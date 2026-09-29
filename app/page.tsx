@@ -85,19 +85,23 @@ export default function Home() {
             <NavItem
               icon={<LayoutDashboard size={18} />}
               label="Dashboard"
+              href="/"
               active
             />
             <NavItem
               icon={<FolderKanban size={18} />}
               label="Projects"
+              href="/projects"
             />
             <NavItem
               icon={<Film size={18} />}
               label="Movies"
+              href="/movies"
             />
             <NavItem
               icon={<Subtitles size={18} />}
               label="Subtitles"
+              href="/subtitles"
             />
           </nav>
 
@@ -109,6 +113,7 @@ export default function Home() {
             <NavItem
               icon={<Settings size={18} />}
               label="Settings"
+              href="/settings"
             />
           </div>
 
@@ -309,14 +314,17 @@ export default function Home() {
 function NavItem({
   icon,
   label,
+  href,
   active = false,
 }: {
   icon: React.ReactNode;
   label: string;
+  href: string;
   active?: boolean;
 }) {
   return (
-    <button
+    <Link
+      href={href}
       className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
         active
           ? "bg-white text-black"
@@ -325,6 +333,6 @@ function NavItem({
     >
       {icon}
       {label}
-    </button>
+    </Link>
   );
 }

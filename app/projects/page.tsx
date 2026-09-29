@@ -151,10 +151,12 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                <button className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 md:mt-0">
+                <Link 
+                  href="/projects/new"
+                  className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 md:mt-0">
                   <FileVideo size={16} />
                   Upload Movie
-                </button>
+                </Link>
               </div>
             </div>
 
