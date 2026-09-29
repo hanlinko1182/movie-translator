@@ -15,6 +15,8 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 
+import Link from "next/link";
+
 const projects = [
   {
     title: "The Hidden Dragon",

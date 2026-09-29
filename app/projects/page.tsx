@@ -95,10 +95,13 @@ export default function ProjectsPage() {
               <h2 className="mt-1 text-lg font-semibold">Projects</h2>
             </div>
 
-            <button className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-zinc-200">
+            <Link
+              href="/projects/new"
+              className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-zinc-200"
+            >
               <Plus size={17} />
               New Project
-            </button>
+            </Link>
           </header>
 
           {/* Content */}
