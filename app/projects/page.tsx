@@ -2,7 +2,6 @@ import {
   Clapperboard,
   FileVideo,
   FolderOpen,
-  MoreHorizontal,
   Plus,
   Search,
   Upload,
@@ -60,11 +59,8 @@ export default function ProjectsPage() {
 
           <nav className="mt-10 space-y-1">
             <SidebarItem href="/" label="Dashboard" />
-
             <SidebarItem href="/projects" label="Projects" active />
-
             <SidebarItem href="/movies" label="Movies" />
-
             <SidebarItem href="/subtitles" label="Subtitles" />
           </nav>
 
@@ -151,9 +147,10 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                <Link 
+                <Link
                   href="/projects/new"
-                  className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 md:mt-0">
+                  className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 md:mt-0"
+                >
                   <FileVideo size={16} />
                   Upload Movie
                 </Link>
@@ -199,16 +196,15 @@ function SidebarItem({
   active?: boolean;
 }) {
   return (
-    <a
+    <Link
       href={href}
-      className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition ${
-        active
+      className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition ${active
           ? "bg-white text-black"
           : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-      }`}
+        }`}
     >
       {label}
-    </a>
+    </Link>
   );
 }
 
@@ -226,51 +222,71 @@ function ProjectRow({
         ? "text-amber-400"
         : "text-zinc-500";
 
+  const projectHref =
+    project.title === "The Hidden Dragon"
+      ? "/projects/hidden-dragon"
+      : "#";
+
   return (
     <div
-      className={`flex flex-col gap-5 p-5 transition hover:bg-white/[0.025] xl:flex-row xl:items-center ${
-        !last ? "border-b border-white/10" : ""
-      }`}
+      className={`flex flex-col gap-5 p-5 transition hover:bg-white/[0.025] xl:flex-row xl:items-center ${!last ? "border-b border-white/10" : ""
+        }`}
     >
       {/* Project info */}
-      <div className="flex min-w-0 flex-1 items-center gap-4">
+      <Link
+        href={projectHref}
+        className="flex min-w-0 flex-1 items-center gap-4"
+      >
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.05]">
           <FolderOpen size={19} className="text-zinc-400" />
         </div>
 
         <div className="min-w-0">
-          <h5 className="truncate text-sm font-medium">{project.title}</h5>
+          <h5 className="truncate text-sm font-medium">
+            {project.title}
+          </h5>
 
-          <p className="mt-1 truncate text-xs text-zinc-600">{project.file}</p>
+          <p className="mt-1 truncate text-xs text-zinc-600">
+            {project.file}
+          </p>
         </div>
-      </div>
+      </Link>
 
       {/* Progress */}
-      <div className="w-full xl:w-64">
+      <Link href={projectHref} className="w-full xl:w-64">
         <div className="mb-2 flex justify-between text-xs">
-          <span className={statusClass}>{project.status}</span>
+          <span className={statusClass}>
+            {project.status}
+          </span>
 
-          <span className="text-zinc-500">{project.progress}%</span>
+          <span className="text-zinc-500">
+            {project.progress}%
+          </span>
         </div>
 
         <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
           <div
             className="h-full rounded-full bg-white transition-all"
-            style={{ width: `${project.progress}%` }}
+            style={{
+              width: `${project.progress}%`,
+            }}
           />
         </div>
-      </div>
+      </Link>
 
       {/* Updated */}
-      <div className="hidden w-28 xl:block">
-        <p className="text-xs text-zinc-600">Updated</p>
-        <p className="mt-1 text-xs text-zinc-400">{project.updated}</p>
-      </div>
+      <Link
+        href={projectHref}
+        className="hidden w-28 xl:block"
+      >
+        <p className="text-xs text-zinc-600">
+          Updated
+        </p>
 
-      {/* Menu */}
-      <button className="self-end rounded-lg p-2 text-zinc-600 transition hover:bg-white/5 hover:text-zinc-300 xl:self-auto">
-        <MoreHorizontal size={18} />
-      </button>
+        <p className="mt-1 text-xs text-zinc-400">
+          {project.updated}
+        </p>
+      </Link>
     </div>
   );
 }
