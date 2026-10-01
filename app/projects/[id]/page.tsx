@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   Check,
@@ -11,6 +12,8 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { prisma } from "@/lib/prisma";
+
 const tabs = [
   { name: "Overview", href: "" },
   { name: "Translation", href: "/translation" },
@@ -20,6 +23,7 @@ const tabs = [
   { name: "Export", href: "/export" },
 ];
 
+// Demo-only processing and story values; these are not read from the database.
 const pipeline = [
   { name: "Upload", status: "done" },
   { name: "Transcribe", status: "done" },
@@ -32,7 +36,47 @@ const pipeline = [
 export default async function ProjectDetailPage({
   params,
 }: PageProps<"/projects/[id]">) {
-  const { id } = await params;
+  const { id: projectSlug } = await params;
+  let project;
+
+  try {
+    project = await prisma.project.findUnique({
+      where: { slug: projectSlug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        sourceLanguage: true,
+        targetLanguage: true,
+        status: true,
+      },
+    });
+  } catch {
+    return (
+      <main className="min-w-0 flex-1 p-6 lg:p-10">
+        <div className="mx-auto max-w-7xl rounded-2xl border border-white/10 bg-white/[0.02] p-8">
+          <h1 className="font-medium">Project is unavailable</h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            We couldn’t load this project right now. Please try again shortly.
+          </p>
+          <Link
+            href="/projects"
+            className="mt-5 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200"
+          >
+            <ArrowLeft size={16} />
+            Projects
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!project) notFound();
+
+  const sourceLanguage = languageName(project.sourceLanguage);
+  const targetLanguage = languageName(project.targetLanguage);
+  const projectStatus =
+    project.status.charAt(0) + project.status.slice(1).toLowerCase();
 
   return (
 
@@ -54,24 +98,24 @@ export default async function ProjectDetailPage({
                   <div className="mb-2 flex items-center gap-2 text-xs text-zinc-500">
                     <span>Projects</span>
                     <ChevronRight size={13} />
-                    <span>The Hidden Dragon</span>
+                    <span>{project.name}</span>
                   </div>
 
                   <h1 className="text-2xl font-semibold tracking-tight">
-                    The Hidden Dragon
+                    {project.name}
                   </h1>
 
                   <div className="mt-2 flex items-center gap-3 text-sm text-zinc-500">
-                    <span>Chinese</span>
+                    <span>{sourceLanguage}</span>
                     <ChevronRight size={14} />
-                    <span className="text-zinc-300">Myanmar</span>
+                    <span className="text-zinc-300">{targetLanguage}</span>
                     <span className="text-zinc-700">•</span>
-                    <span>01:48:32</span>
+                    <span>{projectStatus}</span>
                   </div>
                 </div>
 
                 <Link
-                  href={`/projects/${id}/export`}
+                  href={`/projects/${project.slug}/export`}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
                 >
                   <Download size={16} />
@@ -87,7 +131,7 @@ export default async function ProjectDetailPage({
               {tabs.map((tab, index) => (
                 <Link
                   key={tab.name}
-                  href={`/projects/${id}${tab.href}`}
+                  href={`/projects/${project.slug}${tab.href}`}
                   className={`whitespace-nowrap border-b-2 px-4 py-4 text-sm transition ${
                     index === 0
                       ? "border-white text-white"
@@ -109,7 +153,7 @@ export default async function ProjectDetailPage({
                   <div>
                     <h2 className="font-medium">Processing Progress</h2>
                     <p className="mt-1 text-sm text-zinc-500">
-                      Your movie is being prepared for translation.
+                      Demo pipeline preview. Processing progress will appear here when connected.
                     </p>
                   </div>
 
@@ -136,15 +180,15 @@ export default async function ProjectDetailPage({
                 <InfoCard
                   icon={<Film size={18} />}
                   label="Movie"
-                  value="The Hidden Dragon"
-                  description="Chinese source video"
+                  value={project.name}
+                  description={`${sourceLanguage} source video`}
                 />
 
                 <InfoCard
                   icon={<Languages size={18} />}
                   label="Translation"
-                  value="Chinese → Myanmar"
-                  description="AI translation pipeline"
+                  value={`${sourceLanguage} → ${targetLanguage}`}
+                  description="AI translation pipeline preview"
                 />
 
                 <InfoCard
@@ -173,19 +217,19 @@ export default async function ProjectDetailPage({
                     <StoryRow
                       icon={<Film size={17} />}
                       title="Scenes"
-                      value="42 analyzed"
+                      value="Sample: 42 analyzed"
                     />
 
                     <StoryRow
                       icon={<UserRound size={17} />}
                       title="Characters"
-                      value="8 identified"
+                      value="Sample: 8 identified"
                     />
 
                     <StoryRow
                       icon={<Sparkles size={17} />}
                       title="Story Events"
-                      value="126 detected"
+                      value="Sample: 126 detected"
                     />
                   </div>
                 </div>
@@ -199,7 +243,7 @@ export default async function ProjectDetailPage({
                   </p>
 
                   <Link
-                    href={`/projects/${id}/recap`}
+                    href={`/projects/${project.slug}/recap`}
                     className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-zinc-200"
                   >
                     <Sparkles size={16} />
@@ -290,4 +334,13 @@ function StoryRow({
       <span className="text-sm text-zinc-500">{value}</span>
     </div>
   );
+}
+
+function languageName(code: string) {
+  const knownLanguages: Record<string, string> = {
+    zh: "Chinese",
+    my: "Myanmar",
+  };
+
+  return knownLanguages[code.toLowerCase()] ?? code;
 }
