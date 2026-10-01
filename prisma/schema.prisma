@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProjectStatus {
+  DRAFT
+  PROCESSING
+  READY
+  FAILED
+  ARCHIVED
+}
+
+enum MovieStatus {
+  UPLOADED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  name           String
+  slug           String        @unique
+  sourceLanguage String        @default("zh")
+  targetLanguage String        @default("my")
+  status         ProjectStatus @default(DRAFT)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  movies         Movie[]
+}
+
+model Movie {
+  id                 String      @id @default(cuid())
+  projectId          String
+  title              String
+  originalTitle      String?
+  filename           String?
+  storageKey         String?
+  durationSeconds    Int?
+  fileSizeBytes      BigInt?
+  sourceLanguage     String      @default("zh")
+  status             MovieStatus @default(UPLOADED)
+  processingProgress Int         @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  project            Project     @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+}
