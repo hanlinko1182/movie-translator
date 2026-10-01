@@ -19,6 +19,8 @@
 
 # production
 /build
+# Local development movie uploads
+/storage/movies/
 
 # misc
 .DS_Store
