@@ -29,7 +29,11 @@ const pipeline = [
   { name: "Export", status: "pending" },
 ];
 
-export default function ProjectDetailPage() {
+export default async function ProjectDetailPage({
+  params,
+}: PageProps<"/projects/[id]">) {
+  const { id } = await params;
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
       <div className="flex min-h-screen">
@@ -130,7 +134,7 @@ export default function ProjectDetailPage() {
               {tabs.map((tab, index) => (
                 <Link
                   key={tab.name}
-                  href={`/projects/hidden-dragon${tab.href}`}
+                  href={`/projects/${id}${tab.href}`}
                   className={`whitespace-nowrap border-b-2 px-4 py-4 text-sm transition ${
                     index === 0
                       ? "border-white text-white"
