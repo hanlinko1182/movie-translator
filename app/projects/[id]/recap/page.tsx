@@ -2,7 +2,6 @@ import Link from "next/link";
 import RecapControls from "./RecapControls";
 import {
   ArrowLeft,
-  BookOpen,
   CheckCircle2,
   Copy,
   FileText,
@@ -11,41 +10,14 @@ import {
   UserRound,
 } from "lucide-react";
 
-export default function RecapPage() {
+export default async function RecapPage({
+  params,
+}: PageProps<"/projects/[id]/recap">) {
+  const { id } = await params;
+  const projectPath = `/projects/${id}`;
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <div className="flex items-center gap-3 px-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
-              <BookOpen size={21} />
-            </div>
 
-            <div>
-              <h1 className="text-sm font-semibold">Movie Translator</h1>
 
-              <p className="text-xs text-zinc-500">AI Subtitle Studio</p>
-            </div>
-          </div>
-
-          <nav className="mt-10 space-y-1">
-            <SidebarItem href="/" label="Dashboard" />
-            <SidebarItem href="/projects" label="Projects" active />
-            <SidebarItem href="/movies" label="Movies" />
-            <SidebarItem href="/subtitles" label="Subtitles" />
-          </nav>
-
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
-              System
-            </p>
-
-            <SidebarItem href="/settings" label="Settings" />
-          </div>
-        </aside>
-
-        {/* Main */}
         <section className="flex-1">
           {/* Header */}
           <header className="border-b border-white/10 px-6 py-5 lg:px-10">
@@ -59,7 +31,7 @@ export default function RecapPage() {
                   <span>/</span>
 
                   <Link
-                    href="/projects/hidden-dragon"
+                    href={projectPath}
                     className="hover:text-zinc-300"
                   >
                     The Hidden Dragon
@@ -72,7 +44,7 @@ export default function RecapPage() {
 
                 <div className="mt-2 flex items-center gap-3">
                   <Link
-                    href="/projects/hidden-dragon"
+                    href={projectPath}
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
                   >
                     <ArrowLeft size={17} />
@@ -213,31 +185,8 @@ export default function RecapPage() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-function SidebarItem({
-  href,
-  label,
-  active = false,
-}: {
-  href: string;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition ${
-        active
-          ? "bg-white text-black"
-          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-      }`}
-    >
-      {label}
-    </Link>
+
   );
 }
 

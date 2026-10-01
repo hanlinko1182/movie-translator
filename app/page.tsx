@@ -1,12 +1,7 @@
-"use client";
-
 import {
-  Clapperboard,
   FolderKanban,
   Film,
   Subtitles,
-  Settings,
-  LayoutDashboard,
   Upload,
   MoreHorizontal,
   Clock3,
@@ -15,7 +10,6 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 
-import Link from "next/link";
 
 const projects = [
   {
@@ -66,71 +60,8 @@ const stats = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <div className="flex items-center gap-3 px-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
-              <Clapperboard size={21} />
-            </div>
 
-            <div>
-              <h1 className="text-sm font-semibold">Movie Translator</h1>
-              <p className="text-xs text-zinc-500">AI Subtitle Studio</p>
-            </div>
-          </div>
 
-          <nav className="mt-10 space-y-1">
-            <NavItem
-              icon={<LayoutDashboard size={18} />}
-              label="Dashboard"
-              href="/"
-              active
-            />
-            <NavItem
-              icon={<FolderKanban size={18} />}
-              label="Projects"
-              href="/projects"
-            />
-            <NavItem
-              icon={<Film size={18} />}
-              label="Movies"
-              href="/movies"
-            />
-            <NavItem
-              icon={<Subtitles size={18} />}
-              label="Subtitles"
-              href="/subtitles"
-            />
-          </nav>
-
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
-              System
-            </p>
-
-            <NavItem
-              icon={<Settings size={18} />}
-              label="Settings"
-              href="/settings"
-            />
-          </div>
-
-          <div className="absolute bottom-5 w-56 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-xs font-medium text-zinc-300">
-              Translation Engine
-            </p>
-            <div className="mt-3 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs text-zinc-500">
-                AI services online
-              </span>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main */}
         <section className="flex-1">
           {/* Header */}
           <header className="flex h-20 items-center justify-between border-b border-white/10 px-6 lg:px-10">
@@ -306,33 +237,7 @@ export default function Home() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-function NavItem({
-  icon,
-  label,
-  href,
-  active = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  href: string;
-  active?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
-        active
-          ? "bg-white text-black"
-          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-      }`}
-    >
-      {icon}
-      {label}
-    </Link>
+
   );
 }

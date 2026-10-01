@@ -1,5 +1,4 @@
 import {
-  Clapperboard,
   FileVideo,
   FolderOpen,
   Plus,
@@ -11,6 +10,7 @@ import Link from "next/link";
 
 const projects = [
   {
+    id: "hidden-dragon",
     title: "The Hidden Dragon",
     file: "the-hidden-dragon.mkv",
     status: "Processing",
@@ -18,6 +18,7 @@ const projects = [
     updated: "2 minutes ago",
   },
   {
+    id: "moonlight-sword",
     title: "Moonlight Sword",
     file: "moonlight-sword.mp4",
     status: "Completed",
@@ -25,6 +26,7 @@ const projects = [
     updated: "1 hour ago",
   },
   {
+    id: "legend-of-the-phoenix",
     title: "Legend of the Phoenix",
     file: "legend-phoenix.mkv",
     status: "Processing",
@@ -32,6 +34,7 @@ const projects = [
     updated: "18 minutes ago",
   },
   {
+    id: "the-last-emperor",
     title: "The Last Emperor",
     file: "last-emperor.mp4",
     status: "Draft",
@@ -42,38 +45,8 @@ const projects = [
 
 export default function ProjectsPage() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <div className="flex items-center gap-3 px-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
-              <Clapperboard size={21} />
-            </div>
 
-            <div>
-              <h1 className="text-sm font-semibold">Movie Translator</h1>
-              <p className="text-xs text-zinc-500">AI Subtitle Studio</p>
-            </div>
-          </div>
 
-          <nav className="mt-10 space-y-1">
-            <SidebarItem href="/" label="Dashboard" />
-            <SidebarItem href="/projects" label="Projects" active />
-            <SidebarItem href="/movies" label="Movies" />
-            <SidebarItem href="/subtitles" label="Subtitles" />
-          </nav>
-
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
-              System
-            </p>
-
-            <SidebarItem href="/settings" label="Settings" />
-          </div>
-        </aside>
-
-        {/* Main */}
         <section className="flex-1">
           {/* Header */}
           <header className="flex min-h-20 items-center justify-between border-b border-white/10 px-6 py-4 lg:px-10">
@@ -181,30 +154,8 @@ export default function ProjectsPage() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-function SidebarItem({
-  href,
-  label,
-  active = false,
-}: {
-  href: string;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition ${active
-          ? "bg-white text-black"
-          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-        }`}
-    >
-      {label}
-    </Link>
+
   );
 }
 
@@ -222,10 +173,7 @@ function ProjectRow({
         ? "text-amber-400"
         : "text-zinc-500";
 
-  const projectHref =
-    project.title === "The Hidden Dragon"
-      ? "/projects/hidden-dragon"
-      : "#";
+  const projectHref = `/projects/${project.id}`;
 
   return (
     <div

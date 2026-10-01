@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
-  Clapperboard,
   Clock3,
   Languages,
   MoreHorizontal,
@@ -72,18 +71,6 @@ const mockSegments: {
   },
 ];
 
-const projectSections = [
-  { label: "Recap", path: "recap" },
-  { label: "Characters", path: "characters" },
-  { label: "Scenes", path: "scenes" },
-];
-
-const subtitleSections = [
-  { label: "Subtitle Editor", path: "subtitle-editor" },
-  { label: "Glossary", path: "glossary" },
-  { label: "Translation Memory", path: "translation-memory" },
-];
-
 export default async function TranslationPage({
   params,
 }: PageProps<"/projects/[id]/translation">) {
@@ -91,39 +78,9 @@ export default async function TranslationPage({
   const projectPath = `/projects/${id}`;
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <Link href="/" className="flex items-center gap-3 px-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
-              <Clapperboard size={21} />
-            </span>
-            <span>
-              <span className="block text-sm font-semibold">Movie Translator</span>
-              <span className="block text-xs text-zinc-500">AI Subtitle Studio</span>
-            </span>
-          </Link>
 
-          <SidebarGroup title="Main">
-            <SidebarLink href="/" label="Dashboard" />
-            <SidebarLink href="/projects" label="Projects" />
-            <SidebarLink href="/movies" label="Movies" />
-          </SidebarGroup>
-          <SidebarGroup title="Story">
-            {projectSections.map(({ label, path }) => (
-              <SidebarLink key={path} href={`${projectPath}/${path}`} label={label} />
-            ))}
-          </SidebarGroup>
-          <SidebarGroup title="Subtitles">
-            {subtitleSections.map(({ label, path }) => (
-              <SidebarLink key={path} href={`${projectPath}/${path}`} label={label} active={path === "subtitle-editor"} />
-            ))}
-            <SidebarLink href={`${projectPath}/translation`} label="Translation" active />
-          </SidebarGroup>
-          <SidebarGroup title="System" last>
-            <SidebarLink href="/settings" label="Settings" />
-          </SidebarGroup>
-        </aside>
+
+
 
         <section className="min-w-0 flex-1">
           <header className="border-b border-white/10 px-5 py-5 sm:px-6 lg:px-10">
@@ -279,20 +236,9 @@ export default async function TranslationPage({
             </div>
           </div>
         </section>
-      </div>
-    </main>
+
+
   );
-}
-
-function SidebarGroup({ children, title, last = false }: { children: React.ReactNode; title: string; last?: boolean }) {
-  return <div className={`${last ? "mt-8 border-t border-white/10 pt-5" : "mt-8"}`}>
-    <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">{title}</p>
-    <nav className="space-y-1">{children}</nav>
-  </div>;
-}
-
-function SidebarLink({ href, label, active = false }: { href: string; label: string; active?: boolean }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} className={`block rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-white text-black" : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"}`}>{label}</Link>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

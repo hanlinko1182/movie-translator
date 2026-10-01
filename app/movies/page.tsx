@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
-  Clapperboard,
   ChevronRight,
   Clock3,
   Film,
@@ -68,14 +67,9 @@ const pipeline = [
 
 export default function MoviesPage() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <Link href="/" className="flex items-center gap-3 px-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black"><Clapperboard size={21} /></span><span><span className="block text-sm font-semibold">Movie Translator</span><span className="block text-xs text-zinc-500">AI Subtitle Studio</span></span></Link>
-          <nav className="mt-10 space-y-1"><SidebarLink href="/" label="Dashboard" /><SidebarLink href="/projects" label="Projects" /><SidebarLink href="/movies" label="Movies" active /></nav>
-          <div className="mt-8 border-t border-white/10 pt-5"><p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">System</p><SidebarLink href="/settings" label="Settings" /></div>
-          <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.025] p-4"><div className="flex items-center gap-2"><HardDrive size={14} className="text-zinc-500" /><p className="text-xs font-medium text-zinc-300">Storage</p></div><p className="mt-3 text-xl font-semibold">38.4 <span className="text-xs font-normal text-zinc-500">GB used</span></p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[64%] rounded-full bg-zinc-400" /></div><p className="mt-2 text-[10px] text-zinc-600">of 60 GB allocated</p></div>
-        </aside>
+
+
+
 
         <section className="min-w-0 flex-1">
           <header className="flex flex-col justify-between gap-4 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-center sm:px-6 lg:px-10"><div><div className="flex items-center gap-2 text-xs text-zinc-500"><Link href="/" className="hover:text-zinc-300">Dashboard</Link><ChevronRight size={13} /><span className="text-zinc-300">Movies</span></div><h1 className="mt-1 text-xl font-semibold">Movies</h1><p className="mt-1 text-sm text-zinc-500">Manage uploaded movies and monitor processing progress.</p></div><button type="button" className="inline-flex w-fit items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-zinc-200"><Upload size={15} /> Upload Movie</button></header>
@@ -107,13 +101,9 @@ export default function MoviesPage() {
             </section>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-function SidebarLink({ href, label, active = false }: { href: string; label: string; active?: boolean }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-white text-black" : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"}`}>{label}</Link>;
+
+  );
 }
 
 function SummaryCard({ title, value, warning = false }: { title: string; value: string; warning?: boolean }) {

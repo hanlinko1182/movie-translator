@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   Bot,
   ChevronRight,
-  Clapperboard,
   DollarSign,
   HardDrive,
   Languages,
@@ -37,14 +36,9 @@ const pipeline = [
 
 export default function SettingsPage() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <Link href="/" className="flex items-center gap-3 px-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black"><Clapperboard size={21} /></span><span><span className="block text-sm font-semibold">Movie Translator</span><span className="block text-xs text-zinc-500">AI Subtitle Studio</span></span></Link>
-          <nav className="mt-10 space-y-1"><GlobalNav href="/" label="Dashboard" /><GlobalNav href="/projects" label="Projects" /><GlobalNav href="/movies" label="Movies" /></nav>
-          <div className="mt-8 border-t border-white/10 pt-5"><p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">System</p><GlobalNav href="/settings" label="Settings" active /></div>
-          <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="text-xs font-medium text-zinc-300">Environment</p><div className="mt-3 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400" /><span className="text-[10px] text-zinc-500">Local Development</span></div></div>
-        </aside>
+
+
+
 
         <section className="min-w-0 flex-1">
           <header className="border-b border-white/10 px-5 py-5 sm:px-6 lg:px-10"><div className="mx-auto max-w-[1500px]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Link href="/" className="hover:text-zinc-300">Dashboard</Link><ChevronRight size={13} /><span className="text-zinc-300">Settings</span></div><div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-1 text-xs text-zinc-500">Application configuration</p><h1 className="text-2xl font-semibold tracking-tight">Settings</h1><p className="mt-1 max-w-2xl text-sm text-zinc-500">Configure AI providers, translation behavior, processing, storage, and export defaults.</p></div><span className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Local Development</span></div></div></header>
@@ -75,13 +69,9 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-function GlobalNav({ href, label, active = false }: { href: string; label: string; active?: boolean }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} className={`block rounded-xl px-3 py-2.5 text-sm transition ${active ? "bg-white text-black" : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"}`}>{label}</Link>;
+
+  );
 }
 
 function SectionHeading({ id, title, subtitle, icon }: { id: string; title: string; subtitle: string; icon: React.ReactNode }) {

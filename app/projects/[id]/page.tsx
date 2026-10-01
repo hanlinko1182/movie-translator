@@ -27,7 +27,7 @@ const pipeline = [
   { name: "Translation", status: "processing" },
   { name: "Recap", status: "pending" },
   { name: "Export", status: "pending" },
-];
+] as const;
 
 export default async function ProjectDetailPage({
   params,
@@ -35,58 +35,8 @@ export default async function ProjectDetailPage({
   const { id } = await params;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0c0c0f] px-4 py-6 lg:block">
-          <div className="mb-8 flex items-center gap-3 px-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-black">
-              <Film size={19} />
-            </div>
 
-            <div>
-              <p className="text-sm font-semibold">Movie Studio</p>
-              <p className="text-xs text-zinc-500">AI Translation</p>
-            </div>
-          </div>
 
-          <nav className="space-y-1">
-            <SidebarItem label="Dashboard" href="/" />
-            <SidebarItem label="Projects" href="/projects" active />
-            <SidebarItem label="Movies" href="/movies" />
-            <SidebarItem label="Subtitles" href="/subtitles" />
-          </nav>
-
-          <div className="mt-8">
-            <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
-              Story
-            </p>
-
-            <nav className="space-y-1">
-              <SidebarItem label="Recap" href="#" />
-              <SidebarItem label="Characters" href="#" />
-              <SidebarItem label="Scenes" href="#" />
-            </nav>
-          </div>
-
-          <div className="mt-8">
-            <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
-              Subtitles
-            </p>
-
-            <nav className="space-y-1">
-              <SidebarItem label="Subtitle Editor" href="#" />
-              <SidebarItem label="Glossary" href="#" />
-              <SidebarItem label="Translation Memory" href="#" />
-            </nav>
-          </div>
-
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <SidebarItem label="Settings" href="/settings" />
-          </div>
-        </aside>
-
-        {/* Main */}
         <main className="min-w-0 flex-1">
           {/* Header */}
           <header className="border-b border-white/10 px-6 py-5 lg:px-10">
@@ -120,10 +70,13 @@ export default async function ProjectDetailPage({
                   </div>
                 </div>
 
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] hover:text-white">
+                <Link
+                  href={`/projects/${id}/export`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                >
                   <Download size={16} />
                   Export
-                </button>
+                </Link>
               </div>
             </div>
           </header>
@@ -246,7 +199,7 @@ export default async function ProjectDetailPage({
                   </p>
 
                   <Link
-                    href="/projects/hidden-dragon/recap"
+                    href={`/projects/${id}/recap`}
                     className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-zinc-200"
                   >
                     <Sparkles size={16} />
@@ -257,31 +210,8 @@ export default async function ProjectDetailPage({
             </div>
           </section>
         </main>
-      </div>
-    </div>
-  );
-}
 
-function SidebarItem({
-  label,
-  href,
-  active = false,
-}: {
-  label: string;
-  href: string;
-  active?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`block rounded-xl px-3 py-2.5 text-sm transition ${
-        active
-          ? "bg-white text-black"
-          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-      }`}
-    >
-      {label}
-    </Link>
+
   );
 }
 

@@ -5,7 +5,6 @@ import { useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
-  Clapperboard,
   FileVideo,
   Upload,
   X,
@@ -35,38 +34,8 @@ export default function NewProjectPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-zinc-100">
-      <div className="flex min-h-screen">
-        {/* Sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-          <div className="flex items-center gap-3 px-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
-              <Clapperboard size={21} />
-            </div>
 
-            <div>
-              <h1 className="text-sm font-semibold">
-                Movie Translator
-              </h1>
-              <p className="text-xs text-zinc-500">
-                AI Subtitle Studio
-              </p>
-            </div>
-          </div>
 
-          <nav className="mt-10 space-y-1">
-            <NavItem href="/" label="Dashboard" />
-            <NavItem href="/projects" label="Projects" active />
-            <NavItem href="/movies" label="Movies" />
-            <NavItem href="/subtitles" label="Subtitles" />
-          </nav>
-
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <NavItem href="/settings" label="Settings" />
-          </div>
-        </aside>
-
-        {/* Main */}
         <section className="flex-1">
           <header className="flex min-h-20 items-center border-b border-white/10 px-6 lg:px-10">
             <div>
@@ -243,31 +212,8 @@ export default function NewProjectPage() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
-  );
-}
 
-function NavItem({
-  href,
-  label,
-  active = false,
-}: {
-  href: string;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex items-center rounded-xl px-3 py-2.5 text-sm transition ${
-        active
-          ? "bg-white text-black"
-          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-      }`}
-    >
-      {label}
-    </Link>
+
   );
 }
 
