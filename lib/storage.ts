@@ -5,6 +5,7 @@ import { isAllowedMovieExtension } from "@/lib/movie-upload-policy";
 
 export const LOCAL_STORAGE_ROOT = resolve(process.cwd(), "storage");
 export const MOVIE_STORAGE_DIRECTORY = resolve(LOCAL_STORAGE_ROOT, "movies");
+export const AUDIO_STORAGE_DIRECTORY = resolve(LOCAL_STORAGE_ROOT, "audio");
 
 export function createMovieStorageKey(
   extension: ".mp4" | ".mkv" | ".mov" | ".webm",
@@ -35,6 +36,32 @@ export function resolveMovieStorageKey(storageKey: string) {
 
   if (dirname(destination) !== directory) {
     throw new Error("Invalid local movie storage key.");
+  }
+
+  return destination;
+}
+
+export function getAudioStorageKey(movieId: string) {
+  if (!/^[a-z0-9][a-z0-9_-]{0,127}$/i.test(movieId)) {
+    throw new Error("Invalid local audio storage key.");
+  }
+
+  return `audio/${movieId}.wav`;
+}
+
+export function resolveAudioStorageKey(storageKey: string) {
+  const parts = storageKey.split("/");
+  if (
+    parts.length !== 2 ||
+    parts[0] !== "audio" ||
+    !/^[a-z0-9][a-z0-9_-]{0,127}\.wav$/i.test(parts[1])
+  ) {
+    throw new Error("Invalid local audio storage key.");
+  }
+
+  const destination = resolve(AUDIO_STORAGE_DIRECTORY, parts[1]);
+  if (dirname(destination) !== AUDIO_STORAGE_DIRECTORY) {
+    throw new Error("Invalid local audio storage key.");
   }
 
   return destination;

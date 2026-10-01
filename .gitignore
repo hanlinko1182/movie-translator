@@ -21,6 +21,7 @@
 /build
 # Local development movie uploads
 /storage/movies/
+/storage/audio/
 
 # misc
 .DS_Store
