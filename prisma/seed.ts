@@ -34,8 +34,14 @@ const projects = [
 ];
 
 async function main() {
+  const seededProjects: {
+    id: string;
+    name: string;
+    sourceLanguage: string;
+  }[] = [];
+
   for (const project of projects) {
-    await prisma.project.upsert({
+    const seededProject = await prisma.project.upsert({
       where: { slug: project.slug },
       update: {
         name: project.name,
@@ -43,10 +49,36 @@ async function main() {
         targetLanguage: project.targetLanguage,
       },
       create: project,
+      select: { id: true, name: true, sourceLanguage: true },
     });
+    seededProjects.push(seededProject);
   }
 
-  console.log(`Development seed upserted ${projects.length} projects.`);
+  let moviesCreated = 0;
+
+  for (const project of seededProjects) {
+    const existingMovie = await prisma.movie.findFirst({
+      where: { projectId: project.id, title: project.name },
+      select: { id: true },
+    });
+
+    if (existingMovie) continue;
+
+    await prisma.movie.create({
+      data: {
+        projectId: project.id,
+        title: project.name,
+        sourceLanguage: project.sourceLanguage,
+        status: "UPLOADED",
+        processingProgress: 0,
+      },
+    });
+    moviesCreated += 1;
+  }
+
+  console.log(
+    `Development seed upserted ${projects.length} projects and created ${moviesCreated} movies.`,
+  );
 }
 
 main()

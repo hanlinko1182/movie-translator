@@ -49,6 +49,17 @@ export default async function ProjectDetailPage({
         sourceLanguage: true,
         targetLanguage: true,
         status: true,
+        _count: { select: { movies: true } },
+        movies: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            title: true,
+            sourceLanguage: true,
+            status: true,
+            durationSeconds: true,
+          },
+        },
       },
     });
   } catch {
@@ -180,8 +191,12 @@ export default async function ProjectDetailPage({
                 <InfoCard
                   icon={<Film size={18} />}
                   label="Movie"
-                  value={project.name}
-                  description={`${sourceLanguage} source video`}
+                  value={project.movies[0]?.title ?? "No movie metadata"}
+                  description={
+                    project.movies[0]
+                      ? `${languageName(project.movies[0].sourceLanguage)} source · ${projectStatusLabel(project.movies[0].status)}`
+                      : `${project._count.movies} movies in this project`
+                  }
                 />
 
                 <InfoCard
@@ -343,4 +358,8 @@ function languageName(code: string) {
   };
 
   return knownLanguages[code.toLowerCase()] ?? code;
+}
+
+function projectStatusLabel(status: string) {
+  return status.charAt(0) + status.slice(1).toLowerCase();
 }
