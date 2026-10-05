@@ -17,7 +17,7 @@ const storyLinks = [
 ];
 
 const subtitleLinks = [
-  { label: "Subtitle Editor", segment: "subtitles" },
+  { label: "Source Transcript", segment: "subtitles" },
   { label: "Glossary", segment: "glossary" },
   { label: "Translation Memory", segment: "translation-memory" },
   { label: "Translation", segment: "translation" },
