@@ -27,17 +27,16 @@ type TranscribeMovieOptions = {
   model?: string;
 };
 
+export async function assertMovieTranscriptionReady(movieId: string) {
+  await loadMovieTranscriptionInput(movieId);
+  getTranscriptionProvider();
+}
+
 export async function transcribeMovieAudio(
   movieId: string,
   options: TranscribeMovieOptions = {},
 ) {
-  const movie = await prisma.movie.findUnique({
-    where: { id: movieId },
-    select: { id: true, sourceLanguage: true },
-  });
-  if (!movie) throw new TranscriptionError("MOVIE_NOT_FOUND");
-
-  const audio = await resolveExtractedAudio(movie.id);
+  const { movie, audio } = await loadMovieTranscriptionInput(movieId);
   if (options.maxInputBytes !== undefined && audio.size > options.maxInputBytes) {
     throw new TranscriptionError("TRANSCRIPTION_DEVELOPMENT_LIMIT");
   }
@@ -84,6 +83,16 @@ export async function transcribeMovieAudio(
       console.error("Temporary transcription audio cleanup failed.");
     });
   }
+}
+
+async function loadMovieTranscriptionInput(movieId: string) {
+  const movie = await prisma.movie.findUnique({
+    where: { id: movieId },
+    select: { id: true, sourceLanguage: true },
+  });
+  if (!movie) throw new TranscriptionError("MOVIE_NOT_FOUND");
+
+  return { movie, audio: await resolveExtractedAudio(movie.id) };
 }
 
 export function mergeChunkTranscriptions(

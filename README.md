@@ -53,25 +53,35 @@ the job. Workers acquire the same lock and refuse movies without a committed
 queue state. This is not a distributed transaction: database outages can still
 require operational status reconciliation.
 
-## Development transcription verification
+## Background transcription jobs
 
 Set `OPENROUTER_API_KEY` in the ignored local `.env` file. Keep
 `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`, and set
 `TRANSCRIPTION_MODEL` to either `qwen/qwen3-asr-1.7b` or
-`openai/whisper-large-v3`. There is intentionally no default model while the two
-models are being benchmarked. Never put a real key in `.env.example` or client
-code.
+`openai/whisper-large-v3`. Qwen is the current preferred candidate based on the
+first Chinese benchmark; that result is not a permanent quality conclusion, and
+Whisper remains supported. Never put a real key in `.env.example` or client code.
 
-After the separate media worker has created `audio/<movie-id>.wav`, use
-`POST /api/movies/<database-id>/transcribe` with a tiny development file. This
-synchronous endpoint is only for provider verification and rejects WAVs over
-5 MB. Long audio is supported by the reusable service through private ten-minute
-FFmpeg chunks, but it belongs in a background job before production use.
+After the media worker creates `audio/<movie-id>.wav`, run
+`pnpm worker:transcription` in a separate terminal. `POST
+/api/movies/<database-id>/transcribe` returns 202 after submitting a
+`transcribe-movie` job to the `movie-transcription` queue. `GET` returns the safe
+job state and, once complete, the normalized development result. The payload is
+only `{ movieId }`, with stable ID `transcription-<encoded-movie-id>`.
+
+Jobs use three attempts with exponential backoff starting at two seconds.
+Permanent configuration, movie, audio, and model failures skip remaining
+attempts. Completed and failed jobs are retained up to 1,000 each. Repeated
+submission reuses the retained job and does not start another provider request.
+The worker runs separately from Next.js with concurrency one.
 
 Transcription returns normalized millisecond segments in the original spoken
 language (`zh` is supplied for Chinese movies). A model response without real
-timestamped segments is rejected as unsuitable for subtitle mode. Transcript
-persistence and movie status changes are not implemented in this phase.
+timestamped segments is rejected as unsuitable for subtitle mode. Long audio is
+split into private ten-minute FFmpeg chunks and merged with global timestamps.
+Movie status is unchanged because there is no transcription status column yet.
+Transcript persistence is planned for Phase 9; BullMQ `returnValue` is temporary
+development storage and must not be treated as permanent transcript storage.
 
 For a small private WAV already produced by the media worker, run
 `pnpm benchmark:stt -- <movie-id>`. The benchmark sends that same WAV to Qwen3

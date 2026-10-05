@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "benchmark:stt": "node --conditions=react-server --import tsx scripts/benchmark-transcription.ts",
-    "worker:media": "node --conditions=react-server --import tsx workers/media-worker.ts"
+    "worker:media": "node --conditions=react-server --import tsx workers/media-worker.ts",
+    "worker:transcription": "node --conditions=react-server --import tsx workers/transcription-worker.ts"
   },
   "dependencies": {
     "@openrouter/sdk": "^1.4.21",
