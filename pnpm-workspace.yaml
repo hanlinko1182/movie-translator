@@ -1,4 +1,5 @@
 allowBuilds:
+  '@openrouter/sdk': false
   '@prisma/engines': true
   esbuild: true
   msgpackr-extract: false

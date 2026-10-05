@@ -53,6 +53,32 @@ the job. Workers acquire the same lock and refuse movies without a committed
 queue state. This is not a distributed transaction: database outages can still
 require operational status reconciliation.
 
+## Development transcription verification
+
+Set `OPENROUTER_API_KEY` in the ignored local `.env` file. Keep
+`OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`, and set
+`TRANSCRIPTION_MODEL` to either `qwen/qwen3-asr-1.7b` or
+`openai/whisper-large-v3`. There is intentionally no default model while the two
+models are being benchmarked. Never put a real key in `.env.example` or client
+code.
+
+After the separate media worker has created `audio/<movie-id>.wav`, use
+`POST /api/movies/<database-id>/transcribe` with a tiny development file. This
+synchronous endpoint is only for provider verification and rejects WAVs over
+5 MB. Long audio is supported by the reusable service through private ten-minute
+FFmpeg chunks, but it belongs in a background job before production use.
+
+Transcription returns normalized millisecond segments in the original spoken
+language (`zh` is supplied for Chinese movies). A model response without real
+timestamped segments is rejected as unsuitable for subtitle mode. Transcript
+persistence and movie status changes are not implemented in this phase.
+
+For a small private WAV already produced by the media worker, run
+`pnpm benchmark:stt -- <movie-id>`. The benchmark sends that same WAV to Qwen3
+ASR 1.7B and Whisper Large V3 sequentially, then reports text, timestamp
+availability, segment count, runtime, and provider usage/cost when returned. It
+rejects inputs over 5 MB and does not assign an automatic quality winner.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

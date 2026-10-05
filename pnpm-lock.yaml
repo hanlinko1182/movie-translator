@@ -109,6 +109,9 @@ importers:
 
   .:
     dependencies:
+      '@openrouter/sdk':
+        specifier: ^1.4.21
+        version: 1.4.21
       '@prisma/adapter-pg':
         specifier: ^7.10.0
         version: 7.10.0
@@ -787,6 +790,9 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
+
+  '@openrouter/sdk@1.4.21':
+    resolution: {integrity: sha512-fWaxZ6NV7/qfocMfZfwb0cAjMLTh69B7S/H2b+Mb2dJzS2eZTTGTCb4egHEpB60SRcovUMv/ZqKW2DFU8tpExw==}
 
   '@prisma/adapter-pg@7.10.0':
     resolution: {integrity: sha512-N7nwSor0HO1Kz6xBv0TPAjAPysKK0fac6p4fVN3ensLOuzc/83Fgmln5k92eK/cvzqdkSR/2kkAqlbcdwVrwpw==}
@@ -3467,6 +3473,10 @@ snapshots:
       fastq: 1.20.3
 
   '@nolyfill/is-core-module@1.0.39': {}
+
+  '@openrouter/sdk@1.4.21':
+    dependencies:
+      zod: 4.6.5
 
   '@prisma/adapter-pg@7.10.0':
     dependencies:

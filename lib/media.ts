@@ -1,7 +1,7 @@
 import "server-only";
 
 import { execFile } from "node:child_process";
-import { chmod, lstat, mkdir, mkdtemp, realpath, rename, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, realpath, rename, rm } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 
 import {
@@ -18,6 +18,7 @@ const mediaErrors = {
   MEDIA_PROBE_FAILED: { status: 422, message: "Unable to inspect the movie media" },
   AUDIO_STREAM_NOT_FOUND: { status: 422, message: "The movie has no audio stream" },
   AUDIO_EXTRACTION_FAILED: { status: 500, message: "Unable to extract movie audio" },
+  AUDIO_CHUNKING_FAILED: { status: 500, message: "Unable to split movie audio" },
 } as const;
 
 type MediaErrorCode = keyof typeof mediaErrors;
@@ -169,6 +170,91 @@ export async function extractMovieAudio(source: string, movieId: string) {
   }
 }
 
+export type AudioChunk = {
+  path: string;
+  startMs: number;
+};
+
+export async function splitExtractedAudio(
+  source: string,
+  movieId: string,
+  chunkDurationSeconds: number,
+) {
+  if (!Number.isSafeInteger(chunkDurationSeconds) || chunkDurationSeconds <= 0) {
+    throw new MediaProcessingError("AUDIO_CHUNKING_FAILED");
+  }
+
+  let temporaryDirectory: string | undefined;
+  try {
+    const expectedSource = resolveAudioStorageKey(getAudioStorageKey(movieId));
+    const [root, directory, actualSource, sourceFile] = await Promise.all([
+      realpath(LOCAL_STORAGE_ROOT),
+      realpath(AUDIO_STORAGE_DIRECTORY),
+      realpath(source),
+      lstat(source),
+    ]);
+    if (
+      directory !== resolve(root, "audio") ||
+      source !== expectedSource ||
+      actualSource !== source ||
+      dirname(actualSource) !== directory ||
+      !sourceFile.isFile() ||
+      sourceFile.size <= 0
+    ) {
+      throw new MediaProcessingError("INVALID_STORAGE_KEY");
+    }
+
+    temporaryDirectory = await mkdtemp(join(directory, `.${movieId}-transcription-`));
+    const outputPattern = join(temporaryDirectory, "chunk-%06d.wav");
+    await runMediaBinary(
+      "ffmpeg",
+      [
+        "-nostdin", "-v", "error", "-n",
+        ...localInputArgs(source),
+        "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000",
+        "-c:a", "pcm_s16le", "-f", "segment",
+        "-segment_time", String(chunkDurationSeconds),
+        "-reset_timestamps", "1", outputPattern,
+      ],
+      15 * 60_000,
+      "AUDIO_CHUNKING_FAILED",
+    );
+
+    const filenames = (await readdir(temporaryDirectory))
+      .filter((filename) => /^chunk-\d{6}\.wav$/.test(filename))
+      .sort();
+    if (filenames.length === 0) {
+      throw new MediaProcessingError("AUDIO_CHUNKING_FAILED");
+    }
+
+    const chunks: AudioChunk[] = [];
+    for (const [index, filename] of filenames.entries()) {
+      const path = join(temporaryDirectory, filename);
+      await chmod(path, 0o600);
+      chunks.push({ path, startMs: index * chunkDurationSeconds * 1000 });
+    }
+
+    const directoryToRemove = temporaryDirectory;
+    temporaryDirectory = undefined;
+    return {
+      chunks,
+      cleanup: async () => {
+        await rm(directoryToRemove, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    if (error instanceof MediaProcessingError) throw error;
+    console.error("Transcription audio chunks could not be created.");
+    throw new MediaProcessingError("AUDIO_CHUNKING_FAILED");
+  } finally {
+    if (temporaryDirectory) {
+      await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {
+        console.error("Temporary transcription audio cleanup failed.");
+      });
+    }
+  }
+}
+
 function runMediaBinary(
   binary: "ffmpeg" | "ffprobe",
   args: string[],
@@ -200,7 +286,10 @@ function runMediaBinary(
 function localInputArgs(source: string) {
   // Force an allowed upload container, preventing disguised playlists from
   // loading other files. Disable network protocols for both binaries.
-  const format = [".mp4", ".mov"].includes(extname(source).toLowerCase()) ? "mov" : "matroska";
+  const extension = extname(source).toLowerCase();
+  const format = extension === ".wav"
+    ? "wav"
+    : [".mp4", ".mov"].includes(extension) ? "mov" : "matroska";
   return ["-protocol_whitelist", "file", "-f", format, "-i", source];
 }
 
