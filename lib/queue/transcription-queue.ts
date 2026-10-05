@@ -11,12 +11,13 @@ import {
   type TranscriptionJobData,
 } from "@/lib/queue/types";
 import { assertMovieTranscriptionReady } from "@/lib/transcription/transcribe-movie";
-import { TranscriptionError, type TranscriptionResult } from "@/lib/transcription/types";
+import type { PersistedTranscriptionSummary } from "@/lib/transcription/persist-transcript";
+import { TranscriptionError } from "@/lib/transcription/types";
 
 export function createTranscriptionQueue() {
   const queue = new Queue<
     TranscriptionJobData,
-    TranscriptionResult,
+    PersistedTranscriptionSummary,
     typeof TRANSCRIPTION_JOB_NAME
   >(TRANSCRIPTION_QUEUE_NAME, {
     connection: redisConnection("producer"),
@@ -78,8 +79,15 @@ export async function getMovieTranscriptionJob(movieId: string) {
       jobId: job.id,
       state,
       attemptsMade: job.attemptsMade,
-      ...(state === "completed" && job.returnvalue
-        ? { result: job.returnvalue }
+      ...(state === "completed" && typeof job.returnvalue?.transcriptId === "string"
+        ? { result: {
+          movieId: job.returnvalue.movieId,
+          transcriptId: job.returnvalue.transcriptId,
+          provider: job.returnvalue.provider,
+          model: job.returnvalue.model,
+          segmentCount: job.returnvalue.segmentCount,
+          durationMs: job.returnvalue.durationMs,
+        } }
         : {}),
     };
   } finally {

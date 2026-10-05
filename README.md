@@ -66,7 +66,9 @@ After the media worker creates `audio/<movie-id>.wav`, run
 `pnpm worker:transcription` in a separate terminal. `POST
 /api/movies/<database-id>/transcribe` returns 202 after submitting a
 `transcribe-movie` job to the `movie-transcription` queue. `GET` returns the safe
-job state and, once complete, the normalized development result. The payload is
+job state and, once complete, a compact receipt with the transcript ID. Read the
+full transcript and ordered segments from `GET /api/movies/<database-id>/transcript`.
+The payload is
 only `{ movieId }`, with stable ID `transcription-<encoded-movie-id>`.
 
 Jobs use three attempts with exponential backoff starting at two seconds.
@@ -80,8 +82,9 @@ language (`zh` is supplied for Chinese movies). A model response without real
 timestamped segments is rejected as unsuitable for subtitle mode. Long audio is
 split into private ten-minute FFmpeg chunks and merged with global timestamps.
 Movie status is unchanged because there is no transcription status column yet.
-Transcript persistence is planned for Phase 9; BullMQ `returnValue` is temporary
-development storage and must not be treated as permanent transcript storage.
+The worker atomically replaces the movie's current transcript and its segments in
+PostgreSQL before completing the job. BullMQ stores only the compact receipt;
+PostgreSQL is the transcript source of truth. Phase 10 will add a transcript UI.
 
 For a small private WAV already produced by the media worker, run
 `pnpm benchmark:stt -- <movie-id>`. The benchmark sends that same WAV to Qwen3

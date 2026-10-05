@@ -12,12 +12,14 @@ import {
 } from "@/lib/queue/types";
 import { transcribeMovieAudio } from "@/lib/transcription/transcribe-movie";
 import {
+  persistTranscriptionResult,
+  type PersistedTranscriptionSummary,
+} from "@/lib/transcription/persist-transcript";
+import {
   TranscriptionError,
   type TranscriptionErrorCode,
-  type TranscriptionResult,
 } from "@/lib/transcription/types";
 
-const MAX_JOB_RESULT_BYTES = 10_000_000;
 const permanentFailureCodes = new Set<TranscriptionErrorCode>([
   "MOVIE_NOT_FOUND",
   "TRANSCRIPTION_NOT_CONFIGURED",
@@ -33,7 +35,7 @@ const permanentFailureCodes = new Set<TranscriptionErrorCode>([
 async function main() {
   const worker = new Worker<
     TranscriptionJobData,
-    TranscriptionResult,
+    PersistedTranscriptionSummary,
     typeof TRANSCRIPTION_JOB_NAME
   >(
     TRANSCRIPTION_QUEUE_NAME,
@@ -48,10 +50,7 @@ async function main() {
 
       try {
         const result = await transcribeMovieAudio(job.data.movieId);
-        if (Buffer.byteLength(JSON.stringify(result), "utf8") > MAX_JOB_RESULT_BYTES) {
-          throw new TranscriptionError("TRANSCRIPTION_RESPONSE_TOO_LARGE");
-        }
-        return result;
+        return await persistTranscriptionResult(job.data.movieId, result);
       } catch (error) {
         const code = transcriptionFailureCode(error);
         if (permanentTranscriptionFailure(error)) {
