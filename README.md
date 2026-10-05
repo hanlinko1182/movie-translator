@@ -92,6 +92,18 @@ ASR 1.7B and Whisper Large V3 sequentially, then reports text, timestamp
 availability, segment count, runtime, and provider usage/cost when returned. It
 rejects inputs over 5 MB and does not assign an automatic quality winner.
 
+## Translation benchmark (Phase 11)
+
+Set `TRANSLATION_MODEL_PRIMARY` to the verified OpenRouter ID for GPT-6 Sol and
+`TRANSLATION_MODEL_COMPARE` to the verified OpenRouter ID for GPT-6 Luna. Keep
+`OPENROUTER_API_KEY` server-side. Run `pnpm benchmark:translation -- <movie-id>`
+to compare both models on the same ordered, persisted Chinese transcript segments.
+Each model receives the full segment context in one request. The CLI prints
+side-by-side Myanmar translations, unchanged source timestamps, runtime, and
+provider-reported usage/cost when available. Results are ephemeral; no
+translations are saved to PostgreSQL. A production translation worker is planned
+for Phase 12.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
