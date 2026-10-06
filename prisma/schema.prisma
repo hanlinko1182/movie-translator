@@ -52,6 +52,10 @@ enum TranslationMemoryOrigin {
   AUTOMATIC
 }
 
+enum SceneDetectionMethod {
+  VISUAL_TRANSCRIPT_HEURISTIC
+}
+
 enum TranslationQcCategory {
   EMPTY_OUTPUT
   EXCESSIVE_LENGTH
@@ -107,8 +111,25 @@ model Movie {
   project            Project     @relation(fields: [projectId], references: [id])
   transcript         Transcript?
   translation        Translation?
+  scenes             Scene[]
 
   @@index([projectId])
+}
+
+model Scene {
+  id              String               @id @default(cuid())
+  movieId         String
+  sequence        Int
+  startMs         Int
+  endMs           Int
+  detectionMethod SceneDetectionMethod @default(VISUAL_TRANSCRIPT_HEURISTIC)
+  boundaryScore   Float?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  movie           Movie                @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([movieId, sequence])
+  @@index([movieId, startMs, endMs])
 }
 
 model Transcript {

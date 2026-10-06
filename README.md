@@ -348,6 +348,82 @@ Run `pnpm exec tsx scripts/verify-subtitle-export.ts` for pure formatter, Unicod
 multiline/CRLF, long-hour, gap, injection, filename/header and validation tests.
 This script imports no database, environment configuration or paid providers.
 
+## Phase 17 — Local scene detection foundation
+
+Scene detection runs on the local CPU with FFmpeg/FFprobe, optional current
+TranscriptSegment timing, PostgreSQL and the existing Redis/BullMQ infrastructure.
+It requires no GPU, local AI model or OpenRouter request. Visual shot/cut evidence
+is not proof of semantic or narrative scene boundaries. These heuristic intervals
+can provide timing structure for later character/recap analysis; this phase creates
+no titles, summaries, thumbnails, frames or character information.
+
+Run `pnpm worker:scenes` from the repository root. Queue `movie-scene-detection`
+uses job `detect-scenes`, payload `{ movieId }`, deterministic ID
+`scene-detection-${encodeURIComponent(movieId)}`, concurrency one, three attempts
+with exponential backoff, and up to 1,000 retained completed/failed jobs. Concurrent
+POSTs converge on the same job. Completed POSTs reuse the retained receipt rather
+than scanning again. Failed jobs return a controlled error; explicit invalidation
+or force-rerun after source/configuration changes is future work. Retention is
+bounded, so an evicted job may be scanned again after a later explicit request.
+
+POST `/api/movies/<database-id>/scenes/detect` validates the Movie and private file,
+then returns 202 after enqueueing. It does not scan FFmpeg in the HTTP request.
+GET the same route returns the job state/attempt count and compact completion
+receipt, or `data: null` before queueing. No raw stderr, storage key or local path
+is returned. GET `/api/movies/<database-id>/scenes` returns ordered public timing,
+method and raw boundary score; existing movies with no scenes return 200/empty.
+`/projects/<slug>/scenes` loads the newest movie and its real Scene rows directly
+on the server. Its explicit Detect scenes button queues work and polls status;
+rendering the page never starts a scan. A movie selector remains future work.
+
+FFmpeg uses safe argument arrays, file-only input protocols, forced upload
+containers, software decoding and no output media. `select=gt(scene,threshold)`
+selects visual cut candidates; `metadata=print` returns raw `lavfi.scene_score`
+with timestamps. Timestamps are rounded to integer milliseconds, sorted and
+deduplicated, excluding endpoints; malformed output is rejected. The default
+`SCENE_CHANGE_THRESHOLD=0.4` is raw visual-change evidence on a 0–1 scale, not
+confidence. See [FFmpeg filters](https://ffmpeg.org/ffmpeg-filters.html#select_002c-aselect).
+No images are saved. Processes have a bounded timeout: four times media duration,
+minimum five minutes, maximum six hours, and a 4 MiB output limit.
+
+`SCENE_TRANSCRIPT_GAP_MS=8000` contributes the midpoint of each sufficiently long
+gap between the union of earlier dialogue intervals and the next segment. Timing
+only is used; gaps are not verified acoustic silence. No Transcript works normally
+with visual evidence alone. Container/STT rounding differences of up to one second
+are tolerated: transcript intervals are clipped only for local timing evidence,
+without modifying saved timestamps. Larger overruns fail validation.
+Candidates within an anchored 2,000 ms window collapse
+to the strongest visual candidate (earliest on a tie), retaining nearby gap evidence.
+Gap-supported candidates are considered first, then visual strength, then time.
+Insert a boundary only when both adjacent intervals meet
+`SCENE_MIN_DURATION_MS=15000`. These three variables are optional, validated and
+illustrated in `.env.example`; minimum intervals must be 5–300 seconds and gap
+thresholds 3–300 seconds. A shorter movie still has one full-length interval.
+No candidates also yields one interval; long intervals are not arbitrarily split.
+
+Scene rows cover integer 0 through rounded FFprobe duration continuously, have
+contiguous sequences, positive durations and no overlap. `boundaryScore` is the
+raw score of the selected start boundary, or null for timing/start boundaries.
+It is never labeled accuracy, confidence or semantic probability. The enum
+VISUAL_TRANSCRIPT_HEURISTIC names this pipeline even for visual-only inputs.
+
+Persistence locks the Movie row and verifies its storage key and current transcript
+timing snapshot, then atomically replaces heuristic scenes. Movie status, transcript,
+translation, human edits, TM, QC and exports are untouched. A failed replacement
+rolls back the deletion. The additive `add_scene_detection` migration creates the
+Scene model, timing/score checks, per-movie unique sequence, time index and Movie
+cascade foreign key; it does not change Project deletion semantics.
+
+Missing/corrupt media, malformed evidence, invalid configuration and changed source
+are permanent worker failures. Process timeouts/availability and transient database
+failures have bounded retries. Files use the existing private key/realpath/lstat
+checks; network protocols and user-provided filters are not accepted. Immutable
+uploaded files are assumed; a source file replaced in place under the same key is
+not content-fingerprinted. FFprobe container duration defines coverage, so audio
+that outlasts video can leave a final interval without visual evidence.
+
+Run `node --import tsx scripts/verify-scenes.ts` for pure parsing/grouping tests.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

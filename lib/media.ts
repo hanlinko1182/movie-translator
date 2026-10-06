@@ -283,7 +283,7 @@ function runMediaBinary(
   });
 }
 
-function localInputArgs(source: string) {
+export function localInputArgs(source: string) {
   // Force an allowed upload container, preventing disguised playlists from
   // loading other files. Disable network protocols for both binaries.
   const extension = extname(source).toLowerCase();
