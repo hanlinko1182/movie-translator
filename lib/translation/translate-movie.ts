@@ -1,6 +1,9 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { getRelevantGlossaryEntries } from "@/lib/glossary/service";
+import { findExactMemoryMatches } from "@/lib/translation-memory/service";
+import { normalizeMemorySource } from "@/lib/translation-memory/normalize";
 import { getProductionTranslationProvider } from "@/lib/translation";
 import { assertTranslationResultAligned } from "@/lib/translation/persist-translation";
 import {
@@ -22,6 +25,7 @@ export async function loadMovieTranslationSource(movieId: string) {
     where: { id: movieId },
     select: {
       id: true,
+      projectId: true,
       sourceLanguage: true,
       transcript: {
         select: {
@@ -41,6 +45,7 @@ export async function loadMovieTranslationSource(movieId: string) {
   validateSourceSegments(movie.transcript.segments);
   return {
     movieId: movie.id,
+    projectId: movie.projectId,
     sourceTranscriptId: movie.transcript.id,
     sourceLanguage: movie.sourceLanguage,
     segments: movie.transcript.segments,
@@ -48,35 +53,82 @@ export async function loadMovieTranslationSource(movieId: string) {
 }
 
 export async function assertMovieTranslationReady(movieId: string) {
-  await loadMovieTranslationSource(movieId);
-  getProductionTranslationProvider();
+  const source = await loadMovieTranslationSource(movieId);
+  const matches = await findExactMemoryMatches(source.projectId, source.sourceLanguage, "my", source.segments.map((segment) => segment.text));
+  if (source.segments.some((segment) => !matches.has(normalizeMemorySource(segment.text)))) {
+    getProductionTranslationProvider();
+  }
 }
 
 export async function translateMovieTranscript(movieId: string) {
   const source = await loadMovieTranslationSource(movieId);
-  const { model, provider } = getProductionTranslationProvider();
+  return translateSourceWithMemory(source);
+}
+
+type TranslationSource = Awaited<ReturnType<typeof loadMovieTranslationSource>>;
+type TranslationDependencies = {
+  getProvider?: typeof getProductionTranslationProvider;
+  findMemory?: typeof findExactMemoryMatches;
+  getGlossary?: typeof getRelevantGlossaryEntries;
+};
+
+// Dependency overrides are a server-side test seam; API callers cannot supply them.
+export async function translateSourceWithMemory(
+  source: TranslationSource,
+  dependencies: TranslationDependencies = {},
+) {
+  validateSourceSegments(source.segments);
+  const matches = await (dependencies.findMemory ?? findExactMemoryMatches)(
+    source.projectId, source.sourceLanguage, "my", source.segments.map((segment) => segment.text),
+  );
+  const translated = new Map<number, string>();
+  for (const segment of source.segments) {
+    const match = matches.get(normalizeMemorySource(segment.text));
+    if (match?.trim()) translated.set(segment.sequence, match.trim());
+  }
+  const translationMemoryHits = translated.size;
+  const modelTranslatedSegments = source.segments.length - translationMemoryHits;
+  const configured = modelTranslatedSegments > 0
+    ? (dependencies.getProvider ?? getProductionTranslationProvider)()
+    : undefined;
+  const model = configured?.model ?? "exact-match";
   const batches = buildTranslationBatches(source.segments, source.sourceLanguage);
   const results: TranslationResult[] = [];
 
   // Bound each provider request, and keep batch order deterministic.
   for (const batch of batches) {
-    const result = await provider.translate(batch);
-    assertTranslationResultAligned(result, batch.segments, source.sourceLanguage, model);
+    const active = batch.segments.filter((segment) => !translated.has(segment.sequence));
+    if (active.length === 0) continue;
+    const request: TranslationRequest = {
+      ...batch,
+      segments: active,
+      contextOnly: batch.segments.filter((segment) => translated.has(segment.sequence)),
+    };
+    request.glossary = await (dependencies.getGlossary ?? getRelevantGlossaryEntries)(
+      source.projectId, source.sourceLanguage, "my",
+      [...batch.segments, ...(batch.contextBefore ?? []), ...(batch.contextAfter ?? [])].map((segment) => segment.text),
+    );
+    const result = await configured!.provider.translate(request);
+    assertTranslationResultAligned(result, active, source.sourceLanguage, model);
+    result.segments.forEach((segment) => translated.set(segment.sequence, segment.text));
     results.push(result);
   }
 
   const usage = mergeUsage(results);
   const result: TranslationResult = {
-    provider: results[0].provider,
+    provider: results[0]?.provider ?? "translation-memory",
     model,
     sourceLanguage: source.sourceLanguage,
     targetLanguage: "my",
-    segments: results.flatMap((batch) => batch.segments),
+    segments: source.segments.map((segment) => ({ ...segment, text: translated.get(segment.sequence)! })),
     runtimeMs: results.reduce((total, batch) => total + batch.runtimeMs, 0),
     ...(usage ? { usage } : {}),
+    translationMemoryHits,
+    modelTranslatedSegments,
+    modelCalls: results.length,
   };
   assertTranslationResultAligned(result, source.segments, source.sourceLanguage, model);
-  return { source, result, batchCount: batches.length };
+  return { source, result, batchCount: results.length };
 }
 
 export function buildTranslationBatches(
@@ -148,6 +200,7 @@ function validMilliseconds(value: unknown): value is number {
 }
 
 function mergeUsage(results: TranslationResult[]): TranslationUsage | undefined {
+  if (results.length === 0) return undefined;
   const usage: TranslationUsage = {};
   for (const key of ["inputTokens", "outputTokens", "totalTokens", "costUsd"] as const) {
     const values = results.map((result) => result.usage?.[key]);

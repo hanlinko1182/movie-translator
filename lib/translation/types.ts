@@ -11,7 +11,11 @@ export type TranslationRequest = {
   segments: TranslationSegment[];
   contextBefore?: TranslationSegment[];
   contextAfter?: TranslationSegment[];
+  contextOnly?: TranslationSegment[];
+  glossary?: TranslationGlossaryRule[];
 };
+
+export type TranslationGlossaryRule = { sourceText: string; targetText: string };
 
 export type TranslatedSegment = TranslationSegment;
 
@@ -30,6 +34,9 @@ export type TranslationResult = {
   segments: TranslatedSegment[];
   runtimeMs: number;
   usage?: TranslationUsage;
+  translationMemoryHits?: number;
+  modelTranslatedSegments?: number;
+  modelCalls?: number;
 };
 
 const errorDefinitions = {

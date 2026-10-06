@@ -78,6 +78,9 @@ export async function getMovieTranslationJob(movieId: string) {
           segmentCount: job.returnvalue.segmentCount,
           runtimeMs: job.returnvalue.runtimeMs,
           usage: job.returnvalue.usage,
+          translationMemoryHits: job.returnvalue.translationMemoryHits,
+          modelTranslatedSegments: job.returnvalue.modelTranslatedSegments,
+          modelCalls: job.returnvalue.modelCalls,
         } }
         : {}),
     };

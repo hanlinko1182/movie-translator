@@ -125,6 +125,47 @@ compact receipt to BullMQ. Movie status is unchanged. The translation records
 its source transcript ID; if that transcript is later edited in place, the
 existing translation can become stale and needs a future invalidation policy.
 
+## Glossary and Translation Memory (Phase 13)
+
+`/projects/<slug>/glossary` manages explicit project terminology (names, places,
+titles, organizations, terms, and phrase preferences). `/projects/<slug>/translation-memory`
+manages reusable subtitle source/target pairs. Both pages read PostgreSQL on the
+server and support adding, editing, deleting, and searching entries. Their APIs
+are `/api/projects/<slug>/glossary` and `/api/projects/<slug>/translation-memory`
+(GET/POST), with `/<entryId>` for PATCH/DELETE. The existing `[id]` route segment
+represents a public project slug for these nested endpoints; mutations also filter
+by the resolved database project ID. Duplicate POSTs return 409.
+
+Glossary sources are trimmed, remain case-sensitive, and are unique per project,
+source text, and language pair. Only terms appearing literally in a bounded
+translation batch or its source context are passed to the provider: longest
+matching terms first, at most 20 mappings and 2,000 combined mapping characters.
+Mappings override stylistic preferences and are literal data, not instructions.
+Adding a glossary rule does not create a memory entry.
+
+Memory sources are trimmed and consecutive whitespace is collapsed to one space.
+Case, Chinese characters, punctuation, and Unicode forms are preserved. Node's
+built-in SHA-256 hashes the normalized UTF-8 source. The unique key is project,
+source language, target language, and hash; lookup also verifies normalized source
+text. Language codes are trimmed and lowercased, with `cmn` canonicalized to `zh`
+to match existing Chinese movie and project records; regional variants stay distinct.
+
+Production translation checks exact memory matches before model calls. Hits are
+removed from active targets, though bounded source-only context may include them.
+Unmatched segments use GPT-6 Luna with relevant glossary mappings. Results merge
+in source sequence order with original timestamps. A full memory hit uses explicit
+`translation-memory` / `exact-match` metadata, zero model calls and no invented
+usage or cost. Compact receipts include total segments, memory hits, model-translated
+segments, and model calls; full translations stay in PostgreSQL, not Redis.
+
+Memory capture follows successful segment replacement inside the same transaction.
+Duplicate capture skips existing keys: the first stored translation wins, including
+manual corrections, until explicitly edited or deleted. Repeated persistence does
+not duplicate memory rows. Deleting a Project cascades to both terminology tables;
+existing Project-to-Movie behavior is unchanged. There is no approval/QC metadata,
+fuzzy matching, vector search, or automatic invalidation after glossary changes yet.
+GPT-6 Sol remains reserved for future QC and selective re-translation.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

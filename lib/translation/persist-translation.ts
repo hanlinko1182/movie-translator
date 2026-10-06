@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { captureTranslationMemory } from "@/lib/translation-memory/service";
 import {
   TranslationError,
   type TranslationResult,
@@ -18,6 +19,9 @@ export type PersistedTranslationSummary = {
   segmentCount: number;
   runtimeMs: number;
   usage?: TranslationResult["usage"];
+  translationMemoryHits: number;
+  modelTranslatedSegments: number;
+  modelCalls?: number;
 };
 
 export function assertTranslationResultAligned(
@@ -37,6 +41,16 @@ export function assertTranslationResultAligned(
     !Array.isArray(source) || source.length === 0 ||
     !Array.isArray(result.segments) || result.segments.length !== source.length
   ) invalidResponse();
+
+  if (result.translationMemoryHits !== undefined || result.modelTranslatedSegments !== undefined || result.modelCalls !== undefined) {
+    if (
+      !Number.isSafeInteger(result.translationMemoryHits) || result.translationMemoryHits! < 0 ||
+      !Number.isSafeInteger(result.modelTranslatedSegments) || result.modelTranslatedSegments! < 0 ||
+      result.translationMemoryHits! + result.modelTranslatedSegments! !== source.length ||
+      !Number.isSafeInteger(result.modelCalls) || result.modelCalls! < 0 ||
+      result.modelCalls! > result.modelTranslatedSegments!
+    ) invalidResponse();
+  }
 
   let previousSequence = -1;
   let previousStartMs = -1;
@@ -75,6 +89,7 @@ export async function persistTranslationResult(
     const movie = await transaction.movie.findUnique({
       where: { id: movieId },
       select: {
+        projectId: true,
         sourceLanguage: true,
         transcript: {
           select: {
@@ -123,6 +138,8 @@ export async function persistTranslationResult(
         text: segment.text,
       })),
     });
+    // Capture only after segment replacement succeeds, inside the same transaction.
+    await captureTranslationMemory(transaction, movie.projectId, source, result);
 
     return {
       movieId,
@@ -133,6 +150,9 @@ export async function persistTranslationResult(
       segmentCount: result.segments.length,
       runtimeMs: result.runtimeMs,
       ...(result.usage ? { usage: result.usage } : {}),
+      translationMemoryHits: result.translationMemoryHits ?? 0,
+      modelTranslatedSegments: result.modelTranslatedSegments ?? result.segments.length,
+      ...(result.modelCalls === undefined ? {} : { modelCalls: result.modelCalls }),
     };
   }, { timeout: 60_000 });
 }
