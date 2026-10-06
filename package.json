@@ -10,7 +10,8 @@
     "benchmark:stt": "node --conditions=react-server --import tsx scripts/benchmark-transcription.ts",
     "benchmark:translation": "node --conditions=react-server --import tsx scripts/benchmark-translation.ts",
     "worker:media": "node --conditions=react-server --import tsx workers/media-worker.ts",
-    "worker:transcription": "node --conditions=react-server --import tsx workers/transcription-worker.ts"
+    "worker:transcription": "node --conditions=react-server --import tsx workers/transcription-worker.ts",
+    "worker:translation": "node --conditions=react-server --import tsx workers/translation-worker.ts"
   },
   "dependencies": {
     "@openrouter/sdk": "^1.4.21",

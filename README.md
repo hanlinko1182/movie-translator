@@ -100,9 +100,30 @@ Set `TRANSLATION_MODEL_PRIMARY` to the verified OpenRouter ID for GPT-6 Sol and
 to compare both models on the same ordered, persisted Chinese transcript segments.
 Each model receives the full segment context in one request. The CLI prints
 side-by-side Myanmar translations, unchanged source timestamps, runtime, and
-provider-reported usage/cost when available. Results are ephemeral; no
-translations are saved to PostgreSQL. A production translation worker is planned
-for Phase 12.
+provider-reported usage/cost when available. Benchmark results are ephemeral;
+only the production worker below saves translations to PostgreSQL.
+
+## Production translation jobs (Phase 12)
+
+Set `TRANSLATION_MODEL` to `openai/gpt-6-luna` in the server and worker
+environment, alongside the existing OpenRouter, PostgreSQL, and Redis settings.
+Run `pnpm worker:translation` separately from Next.js. `POST
+/api/movies/<database-id>/translate` returns 202 after adding a `translate-movie`
+job to `movie-translation`; `GET` on that route reports job state and a compact
+receipt. Read the ordered, persisted Myanmar segments from `GET
+/api/movies/<database-id>/translation`. The Phase 11 benchmark remains available.
+GPT-6 Sol is reserved for later QC and selective re-translation.
+
+Each job uses at most 24 active segments and 4,000 source characters per provider
+request, with up to two neighboring context segments and 800 context characters
+on each side. Segments larger than that single-request budget are rejected.
+Three attempts use exponential backoff starting at two seconds; deterministic
+input and malformed model responses fail without retry. A retained job ID prevents
+repeat POSTs from starting another paid run. The worker replaces the current
+translation and its segments in one PostgreSQL transaction, then returns only a
+compact receipt to BullMQ. Movie status is unchanged. The translation records
+its source transcript ID; if that transcript is later edited in place, the
+existing translation can become stale and needs a future invalidation policy.
 
 ## Learn More
 

@@ -17,6 +17,7 @@ const SUBTITLE_INSTRUCTIONS = [
   "Handle Chinese-English code switching naturally. Preserve names and numbers accurately.",
   "Do not invent or omit dialogue. Do not summarize, explain, add translator notes, or use Markdown.",
   "Return exactly one translated text for each input sequence. Do not merge or split segments.",
+  "If previous or following context is provided, use it for meaning only; translate only the active segments array.",
   "Return only the requested JSON object with sequence and text. Do not generate timestamps or metadata.",
 ].join(" ");
 
@@ -54,7 +55,9 @@ export class OpenRouterTranslationProvider implements TranslationProvider {
               content: JSON.stringify({
                 sourceLanguage: input.sourceLanguage,
                 targetLanguage: input.targetLanguage,
+                ...(input.contextBefore?.length ? { contextBefore: input.contextBefore.map(({ sequence, text }) => ({ sequence, text })) } : {}),
                 segments: input.segments.map(({ sequence, text }) => ({ sequence, text })),
+                ...(input.contextAfter?.length ? { contextAfter: input.contextAfter.map(({ sequence, text }) => ({ sequence, text })) } : {}),
               }),
             },
           ],
@@ -87,7 +90,7 @@ export class OpenRouterTranslationProvider implements TranslationProvider {
         },
       });
 
-      if (!("choices" in response) || !("usage" in response)) invalidResponse();
+      if (!("choices" in response)) invalidResponse();
       const choice = response.choices[0];
       if (
         response.choices.length !== 1 ||
@@ -110,6 +113,12 @@ export class OpenRouterTranslationProvider implements TranslationProvider {
     } catch (error) {
       if (error instanceof TranslationError) throw error;
       logProviderFailure(error);
+      if (
+        error instanceof OpenRouterError &&
+        typeof error.statusCode === "number" &&
+        error.statusCode >= 400 && error.statusCode < 500 &&
+        ![408, 409, 429].includes(error.statusCode)
+      ) throw new TranslationError("TRANSLATION_PROVIDER_REJECTED");
       throw new TranslationError("TRANSLATION_PROVIDER_ERROR");
     }
   }

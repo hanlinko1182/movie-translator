@@ -10,16 +10,13 @@ export function getTranslationBenchmarkProviders(): {
   primary: { model: string; provider: TranslationProvider };
   compare: { model: string; provider: TranslationProvider };
 } {
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   const primaryModel = process.env.TRANSLATION_MODEL_PRIMARY?.trim();
   const compareModel = process.env.TRANSLATION_MODEL_COMPARE?.trim();
-  if (!apiKey || !primaryModel || !compareModel || primaryModel === compareModel) {
+  if (!primaryModel || !compareModel || primaryModel === compareModel) {
     throw new TranslationError("TRANSLATION_NOT_CONFIGURED");
   }
 
-  const baseUrl = normalizeOpenRouterBaseUrl(
-    process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_OPENROUTER_BASE_URL,
-  );
+  const { apiKey, baseUrl } = openRouterConfiguration();
   return {
     primary: {
       model: primaryModel,
@@ -30,6 +27,22 @@ export function getTranslationBenchmarkProviders(): {
       provider: new OpenRouterTranslationProvider(compareModel, apiKey, baseUrl),
     },
   };
+}
+
+export function getProductionTranslationProvider(): { model: string; provider: TranslationProvider } {
+  const model = process.env.TRANSLATION_MODEL?.trim();
+  if (!model) throw new TranslationError("TRANSLATION_NOT_CONFIGURED");
+  const { apiKey, baseUrl } = openRouterConfiguration();
+  return { model, provider: new OpenRouterTranslationProvider(model, apiKey, baseUrl) };
+}
+
+function openRouterConfiguration() {
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) throw new TranslationError("TRANSLATION_NOT_CONFIGURED");
+  const baseUrl = normalizeOpenRouterBaseUrl(
+    process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_OPENROUTER_BASE_URL,
+  );
+  return { apiKey, baseUrl };
 }
 
 function normalizeOpenRouterBaseUrl(value: string) {

@@ -51,6 +51,7 @@ model Movie {
   updatedAt          DateTime    @updatedAt
   project            Project     @relation(fields: [projectId], references: [id])
   transcript         Transcript?
+  translation        Translation?
 
   @@index([projectId])
 }
@@ -67,6 +68,7 @@ model Transcript {
   updatedAt  DateTime            @updatedAt
   movie      Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
   segments   TranscriptSegment[]
+  translations Translation[]
 }
 
 model TranscriptSegment {
@@ -81,4 +83,34 @@ model TranscriptSegment {
   transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
 
   @@unique([transcriptId, sequence])
+}
+
+model Translation {
+  id                 String              @id @default(cuid())
+  movieId            String              @unique
+  sourceTranscriptId String
+  provider           String
+  model              String
+  sourceLanguage     String
+  targetLanguage     String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  movie              Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  sourceTranscript   Transcript          @relation(fields: [sourceTranscriptId], references: [id], onDelete: Cascade)
+  segments           TranslatedSegment[]
+
+  @@index([sourceTranscriptId])
+}
+
+model TranslatedSegment {
+  id            String      @id @default(cuid())
+  translationId String
+  sequence      Int
+  startMs       Int
+  endMs         Int
+  text          String
+  createdAt     DateTime    @default(now())
+  translation   Translation @relation(fields: [translationId], references: [id], onDelete: Cascade)
+
+  @@unique([translationId, sequence])
 }
