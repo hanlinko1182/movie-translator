@@ -166,6 +166,81 @@ existing Project-to-Movie behavior is unchanged. There is no approval/QC metadat
 fuzzy matching, vector search, or automatic invalidation after glossary changes yet.
 GPT-6 Sol remains reserved for future QC and selective re-translation.
 
+## Local translation QC and selective refinement (Phase 14)
+
+The Translation screen now reads actual source/target rows and per-segment
+provenance. Run QC performs free, deterministic checks via POST
+`/api/movies/<database-id>/translation/qc`; GET returns persisted findings and
+the current review. Findings describe suspicious evidence, not objective quality,
+confidence, or human approval. No heuristic automatically starts a paid request.
+
+Checks cover empty output, extreme length differences, numeric values, Markdown
+or commentary prefixes, literal glossary mismatch, identical long targets for
+different sources, long Chinese source leakage, and general explanation/repetition
+signals that may indicate ambiguity. Length uses graphemes: excessive output is
+over max(200, 8 × source length); possible omission requires source length ≥20
+and target length below max(4, 0.12 × source length). These are warnings. Numbers
+normalize ASCII, fullwidth and Myanmar digits plus conventional comma thousands
+groups; Chinese number words, written number words and complex locale formats
+are not interpreted. English code-switching and ordinary names are not errors.
+Repetition requires targets of at least 30 graphemes and sources of at least 10.
+Chinese leakage requires a matching span of at least six Han characters. Ambiguity
+signals use mixed English explanations or a repeated Chinese bigram (at least four
+occurrences with two questions), not a hard-coded sample word.
+
+Repeated scans replace unresolved HEURISTIC issues under the movie row lock,
+preserving manual issues and resolved history. A scan timestamp distinguishes
+unscanned translations from scans without findings. QC issues cascade through
+their TranslatedSegment; full translation replacement removes old-row findings.
+
+GPT-6 Luna remains the normal translation model. Set the server/worker variable
+`TRANSLATION_REFINEMENT_MODEL=openai/gpt-6-sol` and run
+`pnpm worker:translation-refinement` for explicit paid refinement. The UI requires
+selection and a paid-request acknowledgement. POST
+`/api/movies/<database-id>/translation/refine` accepts only `{ "sequences": [...] }`,
+normalizes sorted unique nonnegative integers, validates alignment, and returns
+202 with a job ID. GET the same endpoint with `?jobId=<returned-id>` for status.
+Select at most 24 rows; whole-movie selection is rejected (a one-segment movie
+can still refine its one row). Pages and QC scans never trigger paid requests.
+
+Queue `translation-refinement` runs `refine-translation` with concurrency one.
+Payload contains movie ID, sequences, translation ID/revision and a snapshot
+hash, never full dialogue. IDs hash translation identity, full-replacement revision,
+source snapshot and normalized selection. Equivalent concurrent submissions and
+repeated retained requests reuse one job, including after successful refinement.
+Completed/failed jobs retain up to 1,000 each. A deliberate repeat requires removing
+that specific inactive job; retention cleanup can eventually permit a new request.
+Three attempts use exponential backoff from two seconds. Configuration, alignment,
+missing records, stale snapshots, provider rejection and malformed output are
+permanent; network/429/5xx and transient database failures are retryable.
+
+Sol receives only selected active sources, bounded neighboring/source-only context,
+their current translations and relevant glossary mappings. Structured JSON must
+contain exactly the requested sequences and non-empty text, with no extra fields,
+commentary or generated timestamps. Original sequence/timestamps remain application
+owned. A row-locked transaction rechecks source and selected-target snapshots,
+updates only selected row IDs with REFINED/provider/model/job provenance, updates
+safe memory pairs, and reruns local QC for changed rows. The Translation ID and
+unselected rows stay stable. Automatic findings that disappear receive a resolution
+timestamp and refinement reference; manual findings never auto-resolve.
+
+Memory now distinguishes MANUAL and AUTOMATIC. Manual API creation/editing always
+marks a pair MANUAL; production capture marks new pairs AUTOMATIC. Legacy pairs
+are conservatively treated as MANUAL because Phase 13 did not record their origin.
+Refinement only overwrites an AUTOMATIC pair whose current source and target match
+the selected pre-refinement snapshot. Missing pairs can be created automatically;
+manual or changed pairs remain untouched. Legacy segment origin stays UNKNOWN
+unless a full memory result proves TRANSLATION_MEMORY; new production rows record
+their actual MODEL or TRANSLATION_MEMORY origin. Translation-level model metadata
+does not claim to describe every refined row.
+
+A committed refinement can recover using its per-row job marker without another
+model call. A crash after a provider response but before transaction commit may
+still repeat a paid request on retry; there is no distributed exactly-once guarantee.
+No model-based QC, automatic Sol fallback, human approval, subtitle editing, or
+export is implemented. Source edits in place still require a future invalidation
+policy for already-persisted translations.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

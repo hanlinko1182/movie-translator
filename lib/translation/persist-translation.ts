@@ -121,11 +121,12 @@ export async function persistTranslationResult(
       model: result.model,
       sourceLanguage: result.sourceLanguage,
       targetLanguage: result.targetLanguage,
+      qcScannedAt: null,
     };
     const translation = await transaction.translation.upsert({
       where: { movieId },
       create: { movieId, ...data },
-      update: data,
+      update: { ...data, revision: { increment: 1 } },
       select: { id: true },
     });
     await transaction.translatedSegment.deleteMany({ where: { translationId: translation.id } });
@@ -136,6 +137,9 @@ export async function persistTranslationResult(
         startMs: segment.startMs,
         endMs: segment.endMs,
         text: segment.text,
+        provider: segment.provider ?? result.provider,
+        model: segment.model ?? result.model,
+        origin: segment.origin ?? (result.provider === "translation-memory" ? "TRANSLATION_MEMORY" : "MODEL"),
       })),
     });
     // Capture only after segment replacement succeeds, inside the same transaction.

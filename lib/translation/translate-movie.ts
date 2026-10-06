@@ -87,6 +87,7 @@ export async function translateSourceWithMemory(
     if (match?.trim()) translated.set(segment.sequence, match.trim());
   }
   const translationMemoryHits = translated.size;
+  const memorySequences = new Set(translated.keys());
   const modelTranslatedSegments = source.segments.length - translationMemoryHits;
   const configured = modelTranslatedSegments > 0
     ? (dependencies.getProvider ?? getProductionTranslationProvider)()
@@ -120,7 +121,12 @@ export async function translateSourceWithMemory(
     model,
     sourceLanguage: source.sourceLanguage,
     targetLanguage: "my",
-    segments: source.segments.map((segment) => ({ ...segment, text: translated.get(segment.sequence)! })),
+    segments: source.segments.map((segment) => ({
+      ...segment, text: translated.get(segment.sequence)!,
+      provider: memorySequences.has(segment.sequence) ? "translation-memory" : results[0]!.provider,
+      model: memorySequences.has(segment.sequence) ? "exact-match" : model,
+      origin: memorySequences.has(segment.sequence) ? "TRANSLATION_MEMORY" : "MODEL",
+    })),
     runtimeMs: results.reduce((total, batch) => total + batch.runtimeMs, 0),
     ...(usage ? { usage } : {}),
     translationMemoryHits,

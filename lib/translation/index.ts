@@ -45,6 +45,17 @@ function openRouterConfiguration() {
   return { apiKey, baseUrl };
 }
 
+export function getRefinementTranslationProvider(): { model: string; provider: TranslationProvider } {
+  const model = process.env.TRANSLATION_REFINEMENT_MODEL?.trim();
+  if (!model) throw new TranslationError("REFINEMENT_NOT_CONFIGURED");
+  try {
+    const { apiKey, baseUrl } = openRouterConfiguration();
+    return { model, provider: new OpenRouterTranslationProvider(model, apiKey, baseUrl) };
+  } catch {
+    throw new TranslationError("REFINEMENT_NOT_CONFIGURED");
+  }
+}
+
 function normalizeOpenRouterBaseUrl(value: string) {
   try {
     const url = new URL(value);

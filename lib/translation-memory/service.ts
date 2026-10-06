@@ -51,6 +51,7 @@ export async function captureTranslationMemory(
       pairs.set(sourceHash, {
         projectId, sourceLanguage, targetLanguage, sourceText, sourceHash,
         targetText: result.segments[index].text,
+        origin: "AUTOMATIC",
       });
     }
   });

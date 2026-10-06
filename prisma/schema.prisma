@@ -33,6 +33,42 @@ enum GlossaryCategory {
   OTHER
 }
 
+enum TranslationOrigin {
+  UNKNOWN
+  MODEL
+  TRANSLATION_MEMORY
+  REFINED
+}
+
+enum TranslationMemoryOrigin {
+  MANUAL
+  AUTOMATIC
+}
+
+enum TranslationQcCategory {
+  EMPTY_OUTPUT
+  EXCESSIVE_LENGTH
+  POSSIBLE_OMISSION
+  NUMBER_MISMATCH
+  MARKDOWN_OR_COMMENTARY
+  GLOSSARY_MISMATCH
+  SUSPICIOUS_REPETITION
+  SOURCE_TARGET_MISMATCH
+  AMBIGUOUS_OR_WORDPLAY
+}
+
+enum TranslationQcSeverity {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum TranslationQcSource {
+  HEURISTIC
+  MODEL
+  MANUAL
+}
+
 model Project {
   id             String        @id @default(cuid())
   name           String
@@ -107,6 +143,8 @@ model Translation {
   targetLanguage     String
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  revision           Int                 @default(0)
+  qcScannedAt        DateTime?
   movie              Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
   sourceTranscript   Transcript          @relation(fields: [sourceTranscriptId], references: [id], onDelete: Cascade)
   segments           TranslatedSegment[]
@@ -121,8 +159,13 @@ model TranslatedSegment {
   startMs       Int
   endMs         Int
   text          String
+  provider      String?
+  model         String?
+  origin        TranslationOrigin @default(UNKNOWN)
+  refinementJobId String?
   createdAt     DateTime    @default(now())
   translation   Translation @relation(fields: [translationId], references: [id], onDelete: Cascade)
+  qcIssues      TranslationQcIssue[]
 
   @@unique([translationId, sequence])
 }
@@ -151,9 +194,26 @@ model TranslationMemoryEntry {
   sourceLanguage String
   targetLanguage String
   sourceHash     String   @db.VarChar(64)
+  origin         TranslationMemoryOrigin @default(MANUAL)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, sourceLanguage, targetLanguage, sourceHash])
+}
+
+model TranslationQcIssue {
+  id                  String @id @default(cuid())
+  translatedSegmentId String
+  category            TranslationQcCategory
+  severity            TranslationQcSeverity
+  message             String
+  source              TranslationQcSource @default(HEURISTIC)
+  resolvedAt          DateTime?
+  resolution          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  translatedSegment   TranslatedSegment @relation(fields: [translatedSegmentId], references: [id], onDelete: Cascade)
+
+  @@index([translatedSegmentId, resolvedAt])
 }

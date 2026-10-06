@@ -22,7 +22,7 @@ export async function GET(_request: Request, context: RouteContext) {
             targetLanguage: true,
             segments: {
               orderBy: { sequence: "asc" },
-              select: { sequence: true, startMs: true, endMs: true, text: true },
+              select: { sequence: true, startMs: true, endMs: true, text: true, provider: true, model: true, origin: true },
             },
           },
         },

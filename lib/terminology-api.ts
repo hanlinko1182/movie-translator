@@ -15,7 +15,7 @@ export const glossaryEntrySelect = {
   ...commonSelect, category: true, notes: true,
 } satisfies Prisma.GlossaryEntrySelect;
 export const memoryEntrySelect = {
-  ...commonSelect, sourceHash: true,
+  ...commonSelect, sourceHash: true, origin: true,
 } satisfies Prisma.TranslationMemoryEntrySelect;
 
 export class TerminologyError extends Error {
@@ -115,7 +115,7 @@ export async function terminologyCollection(request: Request, slug: string, kind
         select: glossaryEntrySelect,
       })
       : await prisma.translationMemoryEntry.create({
-        data: { ...common, sourceHash: sourceTextHash(common.sourceText) },
+        data: { ...common, sourceHash: sourceTextHash(common.sourceText), origin: "MANUAL" },
         select: memoryEntrySelect,
       });
     return Response.json({ data: entry }, { status: 201 });
@@ -142,6 +142,7 @@ export async function terminologyEntry(request: Request, slug: string, entryId: 
         data: {
           sourceText: input.sourceText, targetText: input.targetText,
           sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage,
+          origin: "MANUAL",
           ...(input.sourceText ? { sourceHash: sourceTextHash(input.sourceText) } : {}),
         },
         select: memoryEntrySelect,
