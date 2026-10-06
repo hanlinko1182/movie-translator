@@ -2,6 +2,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+For the complete Ubuntu/Linux setup, environment, database, worker and Docker instructions, see [docs/RUN.md](docs/RUN.md).
+
 First, run the development server:
 
 ```bash
