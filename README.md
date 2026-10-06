@@ -237,7 +237,7 @@ does not claim to describe every refined row.
 A committed refinement can recover using its per-row job marker without another
 model call. A crash after a provider response but before transaction commit may
 still repeat a paid request on retry; there is no distributed exactly-once guarantee.
-No model-based QC, automatic Sol fallback, or export is implemented. Source edits
+No model-based QC or automatic Sol fallback is implemented. Source edits
 in place still require a future invalidation policy for automated translations.
 
 ## Phase 15 — Human subtitle editing and review
@@ -291,8 +291,62 @@ Migration `20261006160000_add_human_subtitle_review` is additive: MANUAL origin,
 TranslationReviewStatus, segment reviewStatus/revision/editedAt/reviewedAt and
 manualSourceHash. Existing rows default to UNREVIEWED. Authentication and
 multi-user locking remain outside this phase; API writes are scoped to the current
-movie/translation. Export comes next: Phase 16 should consume authoritative
-current target text and explicit review state, never regenerate over manual edits.
+movie/translation. Phase 16 exports authoritative current target text with explicit review filters,
+never regenerating over manual edits.
+
+## Phase 16 — SRT and ASS subtitle export
+
+`/projects/<slug>/export` shows the newest movie's real translation/review summary
+and downloads server-generated subtitle files. Selecting another movie is future
+work; the review link opens that exact movie in Translation. No readiness score,
+AI approval, mock export history, video processing or persistent export storage.
+
+GET `/api/movies/<database-id>/export/subtitles?format=srt&mode=all` downloads SRT;
+use `format=ass` for ASS, or `mode=approved` to include APPROVED rows only. Defaults
+are SRT/all. Other formats/modes, duplicate options and unknown query fields return
+controlled 400 errors. Missing Movie/Translation returns 404; an empty export or
+zero approved rows returns 409; invalid saved sequence/timing/text returns 422.
+
+ALL_CURRENT uses every current TranslatedSegment.text, including MANUAL edits,
+TM matches and model/refined output. APPROVED_ONLY omits UNREVIEWED/NEEDS_REVIEW
+rows, retains original time ranges/gaps and numbers SRT cues sequentially. No
+replacement subtitles are fabricated. The UI warns about non-approved rows or
+omissions and disables zero-approved downloads. Counts reflect the page load;
+each download reads the current saved data in a consistent read transaction.
+
+Timing comes only from persisted startMs/endMs. Export validates non-empty text,
+strict increasing sequences, nondecreasing start times and safe integer ranges
+with end >= start. It never edits source, targets, review state, TM, QC, Movie,
+Translation revisions or timing. Text is copied with CRLF/CR normalized to LF;
+SRT retains other whitespace, punctuation and meaningful line breaks.
+
+SRT uses HH:MM:SS,mmm (hours can exceed 99), UTF-8 without a BOM. ASS uses
+H:MM:SS.cc, flooring both bounds to centiseconds. The sample ranges become
+0:00:00.00–0:00:10.68, 0:00:11.01–0:00:38.21 and 0:00:38.21–0:00:42.51.
+Short ranges can collapse to equal ASS bounds; export never stretches or retimes
+them. ASS includes standard Script Info, V4+ Styles and Events sections, a generic
+sans-serif style, white text/black outline and conventional bottom-center margins.
+Font fallback depends on installed player fonts; no font files are bundled.
+
+ASS newlines become \N. Literal backslashes gain an invisible U+2060 WORD JOINER
+so text such as literal \N/\n/\h cannot become commands. Braces use libass literal
+escapes; an empty block after each opening brace prevents VSFilter from treating
+following text as override tags. Literal brace appearance can differ in VSFilter,
+which lacks libass's literal-brace extension; target words remain safe from override
+injection. This follows [libass's escaping guidance](https://github.com/libass/libass/wiki/Libass%27-ASS-Extensions)
+and [parser behavior](https://github.com/libass/libass/blob/master/libass/ass_parse.c).
+SRT does not share ASS's override syntax; subtitle text is otherwise preserved.
+
+Files use a sanitized movie filename/title plus `.my.srt` or `.my.ass`. Path/control
+characters, unsafe characters, traversal dots and reserved device names are handled;
+stems are limited by UTF-8 byte length. Content-Disposition includes a safe ASCII
+fallback and encoded UTF-8 filename*. SRT uses application/x-subrip; ASS text/plain,
+both charset=utf-8, private/no-store and nosniff. The API generates bytes in memory;
+the client downloads the server bytes and does not generate subtitle content.
+
+Run `pnpm exec tsx scripts/verify-subtitle-export.ts` for pure formatter, Unicode,
+multiline/CRLF, long-hour, gap, injection, filename/header and validation tests.
+This script imports no database, environment configuration or paid providers.
 
 ## Learn More
 
