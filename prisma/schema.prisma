@@ -56,6 +56,32 @@ enum SceneDetectionMethod {
   VISUAL_TRANSCRIPT_HEURISTIC
 }
 
+enum CharacterEvidenceType {
+  MENTION
+  SELF_IDENTIFICATION
+  BEHAVIOR
+  SPEECH_STYLE
+  ACTION_INFERENCE
+  RELATIONSHIP_CLUE
+}
+
+enum InferenceConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CharacterRelationshipType {
+  FAMILY
+  FRIEND
+  ALLY
+  RIVAL
+  ROMANTIC
+  PROFESSIONAL
+  UNKNOWN
+  OTHER
+}
+
 enum TranslationQcCategory {
   EMPTY_OUTPUT
   EXCESSIVE_LENGTH
@@ -92,6 +118,8 @@ model Project {
   movies         Movie[]
   glossaryEntries GlossaryEntry[]
   translationMemoryEntries TranslationMemoryEntry[]
+  characters Character[]
+  characterRelationships CharacterRelationship[]
 }
 
 model Movie {
@@ -112,6 +140,9 @@ model Movie {
   transcript         Transcript?
   translation        Translation?
   scenes             Scene[]
+  characterAnalysis  CharacterAnalysisRun?
+  characterEvidence  CharacterEvidence[]
+  relationshipEvidence CharacterRelationshipEvidence[]
 
   @@index([projectId])
 }
@@ -127,6 +158,8 @@ model Scene {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   movie           Movie                @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  characterEvidence CharacterEvidence[]
+  relationshipEvidence CharacterRelationshipEvidence[]
 
   @@unique([movieId, sequence])
   @@index([movieId, startMs, endMs])
@@ -145,6 +178,7 @@ model Transcript {
   movie      Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
   segments   TranscriptSegment[]
   translations Translation[]
+  characterAnalyses CharacterAnalysisRun[]
 }
 
 model TranscriptSegment {
@@ -157,6 +191,8 @@ model TranscriptSegment {
   confidence   Float?
   createdAt    DateTime   @default(now())
   transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  characterEvidence CharacterEvidence[]
+  relationshipEvidence CharacterRelationshipEvidence[]
 
   @@unique([transcriptId, sequence])
 }
@@ -249,4 +285,123 @@ model TranslationQcIssue {
   translatedSegment   TranslatedSegment @relation(fields: [translatedSegmentId], references: [id], onDelete: Cascade)
 
   @@index([translatedSegmentId, resolvedAt])
+}
+
+model Character {
+  id             String @id @default(cuid())
+  projectId      String
+  identityKey    String @db.VarChar(64)
+  canonicalName  String
+  normalizedName String
+  uncertain      Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  aliases        CharacterAlias[]
+  evidence       CharacterEvidence[]
+  relationshipsA CharacterRelationship[] @relation("CharacterA")
+  relationshipsB CharacterRelationship[] @relation("CharacterB")
+
+  @@unique([projectId, identityKey])
+  @@index([projectId, normalizedName])
+}
+
+model CharacterAlias {
+  id              String @id @default(cuid())
+  characterId     String
+  alias           String
+  normalizedAlias String
+  character       Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  @@unique([characterId, normalizedAlias])
+}
+
+model CharacterAnalysisRun {
+  id           String @id @default(cuid())
+  movieId      String @unique
+  transcriptId String
+  sourceHash   String @db.VarChar(64)
+  provider     String
+  model        String
+  sceneCount   Int
+  runtimeMs    Int
+  modelCalls   Int
+  usage        Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  movie        Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  evidence     CharacterEvidence[]
+  relationshipEvidence CharacterRelationshipEvidence[]
+  @@index([transcriptId])
+}
+
+model CharacterEvidence {
+  id                  String @id @default(cuid())
+  analysisRunId       String
+  characterId         String
+  movieId             String
+  sceneId             String?
+  sceneSequence       Int
+  transcriptSegmentId String
+  evidenceKey         String @db.VarChar(64)
+  evidenceType        CharacterEvidenceType
+  evidenceText        String
+  inference           String
+  confidence          InferenceConfidence
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  analysisRun         CharacterAnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  character           Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  movie               Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  scene               Scene? @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  transcriptSegment   TranscriptSegment @relation(fields: [transcriptSegmentId], references: [id], onDelete: Cascade)
+  @@unique([analysisRunId, evidenceKey])
+  @@index([characterId, movieId])
+  @@index([sceneId])
+  @@index([transcriptSegmentId])
+}
+
+model CharacterRelationship {
+  id               String @id @default(cuid())
+  projectId        String
+  characterAId     String
+  characterBId     String
+  relationshipType CharacterRelationshipType
+  summary          String
+  confidence       InferenceConfidence
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  characterA       Character @relation("CharacterA", fields: [characterAId], references: [id], onDelete: Cascade)
+  characterB       Character @relation("CharacterB", fields: [characterBId], references: [id], onDelete: Cascade)
+  evidence         CharacterRelationshipEvidence[]
+  @@unique([projectId, characterAId, characterBId])
+  @@index([characterAId])
+  @@index([characterBId])
+}
+
+model CharacterRelationshipEvidence {
+  id                  String @id @default(cuid())
+  analysisRunId       String
+  relationshipId     String
+  movieId             String
+  sceneId             String?
+  sceneSequence       Int
+  transcriptSegmentId String
+  evidenceKey         String @db.VarChar(64)
+  relationshipType    CharacterRelationshipType
+  relationshipSummary String
+  evidenceText        String
+  inference           String
+  confidence          InferenceConfidence
+  createdAt           DateTime @default(now())
+  analysisRun         CharacterAnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  relationship        CharacterRelationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  movie               Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  scene               Scene? @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  transcriptSegment   TranscriptSegment @relation(fields: [transcriptSegmentId], references: [id], onDelete: Cascade)
+  @@unique([analysisRunId, evidenceKey])
+  @@index([relationshipId, movieId])
+  @@index([sceneId])
+  @@index([transcriptSegmentId])
 }

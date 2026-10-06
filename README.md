@@ -438,3 +438,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Character evidence and relationships (Phase 18)
+
+Character analysis is evidence-based inference from existing scene intervals and transcript text, optionally with current aligned Myanmar translations. It does not analyze media, identify faces/voices, or provide speaker diarization. Generic candidates remain uncertain and scene-scoped. HIGH/MEDIUM/LOW describe explicit/contextual/ambiguous interpretation confidence, never truth probability. Review every inference against its source evidence.
+
+Set `CHARACTER_ANALYSIS_MODEL` to `openai/gpt-6-luna` (recommended low-cost starting model) and configure the existing server-only OpenRouter and Redis settings. No automatic Sol fallback. Run `pnpm worker:characters`, then explicitly acknowledge the paid action on `/projects/{slug}/characters`. Page rendering and polling never call the model. No model is silently chosen when configuration is missing.
+
+`POST /api/movies/{id}/characters/analyze` validates transcript/scenes and enqueues a source-hash-scoped job. `GET` on that route reports compact status (optional `jobId` query). `GET /api/movies/{id}/characters` returns current analysis/evidence, or a successful empty result if none exists. No scenes returns controlled `SCENES_REQUIRED`; detect scenes first. At most four scene windows, 24 segment occurrences and 12,000 source/target characters per request; long scenes split into bounded windows. Known aliases have a separate 2,000-character budget.
+
+Project-scoped characters and relational aliases are reused conservatively; generic names never merge across scenes. Each inference has actual scene and transcript anchors. Relationship pairs are sorted and unique. Current movie evidence is atomically replaced, while other movies’ evidence and existing identity/alias data are preserved. A current `CharacterAnalysisRun` records the transcript/source hash, provider/model, usage and runtime. Source changes invalidate stale jobs/results. A retained completed job is reused; this phase has no force-rerun mode for unchanged source or model-switch control. Redis receipts contain counts/metadata, not transcript content.
+
+Analysis never edits translations, human subtitles, memory, QC, exports or Movie status. Scene deletion nulls its evidence link (the original scene sequence remains); transcript segment deletion cascades affected evidence. Missing/rebuilt scenes or changed text mark analysis stale. The evidence layer is intended to feed Phase 19 recap; recap is not implemented here.
