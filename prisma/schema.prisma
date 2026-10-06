@@ -143,6 +143,8 @@ model Movie {
   characterAnalysis  CharacterAnalysisRun?
   characterEvidence  CharacterEvidence[]
   relationshipEvidence CharacterRelationshipEvidence[]
+  recap              Recap?
+  recapEvidence      RecapEvidence[]
 
   @@index([projectId])
 }
@@ -160,6 +162,7 @@ model Scene {
   movie           Movie                @relation(fields: [movieId], references: [id], onDelete: Cascade)
   characterEvidence CharacterEvidence[]
   relationshipEvidence CharacterRelationshipEvidence[]
+  recapEvidence     RecapEvidence[]
 
   @@unique([movieId, sequence])
   @@index([movieId, startMs, endMs])
@@ -179,6 +182,7 @@ model Transcript {
   segments   TranscriptSegment[]
   translations Translation[]
   characterAnalyses CharacterAnalysisRun[]
+  recaps            Recap[]
 }
 
 model TranscriptSegment {
@@ -193,6 +197,7 @@ model TranscriptSegment {
   transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
   characterEvidence CharacterEvidence[]
   relationshipEvidence CharacterRelationshipEvidence[]
+  recapEvidence     RecapEvidence[]
 
   @@unique([transcriptId, sequence])
 }
@@ -301,6 +306,9 @@ model Character {
   evidence       CharacterEvidence[]
   relationshipsA CharacterRelationship[] @relation("CharacterA")
   relationshipsB CharacterRelationship[] @relation("CharacterB")
+  recapInsights  RecapCharacterInsight[]
+  recapRelationshipsA RecapRelationshipInsight[] @relation("RecapCharacterA")
+  recapRelationshipsB RecapRelationshipInsight[] @relation("RecapCharacterB")
 
   @@unique([projectId, identityKey])
   @@index([projectId, normalizedName])
@@ -332,6 +340,7 @@ model CharacterAnalysisRun {
   transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
   evidence     CharacterEvidence[]
   relationshipEvidence CharacterRelationshipEvidence[]
+  recaps       Recap[]
   @@index([transcriptId])
 }
 
@@ -375,6 +384,7 @@ model CharacterRelationship {
   characterA       Character @relation("CharacterA", fields: [characterAId], references: [id], onDelete: Cascade)
   characterB       Character @relation("CharacterB", fields: [characterBId], references: [id], onDelete: Cascade)
   evidence         CharacterRelationshipEvidence[]
+  recapInsights    RecapRelationshipInsight[]
   @@unique([projectId, characterAId, characterBId])
   @@index([characterAId])
   @@index([characterBId])
@@ -402,6 +412,134 @@ model CharacterRelationshipEvidence {
   transcriptSegment   TranscriptSegment @relation(fields: [transcriptSegmentId], references: [id], onDelete: Cascade)
   @@unique([analysisRunId, evidenceKey])
   @@index([relationshipId, movieId])
+  @@index([sceneId])
+  @@index([transcriptSegmentId])
+}
+
+enum RecapCharacterContext {
+  CURRENT
+  ABSENT
+  STALE
+}
+
+enum RecapEvidenceType {
+  SECTION
+  CHARACTER_INSIGHT
+  RELATIONSHIP_INSIGHT
+}
+
+model Recap {
+  id                     String @id @default(cuid())
+  movieId                String @unique
+  sourceTranscriptId     String
+  characterAnalysisRunId String?
+  sourceHash             String @db.VarChar(64)
+  characterContext       RecapCharacterContext
+  provider               String
+  model                  String
+  language               String
+  title                  String
+  summary                String
+  strategy               String
+  runtimeMs              Int
+  modelCalls             Int
+  usage                  Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  movie                  Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  sourceTranscript       Transcript @relation(fields: [sourceTranscriptId], references: [id], onDelete: Cascade)
+  characterAnalysisRun   CharacterAnalysisRun? @relation(fields: [characterAnalysisRunId], references: [id], onDelete: SetNull)
+  sections               RecapSection[]
+  characterInsights      RecapCharacterInsight[]
+  relationshipInsights   RecapRelationshipInsight[]
+  evidence               RecapEvidence[]
+  @@index([sourceTranscriptId])
+  @@index([characterAnalysisRunId])
+}
+
+model RecapSection {
+  id                 String @id @default(cuid())
+  recapId            String
+  sequence           Int
+  sceneStartSequence Int
+  sceneEndSequence   Int
+  heading            String
+  summary            String
+  confidence         InferenceConfidence
+  createdAt          DateTime @default(now())
+  recap              Recap @relation(fields: [recapId], references: [id], onDelete: Cascade)
+  evidence           RecapEvidence[]
+  @@unique([recapId, sequence])
+}
+
+model RecapCharacterInsight {
+  id          String @id @default(cuid())
+  recapId     String
+  sequence    Int
+  characterId String?
+  displayName String
+  uncertain   Boolean
+  observation String
+  confidence  InferenceConfidence
+  createdAt   DateTime @default(now())
+  recap       Recap @relation(fields: [recapId], references: [id], onDelete: Cascade)
+  character   Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  evidence    RecapEvidence[]
+  @@unique([recapId, sequence])
+  @@index([characterId])
+}
+
+model RecapRelationshipInsight {
+  id             String @id @default(cuid())
+  recapId        String
+  sequence       Int
+  relationshipId String?
+  characterAId   String?
+  characterBId   String?
+  nameA          String
+  nameB          String
+  uncertainA     Boolean
+  uncertainB     Boolean
+  observation    String
+  confidence     InferenceConfidence
+  createdAt      DateTime @default(now())
+  recap          Recap @relation(fields: [recapId], references: [id], onDelete: Cascade)
+  relationship   CharacterRelationship? @relation(fields: [relationshipId], references: [id], onDelete: SetNull)
+  characterA     Character? @relation("RecapCharacterA", fields: [characterAId], references: [id], onDelete: SetNull)
+  characterB     Character? @relation("RecapCharacterB", fields: [characterBId], references: [id], onDelete: SetNull)
+  evidence       RecapEvidence[]
+  @@unique([recapId, sequence])
+  @@index([relationshipId])
+  @@index([characterAId])
+  @@index([characterBId])
+}
+
+model RecapEvidence {
+  id                  String @id @default(cuid())
+  recapId             String
+  movieId             String
+  sectionId           String?
+  characterInsightId  String?
+  relationshipInsightId String?
+  sceneId             String?
+  sceneSequence       Int
+  transcriptSegmentId String
+  evidenceType        RecapEvidenceType
+  evidenceKey         String @db.VarChar(64)
+  note                String
+  createdAt           DateTime @default(now())
+  recap               Recap @relation(fields: [recapId], references: [id], onDelete: Cascade)
+  movie               Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  section             RecapSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  characterInsight    RecapCharacterInsight? @relation(fields: [characterInsightId], references: [id], onDelete: Cascade)
+  relationshipInsight RecapRelationshipInsight? @relation(fields: [relationshipInsightId], references: [id], onDelete: Cascade)
+  scene               Scene? @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  transcriptSegment   TranscriptSegment @relation(fields: [transcriptSegmentId], references: [id], onDelete: Cascade)
+  @@unique([recapId, evidenceKey])
+  @@index([movieId])
+  @@index([sectionId])
+  @@index([characterInsightId])
+  @@index([relationshipInsightId])
   @@index([sceneId])
   @@index([transcriptSegmentId])
 }

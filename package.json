@@ -14,7 +14,8 @@
     "worker:translation": "node --conditions=react-server --import tsx workers/translation-worker.ts",
     "worker:translation-refinement": "node --conditions=react-server --import tsx workers/translation-refinement-worker.ts",
     "worker:scenes": "node --conditions=react-server --import tsx workers/scene-detection-worker.ts",
-    "worker:characters": "node --conditions=react-server --import tsx workers/character-analysis-worker.ts"
+    "worker:characters": "node --conditions=react-server --import tsx workers/character-analysis-worker.ts",
+    "worker:recap": "node --conditions=react-server --import tsx workers/recap-worker.ts"
   },
   "dependencies": {
     "@openrouter/sdk": "^1.4.21",
