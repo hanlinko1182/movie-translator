@@ -2,11 +2,13 @@ export type QcCategory = "EMPTY_OUTPUT" | "EXCESSIVE_LENGTH" | "POSSIBLE_OMISSIO
 export type QcFinding = { category: QcCategory; severity: "INFO" | "WARNING" | "ERROR"; message: string };
 export type QcIssueView = QcFinding & { id: string; source: string; resolvedAt: string | null; resolution: string | null };
 export type QcSummary = { segmentCount: number; cleanSegments: number; flaggedSegments: number; issueCount: number; categories: Partial<Record<QcCategory, number>> };
+export type ReviewStatus = "UNREVIEWED" | "NEEDS_REVIEW" | "APPROVED";
 export type ReviewRow = {
   id: string; sequence: number; startMs: number; endMs: number; sourceText: string; text: string;
   provider: string | null; model: string | null; origin: string; issues: QcIssueView[];
+  reviewStatus: ReviewStatus; version: string; editedAt: string | null; reviewedAt: string | null;
 };
-export type TranslationReview = { movieId: string; translationId: string; sourceLanguage: string; targetLanguage: string; rows: ReviewRow[]; summary: QcSummary; qcScanned: boolean };
+export type TranslationReview = { movieId: string; translationId: string; revision: number; sourceLanguage: string; targetLanguage: string; rows: ReviewRow[]; summary: QcSummary; qcScanned: boolean };
 export type RefinementReceipt = { movieId: string; translationId: string; sequences: number[]; segmentCount: number; model: string; runtimeMs: number; modelCalls?: number; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; costUsd?: number }; alreadyApplied?: boolean };
 
 export function summarizeQc(rows: { issues: { category: QcCategory; resolvedAt: unknown }[] }[]): QcSummary {

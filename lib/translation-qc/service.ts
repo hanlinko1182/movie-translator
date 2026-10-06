@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { TranslationError } from "@/lib/translation/types";
@@ -29,7 +30,7 @@ export async function loadTranslationSnapshot(movieId: string, database: Prisma.
 }
 export type TranslationSnapshot = Awaited<ReturnType<typeof loadTranslationSnapshot>>;
 
-export async function persistLocalQc(snapshot: TranslationSnapshot, transaction: Prisma.TransactionClient, sequences?: number[], refinementJobId?: string) {
+export async function persistLocalQc(snapshot: TranslationSnapshot, transaction: Prisma.TransactionClient, sequences?: number[], resolutionContext?: string) {
   const candidates = await transaction.glossaryEntry.findMany({ where: { projectId: snapshot.projectId, sourceLanguage: normalizeTerminologyLanguage(snapshot.sourceLanguage), targetLanguage: "my" }, select: { sourceText: true, targetText: true } });
   // QC evaluates every applicable stored rule; prompt budgets must not hide QC evidence.
   const rows = snapshot.translation.segments.map((target, index) => ({ sourceText: snapshot.transcript.segments[index].text, text: target.text }));
@@ -41,12 +42,20 @@ export async function persistLocalQc(snapshot: TranslationSnapshot, transaction:
     const glossaryFindings = checkTranslationRows([rows[index]], relevant)[0];
     const current = [...findings[index], ...glossaryFindings].filter((finding, position, all) => all.findIndex((other) => other.category === finding.category) === position);
     const where = { translatedSegmentId: segment.id, source: "HEURISTIC" as const, resolvedAt: null };
-    if (refinementJobId) {
-      await transaction.translationQcIssue.updateMany({ where: { ...where, category: { notIn: current.map((finding) => finding.category) } }, data: { resolvedAt: new Date(), resolution: `Local finding no longer applies after refinement ${refinementJobId}; human approval is not implied.` } });
+    if (resolutionContext) {
+      await transaction.translationQcIssue.updateMany({ where: { ...where, category: { notIn: current.map((finding) => finding.category) } }, data: { resolvedAt: new Date(), resolution: `Local finding no longer applies after ${resolutionContext}; human approval is not implied.` } });
     }
     await transaction.translationQcIssue.deleteMany({ where });
     if (current.length) await transaction.translationQcIssue.createMany({ data: current.map((finding) => ({ translatedSegmentId: segment.id, ...finding, source: "HEURISTIC" })) });
   }
+}
+
+// Include source content so an in-place transcript change also invalidates editor tokens.
+export function translationSegmentVersion(translation: { id: string; revision: number }, segment: { id: string; revision: number }, source: { sequence: number; startMs: number; endMs: number; text: string } | undefined) {
+  return createHash("sha256").update(JSON.stringify([translation.id, translation.revision, segment.id, segment.revision, source])).digest("hex");
+}
+export function segmentVersion(snapshot: TranslationSnapshot, segment: TranslationSnapshot["translation"]["segments"][number]) {
+  return translationSegmentVersion(snapshot.translation, segment, snapshot.transcript.segments.find((source) => source.sequence === segment.sequence));
 }
 
 export function snapshotReview(snapshot: TranslationSnapshot): TranslationReview {
@@ -54,9 +63,11 @@ export function snapshotReview(snapshot: TranslationSnapshot): TranslationReview
     id: segment.id, sequence: segment.sequence, startMs: segment.startMs, endMs: segment.endMs,
     sourceText: snapshot.transcript.segments[index].text, text: segment.text,
     provider: segment.provider, model: segment.model, origin: segment.origin,
+    reviewStatus: segment.reviewStatus, version: translationSegmentVersion(snapshot.translation, segment, snapshot.transcript.segments[index]),
+    editedAt: segment.editedAt?.toISOString() ?? null, reviewedAt: segment.reviewedAt?.toISOString() ?? null,
     issues: segment.qcIssues.map((issue) => ({ id: issue.id, category: issue.category, severity: issue.severity, message: issue.message, source: issue.source, resolvedAt: issue.resolvedAt?.toISOString() ?? null, resolution: issue.resolution })),
   }));
-  return { movieId: snapshot.id, translationId: snapshot.translation.id, sourceLanguage: snapshot.sourceLanguage, targetLanguage: snapshot.translation.targetLanguage, rows, summary: summarizeQc(rows), qcScanned: snapshot.translation.qcScannedAt !== null };
+  return { movieId: snapshot.id, translationId: snapshot.translation.id, revision: snapshot.translation.revision, sourceLanguage: snapshot.sourceLanguage, targetLanguage: snapshot.translation.targetLanguage, rows, summary: summarizeQc(rows), qcScanned: snapshot.translation.qcScannedAt !== null };
 }
 
 export async function getTranslationReview(movieId: string) { return snapshotReview(await loadTranslationSnapshot(movieId)); }

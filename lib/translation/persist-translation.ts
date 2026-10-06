@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { sourceTextHash } from "@/lib/translation-memory/hash";
 import { captureTranslationMemory } from "@/lib/translation-memory/service";
 import {
   TranslationError,
@@ -115,6 +116,17 @@ export async function persistTranslationResult(
         segment.text !== source[index].text)
     ) throw new TranslationError("TRANSLATION_SOURCE_CHANGED");
 
+    const previous = await transaction.translation.findUnique({ where: { movieId }, include: { segments: true } });
+    const manual = previous?.segments.filter((segment) => segment.origin === "MANUAL") ?? [];
+    const sourceBySequence = new Map(source.map((segment) => [segment.sequence, segment]));
+    // Never discard manual work, including when an in-place source replacement changed its meaning.
+    if (manual.length && (previous!.sourceTranscriptId !== sourceTranscriptId || previous!.sourceLanguage !== result.sourceLanguage || previous!.targetLanguage !== result.targetLanguage || manual.some((segment) => {
+      const original = sourceBySequence.get(segment.sequence);
+      return !original || original.startMs !== segment.startMs || original.endMs !== segment.endMs || segment.manualSourceHash !== sourceTextHash(original.text);
+    }))) throw new TranslationError("MANUAL_EDIT_PROTECTED");
+    const manualBySequence = new Map(manual.map((segment) => [segment.sequence, segment]));
+    const previousBySequence = new Map(previous?.segments.map((segment) => [segment.sequence, segment]) ?? []);
+
     const data = {
       sourceTranscriptId,
       provider: result.provider.trim(),
@@ -129,21 +141,22 @@ export async function persistTranslationResult(
       update: { ...data, revision: { increment: 1 } },
       select: { id: true },
     });
-    await transaction.translatedSegment.deleteMany({ where: { translationId: translation.id } });
+    await transaction.translatedSegment.deleteMany({ where: { translationId: translation.id, origin: { not: "MANUAL" } } });
     await transaction.translatedSegment.createMany({
-      data: result.segments.map((segment) => ({
+      data: result.segments.filter((segment) => !manualBySequence.has(segment.sequence)).map((segment) => ({
         translationId: translation.id,
         sequence: segment.sequence,
         startMs: segment.startMs,
         endMs: segment.endMs,
         text: segment.text,
+        reviewStatus: previousBySequence.get(segment.sequence)?.reviewStatus === "APPROVED" ? "NEEDS_REVIEW" : "UNREVIEWED",
         provider: segment.provider ?? result.provider,
         model: segment.model ?? result.model,
         origin: segment.origin ?? (result.provider === "translation-memory" ? "TRANSLATION_MEMORY" : "MODEL"),
       })),
     });
     // Capture only after segment replacement succeeds, inside the same transaction.
-    await captureTranslationMemory(transaction, movie.projectId, source, result);
+    await captureTranslationMemory(transaction, movie.projectId, source, { ...result, segments: result.segments.map((segment) => ({ ...segment, text: manualBySequence.get(segment.sequence)?.text ?? segment.text })) });
 
     return {
       movieId,

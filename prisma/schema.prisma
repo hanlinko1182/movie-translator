@@ -38,6 +38,13 @@ enum TranslationOrigin {
   MODEL
   TRANSLATION_MEMORY
   REFINED
+  MANUAL
+}
+
+enum TranslationReviewStatus {
+  UNREVIEWED
+  NEEDS_REVIEW
+  APPROVED
 }
 
 enum TranslationMemoryOrigin {
@@ -163,6 +170,11 @@ model TranslatedSegment {
   model         String?
   origin        TranslationOrigin @default(UNKNOWN)
   refinementJobId String?
+  reviewStatus  TranslationReviewStatus @default(UNREVIEWED)
+  revision      Int         @default(0)
+  editedAt      DateTime?
+  reviewedAt    DateTime?
+  manualSourceHash String?  @db.VarChar(64)
   createdAt     DateTime    @default(now())
   translation   Translation @relation(fields: [translationId], references: [id], onDelete: Cascade)
   qcIssues      TranslationQcIssue[]

@@ -20,6 +20,7 @@ export function normalizeRefinementSequences(value: unknown): number[] {
 }
 export function validateRefinementSelection(snapshot: TranslationSnapshot, sequences: number[]) {
   if (sequences.some((sequence) => !snapshot.translation.segments.some((segment) => segment.sequence === sequence))) throw new TranslationError("REFINEMENT_SEQUENCE_NOT_FOUND");
+  if (snapshot.translation.segments.some((segment) => sequences.includes(segment.sequence) && segment.origin === "MANUAL")) throw new TranslationError("MANUAL_EDIT_PROTECTED");
   if (sequences.length > 1 && sequences.length === snapshot.translation.segments.length) throw new TranslationError("REFINEMENT_SELECTION_TOO_BROAD");
 }
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -30,7 +31,7 @@ export function refinementSnapshotHash(snapshot: TranslationSnapshot, sequences:
   return digest([
     snapshot.projectId, snapshot.sourceLanguage, snapshot.transcript.id, snapshot.transcript.segments,
     snapshot.translation.id, snapshot.translation.revision, snapshot.translation.targetLanguage,
-    snapshot.translation.segments.filter((segment) => sequences.includes(segment.sequence)).map(({ id, sequence, text, provider, model, origin, refinementJobId }) => ({ id, sequence, text, provider, model, origin, refinementJobId })),
+    snapshot.translation.segments.filter((segment) => sequences.includes(segment.sequence)).map(({ id, sequence, text, provider, model, origin, refinementJobId, revision, reviewStatus }) => ({ id, sequence, text, provider, model, origin, refinementJobId, revision, reviewStatus })),
   ]);
 }
 
@@ -55,18 +56,19 @@ export async function persistRefinement(data: RefinementJobData, jobId: string, 
   return prisma.$transaction(async (transaction) => {
     await transaction.$queryRaw`SELECT id FROM "Movie" WHERE id = ${data.movieId} FOR UPDATE`;
     const current = await loadTranslationSnapshot(data.movieId, transaction);
+    validateRefinementSelection(current, data.sequences);
     if (current.translation.id !== data.translationId || current.translation.revision !== data.revision || refinementSnapshotHash(current, data.sequences) !== data.snapshotHash) throw new TranslationError("REFINEMENT_STALE");
     for (const translated of result.segments) {
       const original = current.translation.segments.find((segment) => segment.sequence === translated.sequence)!;
       const source = current.transcript.segments.find((segment) => segment.sequence === translated.sequence)!;
-      await transaction.translatedSegment.update({ where: { id: original.id }, data: { text: translated.text, provider: result.provider, model: result.model, origin: "REFINED", refinementJobId: jobId } });
+      await transaction.translatedSegment.update({ where: { id: original.id }, data: { text: translated.text, provider: result.provider, model: result.model, origin: "REFINED", refinementJobId: jobId, revision: { increment: 1 }, ...(translated.text !== original.text ? { reviewStatus: "NEEDS_REVIEW", reviewedAt: null } : {}) } });
       const key = { projectId: current.projectId, sourceLanguage: normalizeTerminologyLanguage(current.sourceLanguage), targetLanguage: "my", sourceHash: sourceTextHash(source.text) };
       // Atomic predicate protects manual edits and automatic pairs that no longer match this revision.
       await transaction.translationMemoryEntry.updateMany({ where: { ...key, origin: "AUTOMATIC", sourceText: normalizeMemorySource(source.text), targetText: original.text }, data: { targetText: translated.text } });
       await transaction.translationMemoryEntry.createMany({ data: [{ ...key, sourceText: normalizeMemorySource(source.text), targetText: translated.text, origin: "AUTOMATIC" }], skipDuplicates: true });
     }
     const updated = await loadTranslationSnapshot(data.movieId, transaction);
-    await persistLocalQc(updated, transaction, data.sequences, jobId);
+    await persistLocalQc(updated, transaction, data.sequences, `refinement ${jobId}`);
     return { movieId: data.movieId, translationId: current.translation.id, sequences: data.sequences, segmentCount: result.segments.length, model: result.model, runtimeMs: result.runtimeMs, ...(result.modelCalls === undefined ? {} : { modelCalls: result.modelCalls }), ...(result.usage ? { usage: result.usage } : {}) } satisfies RefinementReceipt;
   }, { timeout: 60_000 });
 }

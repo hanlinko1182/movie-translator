@@ -205,7 +205,7 @@ can still refine its one row). Pages and QC scans never trigger paid requests.
 
 Queue `translation-refinement` runs `refine-translation` with concurrency one.
 Payload contains movie ID, sequences, translation ID/revision and a snapshot
-hash, never full dialogue. IDs hash translation identity, full-replacement revision,
+hash, never full dialogue. IDs hash translation identity, replacement/human-mutation revision,
 source snapshot and normalized selection. Equivalent concurrent submissions and
 repeated retained requests reuse one job, including after successful refinement.
 Completed/failed jobs retain up to 1,000 each. A deliberate repeat requires removing
@@ -237,9 +237,62 @@ does not claim to describe every refined row.
 A committed refinement can recover using its per-row job marker without another
 model call. A crash after a provider response but before transaction commit may
 still repeat a paid request on retry; there is no distributed exactly-once guarantee.
-No model-based QC, automatic Sol fallback, human approval, subtitle editing, or
-export is implemented. Source edits in place still require a future invalidation
-policy for already-persisted translations.
+No model-based QC, automatic Sol fallback, or export is implemented. Source edits
+in place still require a future invalidation policy for automated translations.
+
+## Phase 15 — Human subtitle editing and review
+
+Use `/projects/<slug>/translation` to edit current Myanmar targets. Chinese source,
+sequence and timestamps are read-only. Save is explicit and runs no provider call;
+it atomically stores the current text, MANUAL origin, edit timestamp, manual memory
+pair and refreshed local QC. Prior provider/model metadata remains as previous
+automation, not the current origin. No duplicate editedText or full history is kept.
+
+Review states are UNREVIEWED, NEEDS_REVIEW and APPROVED. Only explicit human
+review actions approve a row. Changed text becomes NEEDS_REVIEW and clears
+reviewedAt; save changed text before approving separately. QC findings do not
+approve rows. Status-only actions do not change text, origin or memory. Bulk
+approval/needs-review accepts up to 24 selected rows atomically.
+
+PATCH `/api/movies/<id>/translation/segments/<sequence>` accepts only `text` and/or
+`reviewStatus` plus the current `version` token. Text is trimmed, non-empty and at
+most 32,000 characters. PATCH `/api/movies/<id>/translation/review` accepts only
+`sequences`, `reviewStatus` and `versions` (sequence-to-token map). Tokens bind the
+translation generation, row identity/revision and aligned source contents. Reads
+from the translation and QC APIs expose tokens, review state, editedAt/reviewedAt
+and QC evidence. Stale mutations return 409 STALE_TRANSLATION_SEGMENT. A stale
+editor retains its draft and requires comparing the latest saved text before rebasing.
+
+Human edits are authoritative: production reruns preserve MANUAL row identities,
+text, review state, timestamps and QC history. Non-manual rows can be replaced;
+previous approvals are invalidated. A stored manualSourceHash prevents reruns from
+silently attaching human work to changed source text; mismatched source bindings
+reject with MANUAL_EDIT_PROTECTED. No force override exists. Sol selection and
+commit also reject MANUAL rows before overwriting; selection rejects before any
+provider call. Automated Sol target changes invalidate approval.
+
+Manual saves upsert project/language/source-hash exact memory pairs as MANUAL
+using existing normalization. Automatic capture skips existing pairs; refinement
+only updates qualifying AUTOMATIC pairs. Repeated identical source lines share
+one pair, so the latest explicit human save determines that future memory match.
+Disappearing HEURISTIC findings receive a resolution timestamp after an edit;
+manual findings are never auto-resolved. Approval remains a human decision.
+
+Per-row revision provides monotonic write protection. Translation revision advances
+on production replacement and every human save/review action, invalidating queued
+refinement generations. Sol completion advances selected row revisions, but retains
+the translation generation so retained completed jobs still deduplicate paid requests.
+QC scans leave edit tokens unchanged. Drafts survive search/filter/QC refresh and
+show unsaved status; browser reload/close warns, but SPA route navigation is not
+blocked. Saving/reviewing one row can invalidate another draft's generation token;
+the editor explicitly compares/rebases that draft before saving.
+
+Migration `20261006160000_add_human_subtitle_review` is additive: MANUAL origin,
+TranslationReviewStatus, segment reviewStatus/revision/editedAt/reviewedAt and
+manualSourceHash. Existing rows default to UNREVIEWED. Authentication and
+multi-user locking remain outside this phase; API writes are scoped to the current
+movie/translation. Export comes next: Phase 16 should consume authoritative
+current target text and explicit review state, never regenerate over manual edits.
 
 ## Learn More
 
