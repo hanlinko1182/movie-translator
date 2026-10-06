@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 
 import { OpenRouter } from "@openrouter/sdk";
@@ -211,8 +212,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function logProviderFailure(error: unknown) {
   if (error instanceof OpenRouterError) {
-    console.error("OpenRouter translation request failed.", { name: error.name, status: error.statusCode });
+    log("error", "translation_provider_failed", { status: error.statusCode });
     return;
   }
-  console.error("OpenRouter translation request failed with a transport error.");
+  log("error", "translation_transport_failed");
 }

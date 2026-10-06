@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 import { OpenRouter } from "@openrouter/sdk";
 import { OpenRouterError, ResponseValidationError, SDKValidationError } from "@openrouter/sdk/models/errors";
@@ -48,7 +49,7 @@ export class OpenRouterRecapProvider implements RecapProvider {
       if (error instanceof ResponseValidationError) throw new RecapError("RECAP_INVALID_RESPONSE");
       if (error instanceof SDKValidationError) throw new RecapError("RECAP_PROVIDER_REJECTED");
       const status = error instanceof OpenRouterError ? error.statusCode : undefined;
-      console.error("Recap provider request failed.", typeof status === "number" ? { status } : { transport: true });
+      log("error", "recap_provider_failed", typeof status === "number" ? { status } : {});
       if (typeof status === "number" && status >= 400 && status < 500 && ![408, 409, 429].includes(status)) throw new RecapError("RECAP_PROVIDER_REJECTED");
       throw new RecapError("RECAP_PROVIDER_ERROR");
     }

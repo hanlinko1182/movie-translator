@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import { jsonError } from "@/lib/project-api";
 import { RedisConfigurationError } from "@/lib/queue/connection";
 import {
@@ -35,14 +36,14 @@ function queueErrorResponse(error: unknown) {
     return jsonError(error.code, error.message, error.status);
   }
   if (error instanceof RedisConfigurationError) {
-    console.error(error.message);
+    log("error", "runtime_configuration_invalid");
     return jsonError(
       "TRANSCRIPTION_QUEUE_NOT_CONFIGURED",
       "Transcription processing is not configured",
       503,
     );
   }
-  console.error("Transcription queue request failed; check database and Redis connectivity.");
+  log("error", "transcribe_route_diagnostic");
   return jsonError(
     "TRANSCRIPTION_QUEUE_UNAVAILABLE",
     "Unable to access the transcription queue; try again later",

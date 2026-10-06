@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 import { OpenRouter } from "@openrouter/sdk";
 import { OpenRouterError, ResponseValidationError, SDKValidationError } from "@openrouter/sdk/models/errors";
@@ -42,7 +43,7 @@ export class OpenRouterCharacterProvider implements CharacterAnalysisProvider {
       if (error instanceof ResponseValidationError) throw new CharacterAnalysisError("CHARACTER_INVALID_RESPONSE");
       if (error instanceof SDKValidationError) throw new CharacterAnalysisError("CHARACTER_PROVIDER_REJECTED");
       const status = error instanceof OpenRouterError ? error.statusCode : undefined;
-      console.error("Character provider request failed.", typeof status === "number" ? { status } : { transport: true });
+      log("error", "character_analysis_provider_failed", typeof status === "number" ? { status } : {});
       if (typeof status === "number" && status >= 400 && status < 500 && ![408, 409, 429].includes(status)) throw new CharacterAnalysisError("CHARACTER_PROVIDER_REJECTED");
       throw new CharacterAnalysisError("CHARACTER_PROVIDER_ERROR");
     }

@@ -1,4 +1,5 @@
 import { Prisma, ProjectStatus } from "@/generated/prisma/client";
+import { boundedJson } from "@/lib/request-body";
 
 export const projectSelect = {
   id: true,
@@ -29,7 +30,7 @@ export function jsonError(code: string, message: string, status: number) {
 
 export async function readJsonObject(request: Request) {
   try {
-    const value: unknown = await request.json();
+    const value: unknown = await boundedJson(request);
 
     if (value && typeof value === "object" && !Array.isArray(value)) {
       return value as Record<string, unknown>;
@@ -52,7 +53,7 @@ export function nonEmptyString(value: unknown) {
   if (typeof value !== "string") return null;
 
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  return trimmed.length > 0 && trimmed.length <= 500 ? trimmed : null;
 }
 
 export function slugify(value: string) {

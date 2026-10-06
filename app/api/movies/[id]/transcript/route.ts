@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { jsonError } from "@/lib/project-api";
 
@@ -42,7 +43,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
     return Response.json({ data: movie.transcript });
   } catch {
-    console.error("Transcript request failed.");
+    log("error", "transcript_route_diagnostic");
     return jsonError("TRANSCRIPT_FETCH_FAILED", "Unable to fetch transcript", 500);
   }
 }

@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 import { Queue } from "bullmq";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +16,7 @@ export function createRefinementQueue() {
     connection: redisConnection("producer"),
     defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2_000 }, removeOnComplete: { count: 1_000 }, removeOnFail: { count: 1_000 } },
   });
-  queue.on("error", () => console.error("Refinement queue Redis connection failed."));
+  queue.on("error", () => log("error", "queue_refinement_queue_diagnostic"));
   return queue;
 }
 export async function enqueueTranslationRefinement(movieId: string, value: unknown) {
@@ -36,7 +37,7 @@ export async function enqueueTranslationRefinement(movieId: string, value: unkno
     const data: RefinementJobData = { movieId, sequences, translationId: snapshot.translation.id, revision: snapshot.translation.revision, snapshotHash: refinementSnapshotHash(snapshot, sequences) };
     const job = await queue.add(REFINEMENT_JOB_NAME, data, { jobId });
     return { movieId, jobId, state: await job.getState() };
-  } finally { await queue.close().catch(() => console.error("Refinement queue could not close.")); }
+  } finally { await queue.close().catch(() => log("error", "queue_refinement_queue_diagnostic")); }
 }
 export async function getTranslationRefinementJob(movieId: string, jobId: string) {
   if (!await prisma.movie.findUnique({ where: { id: movieId }, select: { id: true } })) throw new TranslationError("MOVIE_NOT_FOUND");
@@ -54,5 +55,5 @@ export async function getTranslationRefinementJob(movieId: string, jobId: string
       modelCalls: receipt.modelCalls, alreadyApplied: receipt.alreadyApplied,
       ...(receipt.usage ? { usage: { inputTokens: receipt.usage.inputTokens, outputTokens: receipt.usage.outputTokens, totalTokens: receipt.usage.totalTokens, costUsd: receipt.usage.costUsd } } : {}),
     } } : {}) };
-  } finally { await queue.close().catch(() => console.error("Refinement queue could not close.")); }
+  } finally { await queue.close().catch(() => log("error", "queue_refinement_queue_diagnostic")); }
 }

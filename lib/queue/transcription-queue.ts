@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 
 import { Queue } from "bullmq";
@@ -28,7 +29,7 @@ export function createTranscriptionQueue() {
       removeOnFail: { count: 1_000 },
     },
   });
-  queue.on("error", () => console.error("Transcription queue Redis connection failed."));
+  queue.on("error", () => log("error", "queue_transcription_queue_diagnostic"));
   return queue;
 }
 
@@ -54,7 +55,7 @@ export async function enqueueMovieTranscription(movieId: string) {
     return { movieId, jobId, state: await job.getState() };
   } finally {
     await queue.close().catch(() => {
-      console.error("Transcription queue connection could not close.");
+      log("error", "transcription_queue_diagnostic");
     });
   }
 }
@@ -92,7 +93,7 @@ export async function getMovieTranscriptionJob(movieId: string) {
     };
   } finally {
     await queue.close().catch(() => {
-      console.error("Transcription queue connection could not close.");
+      log("error", "transcription_queue_diagnostic");
     });
   }
 }

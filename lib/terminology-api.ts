@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -164,6 +165,6 @@ function terminologyErrorResponse(error: unknown, kind: TerminologyKind) {
     return jsonError(`${prefix}_DUPLICATE`, "An entry with this source and language pair already exists", 409);
   }
   if (isPrismaError(error, "P2025")) return jsonError(`${prefix}_ENTRY_NOT_FOUND`, "Entry not found in this project", 404);
-  console.error("Project terminology request failed.");
+  log("error", "lib_terminology_api_diagnostic");
   return jsonError(`${prefix}_REQUEST_FAILED`, "Unable to manage project entries", 500);
 }

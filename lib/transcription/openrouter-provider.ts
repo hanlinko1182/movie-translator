@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 
 import { openAsBlob } from "node:fs";
@@ -180,11 +181,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function logProviderFailure(error: unknown) {
   if (error instanceof OpenRouterError) {
-    console.error("OpenRouter transcription request failed.", {
-      name: error.name,
-      status: error.statusCode,
-    });
+    log("error", "transcription_provider_failed", { status: error.statusCode });
     return;
   }
-  console.error("OpenRouter transcription request failed with a transport error.");
+  log("error", "transcription_transport_failed");
 }

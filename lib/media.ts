@@ -10,7 +10,10 @@ import {
   LOCAL_STORAGE_ROOT,
   resolveAudioStorageKey,
   resolveMovieStorageKey,
+  localStorage,
 } from "@/lib/storage";
+import { StorageError } from "@/lib/storage/local";
+import { log } from "@/lib/logger";
 
 const mediaErrors = {
   MOVIE_FILE_MISSING: { status: 404, message: "The stored movie file is missing" },
@@ -53,6 +56,7 @@ export async function resolveMovieSource(storageKey: string) {
   }
 
   try {
+    await localStorage.localPath(storageKey);
     const [root, actualSource, file] = await Promise.all([
       realpath(LOCAL_STORAGE_ROOT),
       realpath(source),
@@ -66,6 +70,7 @@ export async function resolveMovieSource(storageKey: string) {
     return actualSource;
   } catch (error) {
     if (error instanceof MediaProcessingError) throw error;
+    if (error instanceof StorageError) throw new MediaProcessingError(error.code === "STORAGE_FILE_MISSING" ? "MOVIE_FILE_MISSING" : "INVALID_STORAGE_KEY");
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       throw new MediaProcessingError("MOVIE_FILE_MISSING");
     }
@@ -132,6 +137,7 @@ export async function extractMovieAudio(source: string, movieId: string) {
   let temporaryDirectory: string | undefined;
   try {
     await mkdir(AUDIO_STORAGE_DIRECTORY, { recursive: true, mode: 0o700 });
+    await localStorage.check();
     const [root, directory] = await Promise.all([
       realpath(LOCAL_STORAGE_ROOT),
       realpath(AUDIO_STORAGE_DIRECTORY),
@@ -159,12 +165,12 @@ export async function extractMovieAudio(source: string, movieId: string) {
     return { storageKey };
   } catch (error) {
     if (error instanceof MediaProcessingError) throw error;
-    console.error("Audio artifact could not be stored.");
+    log("error", "media_diagnostic");
     throw new MediaProcessingError("AUDIO_EXTRACTION_FAILED");
   } finally {
     if (temporaryDirectory) {
       await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {
-        console.error("Temporary audio artifact cleanup failed.");
+        log("error", "media_diagnostic");
       });
     }
   }
@@ -187,6 +193,7 @@ export async function splitExtractedAudio(
   let temporaryDirectory: string | undefined;
   try {
     const expectedSource = resolveAudioStorageKey(getAudioStorageKey(movieId));
+    await localStorage.localPath(getAudioStorageKey(movieId));
     const [root, directory, actualSource, sourceFile] = await Promise.all([
       realpath(LOCAL_STORAGE_ROOT),
       realpath(AUDIO_STORAGE_DIRECTORY),
@@ -244,12 +251,12 @@ export async function splitExtractedAudio(
     };
   } catch (error) {
     if (error instanceof MediaProcessingError) throw error;
-    console.error("Transcription audio chunks could not be created.");
+    log("error", "media_diagnostic");
     throw new MediaProcessingError("AUDIO_CHUNKING_FAILED");
   } finally {
     if (temporaryDirectory) {
       await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => {
-        console.error("Temporary transcription audio cleanup failed.");
+        log("error", "media_diagnostic");
       });
     }
   }
@@ -269,12 +276,12 @@ function runMediaBinary(
       maxBuffer: 1024 * 1024,
       windowsHide: true,
       shell: false,
-    }, (error, stdout, stderr) => {
+    }, (error, stdout) => {
       if (error) {
-        // Raw binary diagnostics stay on the server; errors returned by the API
-        // contain only the controlled code/message above. Timeout kills the
+        // Discard raw binary diagnostics (they can contain paths/content).
+        // Public errors contain only the controlled code/message. Timeout kills the
         // process before this callback runs and temporary-file cleanup begins.
-        console.error(`${binary} failed${error.killed ? " (terminated)" : ""}:`, stderr);
+        log("error", "media_binary_failed", { errorCode: failure });
         reject(new MediaProcessingError(failure));
         return;
       }

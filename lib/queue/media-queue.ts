@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 
 import { Queue } from "bullmq";
@@ -25,7 +26,7 @@ export function createMediaQueue() {
       removeOnFail: { count: 1_000 },
     },
   });
-  queue.on("error", () => console.error("Media queue Redis connection failed."));
+  queue.on("error", () => log("error", "queue_media_queue_diagnostic"));
   return queue;
 }
 
@@ -67,12 +68,12 @@ export async function enqueueMovieMedia(movieId: string) {
     // unqueued movie if publication survived a rolled-back transaction.
     if (publishing) {
       await queue.getJob(jobId).then((job) => job?.remove()).catch(() => {
-        console.error("Media enqueue compensation could not remove the job.");
+        log("error", "media_queue_diagnostic");
       });
     }
     throw error;
   } finally {
-    await queue.close().catch(() => console.error("Media queue connection could not close."));
+    await queue.close().catch(() => log("error", "queue_media_queue_diagnostic"));
   }
 }
 
@@ -85,6 +86,6 @@ export async function getMovieMediaJob(movieId: string) {
     const job = await queue.getJob(mediaJobId(movieId));
     return job ? { jobId: job.id, state: await job.getState(), attemptsMade: job.attemptsMade } : null;
   } finally {
-    await queue.close().catch(() => console.error("Media queue connection could not close."));
+    await queue.close().catch(() => log("error", "queue_media_queue_diagnostic"));
   }
 }

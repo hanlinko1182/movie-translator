@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 import { Queue } from "bullmq";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ export type CharacterJobData = { movieId: string; sourceHash: string };
 export function characterJobId(movieId: string, sourceHash: string) { return `character-analysis-${encodeURIComponent(movieId)}-${sourceHash}`; }
 export function createCharacterQueue() {
   const queue = new Queue<CharacterJobData, AnalysisReceipt, typeof CHARACTER_JOB_NAME>(CHARACTER_QUEUE_NAME, { connection: redisConnection("producer"), defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 }, removeOnComplete: { count: 1000 }, removeOnFail: { count: 1000 } } });
-  queue.on("error", () => console.error("Character analysis queue Redis connection failed."));
+  queue.on("error", () => log("error", "queue_character_queue_diagnostic"));
   return queue;
 }
 export async function enqueueCharacterAnalysis(movieId: string) {
@@ -26,7 +27,7 @@ export async function enqueueCharacterAnalysis(movieId: string) {
     if (existing && await existing.getState() === "failed") throw new CharacterAnalysisError("CHARACTER_JOB_FAILED");
     const job = existing ?? await queue.add(CHARACTER_JOB_NAME, { movieId, sourceHash: source.sourceHash }, { jobId });
     return { movieId, jobId, state: await job.getState() };
-  } finally { await queue.close().catch(() => console.error("Character queue connection could not close.")); }
+  } finally { await queue.close().catch(() => log("error", "queue_character_queue_diagnostic")); }
 }
 export async function getCharacterJob(movieId: string, requestedId?: string | null) {
   if (!await prisma.movie.findUnique({ where: { id: movieId }, select: { id: true } })) throw new CharacterAnalysisError("MOVIE_NOT_FOUND");
@@ -46,6 +47,6 @@ export async function getCharacterJob(movieId: string, requestedId?: string | nu
       ...(state === "completed" && receipt ? { result: { movieId: receipt.movieId, analysisRunId: receipt.analysisRunId, characterCount: receipt.characterCount, relationshipCount: receipt.relationshipCount, evidenceCount: receipt.evidenceCount, provider: receipt.provider, model: receipt.model, runtimeMs: receipt.runtimeMs, modelCalls: receipt.modelCalls, usage: receipt.usage } } : {}),
       ...(state === "failed" ? { error: "Character analysis failed. Inspect worker configuration and source data." } : {}),
     };
-  } finally { await queue.close().catch(() => console.error("Character queue connection could not close.")); }
+  } finally { await queue.close().catch(() => log("error", "queue_character_queue_diagnostic")); }
 }
 export type CharacterJobStatus = Awaited<ReturnType<typeof getCharacterJob>>;

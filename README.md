@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Fonts use the existing CSS system stack, including installed Myanmar fallbacks; builds do not download Google fonts.
 
 ## Local media jobs
 
@@ -464,3 +464,15 @@ Short text uses one request. Long text uses ≤4 adjacent scene windows, ≤24 s
 One current Recap and normalized section/insight/evidence rows are replaced atomically under Project/Movie locks. Source hashes cover language, transcript IDs/text/timing, scene IDs/timing, and current semantic identities/evidence actually available to generation; excluded stale analysis is never represented as used. Evidence IDs/update timestamps are not semantic hash inputs. Changes invalidate stale jobs/persisted recaps. Same-source retained completed jobs are reused; committed receipts are recovered after worker failure. There is no force-rerun/model-switch UI or durable per-chunk checkpoint yet, so long-job retries before commit can repeat paid work. Recap never edits subtitles, translations, TM, QC, scenes, exports or Movie status.
 
 The former project mock recap controls are replaced. The unused global `/api/recap` prototype remains a legacy mock; the real workspace exclusively uses movie-scoped APIs. This phase adds the product recap experience without deployment or new export formats.
+
+## Production readiness (Phase 20)
+
+Read [the production runbook](docs/production-runbook.md) before deployment. The application is **not ready for unprotected public access**: authentication, resource authorization, CSRF/abuse controls and paid-action quotas are mandatory deployment gates. IDs/slugs are not authorization. Use a trusted access gateway/private network until those features exist; no multi-tenant safety is claimed.
+
+Environment validation is server-only and runtime-specific. Production web needs PostgreSQL, Redis, explicit `STORAGE_DRIVER=local`, an absolute private `LOCAL_STORAGE_ROOT`, and FFmpeg/FFprobe for upload inspection. AI workers additionally require only their own model and OpenRouter key. Existing local `.env` names/default storage remain compatible. `/api/health` is lightweight liveness; `/api/ready` checks DB/Redis/private storage/binaries with bounded safe responses. Workers validate dependencies before taking jobs and share structured logging/graceful drain behavior.
+
+Deploy Next.js web and seven optional independent worker services sharing PostgreSQL, Redis and private media storage. See the runbook's exact command/role matrix. Use `pnpm exec prisma migrate deploy` once before release; never reset or `migrate dev` in production. Build with `pnpm build` (or verified `pnpm exec next build --webpack` where Turbopack is restricted), then `pnpm start`; never `next dev` in production. The same non-root Docker image can run web or any worker command; worker containers must override the web-only Docker healthcheck.
+
+Local storage requires a persistent shared volume for web/media/STT/scene services. Container replacement without that volume loses media. The provider interface supports a future private S3-compatible adapter, with secure local staging for FFmpeg; no cloud adapter is included. Uploads retain 512 MiB, enforce actual-byte limits and media probing, and need ingress time/body/concurrency limits because multipart parsing may buffer files. General JSON mutations are bounded to 64 KiB. Sensitive API/project responses use private/no-store; static assets retain useful caching. Downloads retain safe filenames, nosniff and no local paths. No wildcard CORS or speculative strict CSP is added.
+
+Runtime secrets belong in environment injection, never images/client bundles/logs. Back up PostgreSQL and private media, enable appropriate Redis persistence, and test restores. Logs/receipts carry safe IDs, runtimes, token/cost metrics rather than content. Track queue depth, stalls/failures, provider cost, DB/Redis/storage/binary failures and backup health. Known limitations remain: PostgreSQL adapter query deprecation warning, environment-only Turbopack restriction, retention permitting reruns, no durable per-batch AI checkpoint, local volume requirements and no auth. No schema or dependency change is required for this foundation.

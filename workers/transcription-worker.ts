@@ -1,10 +1,10 @@
+import { workerLifecycle } from "@/lib/worker-runtime";
 import "dotenv/config";
 import "server-only";
 
 import { UnrecoverableError, Worker } from "bullmq";
 
-import { prisma } from "@/lib/prisma";
-import { redisConnection, RedisConfigurationError } from "@/lib/queue/connection";
+import { redisConnection } from "@/lib/queue/connection";
 import {
   TRANSCRIPTION_JOB_NAME,
   TRANSCRIPTION_QUEUE_NAME,
@@ -32,7 +32,7 @@ const permanentFailureCodes = new Set<TranscriptionErrorCode>([
   "TRANSCRIPTION_RESPONSE_TOO_LARGE",
 ]);
 
-async function main() {
+export async function main() {
   const worker = new Worker<
     TranscriptionJobData,
     PersistedTranscriptionSummary,
@@ -67,38 +67,7 @@ async function main() {
     },
   );
 
-  worker.on("active", (job) => console.info("Transcription job active:", job.id));
-  worker.on("completed", (job) => console.info("Transcription job completed:", job.id));
-  worker.on("failed", (job) => {
-    if (!job) return;
-    console.error("Transcription job failed:", job.id, "attempts:", job.attemptsMade);
-  });
-  worker.on("stalled", (jobId) => {
-    console.warn("Transcription job stalled; recovery scheduled:", jobId);
-  });
-  worker.on("error", () => {
-    console.error("Transcription worker connection/lifecycle error; check Redis connectivity.");
-  });
-
-  let closing = false;
-  async function close() {
-    if (closing) return;
-    closing = true;
-    console.info("Transcription worker shutting down after active jobs finish.");
-    await worker.close();
-    await prisma.$disconnect();
-  }
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
-      void close().catch(() => {
-        console.error("Transcription worker shutdown failed.");
-        process.exitCode = 1;
-      });
-    });
-  }
-
-  await worker.waitUntilReady();
-  console.info("Transcription worker ready:", TRANSCRIPTION_QUEUE_NAME);
+  await workerLifecycle(worker, "transcription");
 }
 
 function permanentTranscriptionFailure(error: unknown) {
@@ -110,12 +79,3 @@ function transcriptionFailureCode(error: unknown) {
     ? error.code
     : "TRANSCRIPTION_PROCESSING_FAILED";
 }
-
-void main().catch((error: unknown) => {
-  console.error(
-    error instanceof RedisConfigurationError
-      ? error.message
-      : "Transcription worker failed to start.",
-  );
-  process.exitCode = 1;
-});

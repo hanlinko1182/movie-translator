@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 
 import { dirname, resolve } from "node:path";
@@ -80,7 +81,7 @@ export async function transcribeMovieAudio(
     return mergeChunkTranscriptions(results);
   } finally {
     await split.cleanup().catch(() => {
-      console.error("Temporary transcription audio cleanup failed.");
+      log("error", "transcribe_movie_diagnostic");
     });
   }
 }

@@ -1,9 +1,6 @@
-import { createWriteStream } from "node:fs";
-import { mkdir, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { extname } from "node:path";
 import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 import { MovieStatus } from "@/generated/prisma/client";
@@ -15,7 +12,10 @@ import {
   nonEmptyString,
   slugify,
 } from "@/lib/project-api";
-import { createMovieStorageKey, MOVIE_STORAGE_DIRECTORY, resolveMovieStorageKey } from "@/lib/storage";
+import { createMovieStorageKey, storage } from "@/lib/storage";
+import { inspectMovie, MediaProcessingError } from "@/lib/media";
+import { boundedRequest, BodyLimitError } from "@/lib/request-body";
+import { log } from "@/lib/logger";
 import {
   ALLOWED_MOVIE_EXTENSIONS,
   isAllowedMovieExtension,
@@ -44,8 +44,9 @@ export async function POST(request: Request) {
 
   let formData: FormData;
   try {
-    formData = await request.formData();
-  } catch {
+    formData = await boundedRequest(request, MAX_MOVIE_UPLOAD_BYTES + MAX_FORM_OVERHEAD_BYTES).formData();
+  } catch (error) {
+    if (error instanceof BodyLimitError) return tooLargeResponse();
     return jsonError("INVALID_UPLOAD", "The upload form could not be read", 400);
   }
 
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
   const targetLanguage = nonEmptyString(formData.get("targetLanguage"));
   const movieFile = formData.get("movie");
 
-  if (!name || !sourceLanguage || !targetLanguage) {
+  if (!name || !sourceLanguage || !targetLanguage || sourceLanguage.length > 35 || targetLanguage.length > 35) {
     return jsonError(
       "INVALID_PROJECT",
       "Project name, source language, and target language are required",
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
     .at(-1)
     ?.replace(/[\u0000-\u001f\u007f]/g, "");
 
-  if (!filename) {
+  if (!filename || filename.length > 255) {
     return jsonError("INVALID_MOVIE_FILENAME", "The movie filename is required", 400);
   }
 
@@ -124,8 +125,7 @@ export async function POST(request: Request) {
     return jsonError("INVALID_MOVIE_FILENAME", "The movie filename needs a title", 400);
   }
 
-  // MIME type and extension are client supplied hints. This development flow
-  // does not inspect media signatures; FFmpeg-based inspection is out of scope.
+  // Hints are checked first; restricted FFprobe inspects the private staged file below.
   const baseSlug = slugify(name) || "project";
   const storageKey = createMovieStorageKey(extension);
   const movieId = randomUUID();
@@ -155,12 +155,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    await mkdir(MOVIE_STORAGE_DIRECTORY, { recursive: true });
-    const destination = resolveMovieStorageKey(storageKey);
-    await pipeline(
-      Readable.fromWeb(movieFile.stream() as unknown as NodeReadableStream),
-      createWriteStream(destination, { flags: "wx", mode: 0o600 }),
-    );
+    await storage.put(storageKey, Readable.fromWeb(movieFile.stream() as unknown as NodeReadableStream));
+    const input = await storage.resolveInput(storageKey);
+    try { const metadata = await inspectMovie(input.path); if (!metadata.hasAudio) throw new MediaProcessingError("AUDIO_STREAM_NOT_FOUND"); }
+    finally { await input.cleanup(); }
 
     const movie = await prisma.movie.create({
       data: {
@@ -199,8 +197,9 @@ export async function POST(request: Request) {
       },
       { status: 201 },
     );
-  } catch {
+  } catch (error) {
     await cleanupFailedUpload(project.id, movieId, storageKey);
+    if (error instanceof MediaProcessingError) return jsonError(error.code, error.message, error.status);
     return jsonError("PROJECT_UPLOAD_FAILED", "Unable to create project and store movie", 500);
   }
 }
@@ -221,7 +220,7 @@ async function cleanupFailedUpload(
   let cleanupFailed = false;
 
   try {
-    await unlink(resolveMovieStorageKey(storageKey));
+    await storage.delete(storageKey);
   } catch (error) {
     if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
       cleanupFailed = true;
@@ -238,6 +237,6 @@ async function cleanupFailedUpload(
   }
 
   if (cleanupFailed) {
-    console.error("Project movie upload rollback cleanup failed.");
+    log("error", "upload_cleanup_failed", { errorCode: "UPLOAD_CLEANUP_FAILED" });
   }
 }

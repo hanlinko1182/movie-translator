@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import { jsonError } from "@/lib/project-api";
 import { getExportableSubtitle } from "@/lib/subtitle-export/service";
 import { formatSrt } from "@/lib/subtitle-export/srt";
@@ -24,7 +25,7 @@ export async function GET(request: Request, context: Context) {
     } });
   } catch (error) {
     if (error instanceof SubtitleExportError) return jsonError(error.code, error.message, error.status);
-    console.error("Subtitle export request failed.");
+    log("error", "subtitles_route_diagnostic");
     return jsonError("SUBTITLE_EXPORT_FAILED", "Unable to export subtitles; please try again", 500);
   }
 }

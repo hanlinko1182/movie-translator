@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import { enqueueMovieMedia, getMovieMediaJob, MediaQueueError } from "@/lib/queue/media-queue";
 import { RedisConfigurationError } from "@/lib/queue/connection";
 import { jsonError } from "@/lib/project-api";
@@ -26,9 +27,9 @@ export async function GET(_request: Request, context: RouteContext) {
 function queueErrorResponse(error: unknown) {
   if (error instanceof MediaQueueError) return jsonError(error.code, error.message, error.status);
   if (error instanceof RedisConfigurationError) {
-    console.error(error.message);
+    log("error", "runtime_configuration_invalid");
     return jsonError("MEDIA_QUEUE_NOT_CONFIGURED", "Media processing is not configured", 503);
   }
-  console.error("Media queue request failed; check database and Redis connectivity.");
+  log("error", "process_media_route_diagnostic");
   return jsonError("MEDIA_QUEUE_UNAVAILABLE", "Unable to access the media queue; try again later", 503);
 }

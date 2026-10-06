@@ -1,11 +1,21 @@
+import "server-only";
 import { randomUUID } from "node:crypto";
 import { dirname, extname, resolve } from "node:path";
 
 import { isAllowedMovieExtension } from "@/lib/movie-upload-policy";
+import { storageConfig } from "@/lib/env";
+import { LocalStorageProvider } from "@/lib/storage/local";
+import type { StorageProvider } from "@/lib/storage/provider";
 
-export const LOCAL_STORAGE_ROOT = resolve(process.cwd(), "storage");
+// Next imports route modules while collecting the build. Validate production
+// requirements at runtime; a build only needs inert path constants, not a volume.
+export const LOCAL_STORAGE_ROOT = storageConfig(process.env.NEXT_PHASE === "phase-production-build"
+  ? { ...process.env, NODE_ENV: "development" }
+  : process.env).root;
 export const MOVIE_STORAGE_DIRECTORY = resolve(LOCAL_STORAGE_ROOT, "movies");
 export const AUDIO_STORAGE_DIRECTORY = resolve(LOCAL_STORAGE_ROOT, "audio");
+export const localStorage = new LocalStorageProvider(LOCAL_STORAGE_ROOT);
+export const storage: StorageProvider = localStorage;
 
 export function createMovieStorageKey(
   extension: ".mp4" | ".mkv" | ".mov" | ".webm",

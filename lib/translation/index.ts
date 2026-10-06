@@ -4,7 +4,7 @@ import { OpenRouterTranslationProvider } from "@/lib/translation/openrouter-prov
 import type { TranslationProvider } from "@/lib/translation/provider";
 import { TranslationError } from "@/lib/translation/types";
 
-const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+import { modelConfig, openRouterConfig } from "@/lib/env";
 
 export function getTranslationBenchmarkProviders(): {
   primary: { model: string; provider: TranslationProvider };
@@ -30,47 +30,24 @@ export function getTranslationBenchmarkProviders(): {
 }
 
 export function getProductionTranslationProvider(): { model: string; provider: TranslationProvider } {
-  const model = process.env.TRANSLATION_MODEL?.trim();
-  if (!model) throw new TranslationError("TRANSLATION_NOT_CONFIGURED");
+  let model: string;
+  try { model = modelConfig("TRANSLATION_MODEL"); } catch { throw new TranslationError("TRANSLATION_NOT_CONFIGURED"); }
   const { apiKey, baseUrl } = openRouterConfiguration();
   return { model, provider: new OpenRouterTranslationProvider(model, apiKey, baseUrl) };
 }
 
 function openRouterConfiguration() {
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) throw new TranslationError("TRANSLATION_NOT_CONFIGURED");
-  const baseUrl = normalizeOpenRouterBaseUrl(
-    process.env.OPENROUTER_BASE_URL?.trim() || DEFAULT_OPENROUTER_BASE_URL,
-  );
-  return { apiKey, baseUrl };
+  try { return openRouterConfig(); } catch { throw new TranslationError("TRANSLATION_NOT_CONFIGURED"); }
 }
 
 export function getRefinementTranslationProvider(): { model: string; provider: TranslationProvider } {
-  const model = process.env.TRANSLATION_REFINEMENT_MODEL?.trim();
-  if (!model) throw new TranslationError("REFINEMENT_NOT_CONFIGURED");
+  let model: string;
+  try { model = modelConfig("TRANSLATION_REFINEMENT_MODEL"); } catch { throw new TranslationError("REFINEMENT_NOT_CONFIGURED"); }
   try {
     const { apiKey, baseUrl } = openRouterConfiguration();
     return { model, provider: new OpenRouterTranslationProvider(model, apiKey, baseUrl) };
   } catch {
     throw new TranslationError("REFINEMENT_NOT_CONFIGURED");
-  }
-}
-
-function normalizeOpenRouterBaseUrl(value: string) {
-  try {
-    const url = new URL(value);
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      url.hostname !== "openrouter.ai" ||
-      url.pathname.replace(/\/+$/, "") !== "/api/v1"
-    ) throw new Error("Invalid OpenRouter base URL");
-    return `${url.origin}/api/v1`;
-  } catch {
-    throw new TranslationError("TRANSLATION_NOT_CONFIGURED");
   }
 }
 

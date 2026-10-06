@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import "server-only";
 import { Queue } from "bullmq";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +15,7 @@ export function createSceneQueue() {
     connection: redisConnection("producer"),
     defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2_000 }, removeOnComplete: { count: 1_000 }, removeOnFail: { count: 1_000 } },
   });
-  queue.on("error", () => console.error("Scene queue Redis connection failed."));
+  queue.on("error", () => log("error", "queue_scene_queue_diagnostic"));
   return queue;
 }
 export async function enqueueSceneDetection(movieId: string) {
@@ -31,7 +32,7 @@ export async function enqueueSceneDetection(movieId: string) {
     }
     const job = await queue.add(SCENE_JOB_NAME, { movieId }, { jobId });
     return { movieId, jobId, state: await job.getState() };
-  } finally { await queue.close().catch(() => console.error("Scene queue connection could not close.")); }
+  } finally { await queue.close().catch(() => log("error", "queue_scene_queue_diagnostic")); }
 }
 export async function getSceneDetectionJob(movieId: string): Promise<SceneJobStatus | null> {
   if (!await prisma.movie.findUnique({ where: { id: movieId }, select: { id: true } })) throw new SceneDetectionError("MOVIE_NOT_FOUND");
@@ -46,5 +47,5 @@ export async function getSceneDetectionJob(movieId: string): Promise<SceneJobSta
       ...(state === "completed" && receipt ? { result: { movieId: receipt.movieId, sceneCount: receipt.sceneCount, durationMs: receipt.durationMs, visualCandidateCount: receipt.visualCandidateCount, transcriptGapCandidateCount: receipt.transcriptGapCandidateCount } } : {}),
       ...(state === "failed" ? { error: "Scene detection failed. Inspect worker configuration or source media." } : {}),
     };
-  } finally { await queue.close().catch(() => console.error("Scene queue connection could not close.")); }
+  } finally { await queue.close().catch(() => log("error", "queue_scene_queue_diagnostic")); }
 }

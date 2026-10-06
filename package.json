@@ -9,13 +9,13 @@
     "lint": "eslint",
     "benchmark:stt": "node --conditions=react-server --import tsx scripts/benchmark-transcription.ts",
     "benchmark:translation": "node --conditions=react-server --import tsx scripts/benchmark-translation.ts",
-    "worker:media": "node --conditions=react-server --import tsx workers/media-worker.ts",
-    "worker:transcription": "node --conditions=react-server --import tsx workers/transcription-worker.ts",
-    "worker:translation": "node --conditions=react-server --import tsx workers/translation-worker.ts",
-    "worker:translation-refinement": "node --conditions=react-server --import tsx workers/translation-refinement-worker.ts",
-    "worker:scenes": "node --conditions=react-server --import tsx workers/scene-detection-worker.ts",
-    "worker:characters": "node --conditions=react-server --import tsx workers/character-analysis-worker.ts",
-    "worker:recap": "node --conditions=react-server --import tsx workers/recap-worker.ts"
+    "worker:media": "node --conditions=react-server --import tsx workers/start.ts media",
+    "worker:transcription": "node --conditions=react-server --import tsx workers/start.ts transcription",
+    "worker:translation": "node --conditions=react-server --import tsx workers/start.ts translation",
+    "worker:translation-refinement": "node --conditions=react-server --import tsx workers/start.ts refinement",
+    "worker:scenes": "node --conditions=react-server --import tsx workers/start.ts scene",
+    "worker:characters": "node --conditions=react-server --import tsx workers/start.ts character",
+    "worker:recap": "node --conditions=react-server --import tsx workers/start.ts recap"
   },
   "dependencies": {
     "@openrouter/sdk": "^1.4.21",

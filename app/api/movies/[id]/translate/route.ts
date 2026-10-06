@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import { jsonError } from "@/lib/project-api";
 import { RedisConfigurationError } from "@/lib/queue/connection";
 import { enqueueMovieTranslation, getMovieTranslationJob } from "@/lib/queue/translation-queue";
@@ -29,9 +30,9 @@ function queueErrorResponse(error: unknown) {
     return jsonError(error.code, error.message, error.status);
   }
   if (error instanceof RedisConfigurationError) {
-    console.error(error.message);
+    log("error", "runtime_configuration_invalid");
     return jsonError("TRANSLATION_QUEUE_NOT_CONFIGURED", "Translation processing is not configured", 503);
   }
-  console.error("Translation queue request failed; check database and Redis connectivity.");
+  log("error", "translate_route_diagnostic");
   return jsonError("TRANSLATION_QUEUE_UNAVAILABLE", "Unable to access the translation queue; try again later", 503);
 }

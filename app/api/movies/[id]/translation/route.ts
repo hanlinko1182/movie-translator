@@ -1,3 +1,4 @@
+import { log } from "@/lib/logger";
 import { translationSegmentVersion } from "@/lib/translation-qc/service";
 import { prisma } from "@/lib/prisma";
 import { jsonError } from "@/lib/project-api";
@@ -36,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const sourceBySequence = new Map(movie.transcript?.segments.map((segment) => [segment.sequence, segment]) ?? []);
     return Response.json({ data: { ...movie.translation, segments: movie.translation.segments.map((segment) => ({ ...segment, version: translationSegmentVersion(movie.translation!, segment, sourceBySequence.get(segment.sequence)) })) } });
   } catch {
-    console.error("Translation request failed.");
+    log("error", "translation_route_diagnostic");
     return jsonError("TRANSLATION_FETCH_FAILED", "Unable to fetch translation", 500);
   }
 }

@@ -1,10 +1,10 @@
+import { workerLifecycle } from "@/lib/worker-runtime";
 import "dotenv/config";
 import "server-only";
 
 import { UnrecoverableError, Worker } from "bullmq";
 
-import { prisma } from "@/lib/prisma";
-import { redisConnection, RedisConfigurationError } from "@/lib/queue/connection";
+import { redisConnection } from "@/lib/queue/connection";
 import {
   TRANSLATION_JOB_NAME,
   TRANSLATION_QUEUE_NAME,
@@ -28,7 +28,7 @@ const permanentFailureCodes = new Set<TranslationErrorCode>([
   "TRANSLATION_INVALID_RESPONSE",
 ]);
 
-async function main() {
+export async function main() {
   const worker = new Worker<
     TranslationJobData,
     PersistedTranslationSummary,
@@ -66,40 +66,5 @@ async function main() {
     },
   );
 
-  worker.on("active", (job) => console.info("Translation job active:", job.id));
-  worker.on("completed", (job) => console.info("Translation job completed:", job.id));
-  worker.on("failed", (job) => {
-    if (job) console.error("Translation job failed:", job.id, "attempts:", job.attemptsMade);
-  });
-  worker.on("stalled", (jobId) => console.warn("Translation job stalled; recovery scheduled:", jobId));
-  worker.on("error", () => console.error("Translation worker connection/lifecycle error; check Redis connectivity."));
-
-  let closing = false;
-  async function close() {
-    if (closing) return;
-    closing = true;
-    console.info("Translation worker shutting down after active jobs finish.");
-    await worker.close();
-    await prisma.$disconnect();
-  }
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
-      void close().catch(() => {
-        console.error("Translation worker shutdown failed.");
-        process.exitCode = 1;
-      });
-    });
-  }
-
-  await worker.waitUntilReady();
-  console.info("Translation worker ready:", TRANSLATION_QUEUE_NAME);
+  await workerLifecycle(worker, "translation");
 }
-
-void main().catch((error: unknown) => {
-  console.error(
-    error instanceof RedisConfigurationError
-      ? error.message
-      : "Translation worker failed to start.",
-  );
-  process.exitCode = 1;
-});

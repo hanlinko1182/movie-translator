@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { RedisOptions } from "bullmq";
+import { redisUrl } from "@/lib/env";
 
 export class RedisConfigurationError extends Error {
   constructor() {
@@ -11,8 +12,7 @@ export class RedisConfigurationError extends Error {
 
 export function redisConnection(role: "producer" | "worker"): RedisOptions {
   try {
-    const value = process.env.REDIS_URL;
-    if (!value) throw new RedisConfigurationError();
+    const value = redisUrl();
     const url = new URL(value);
     const port = Number(url.port || 6379);
     const database = url.pathname.replace(/^\//, "") || "0";
