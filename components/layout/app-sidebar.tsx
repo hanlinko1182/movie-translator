@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Clapperboard } from "lucide-react";
 
 const globalLinks = [
@@ -10,21 +11,29 @@ const globalLinks = [
   { label: "Movies", href: "/movies" },
 ];
 
-const storyLinks = [
-  { label: "Recap", segment: "recap" },
-  { label: "Characters", segment: "characters" },
-  { label: "Scenes", segment: "scenes" },
+const workspaceLinks = [
+  { label: "Overview", suffix: "" },
+  { label: "Transcription", suffix: "/subtitles" },
+  { label: "Translation", suffix: "/translation" },
+  { label: "Review", suffix: "/translation?view=review#review" },
+  { label: "Recap", suffix: "/recap" },
+  { label: "Export", suffix: "/export" },
 ];
 
-const subtitleLinks = [
-  { label: "Source Transcript", segment: "subtitles" },
+const advancedLinks = [
+  { label: "Scenes", segment: "scenes" },
+  { label: "Characters & evidence", segment: "characters" },
   { label: "Glossary", segment: "glossary" },
   { label: "Translation Memory", segment: "translation-memory" },
-  { label: "Translation", segment: "translation" },
 ];
 
 export default function AppSidebar() {
+  return <Suspense fallback={<aside aria-label="Navigation loading" className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] lg:block" />}><SidebarNavigation /></Suspense>;
+}
+
+function SidebarNavigation() {
   const pathname = usePathname();
+  const reviewView = useSearchParams().get("view") === "review";
   const segments = pathname.split("/").filter(Boolean);
   const projectId =
     segments[0] === "projects" && segments.length >= 2 && segments[1] !== "new"
@@ -40,7 +49,7 @@ export default function AppSidebar() {
         </span>
         <span>
           <span className="block text-sm font-semibold">Movie Translator</span>
-          <span className="block text-xs text-zinc-500">AI Subtitle Studio</span>
+          <span className="block text-xs text-zinc-500">Localization & Recap Studio</span>
         </span>
       </Link>
 
@@ -56,29 +65,22 @@ export default function AppSidebar() {
             />
           );
         })}
-        {projectBase && (
-          <SidebarLink
-            href={projectBase}
-            label="Project Overview"
-            active={pathname === projectBase}
-          />
-        )}
       </nav>
 
       {projectBase && (
         <>
-          <SidebarGroup title="Story">
-            {storyLinks.map((item) => (
+          <SidebarGroup title="Project workspace">
+            {workspaceLinks.map((item) => (
               <SidebarLink
-                key={item.segment}
-                href={`${projectBase}/${item.segment}`}
+                key={item.label}
+                href={`${projectBase}${item.suffix}`}
                 label={item.label}
-                active={pathname === `${projectBase}/${item.segment}`}
+                active={item.label === "Review" ? pathname === `${projectBase}/translation` && reviewView : pathname === `${projectBase}${item.suffix}` && (item.label !== "Translation" || !reviewView)}
               />
             ))}
           </SidebarGroup>
-          <SidebarGroup title="Subtitles">
-            {subtitleLinks.map((item) => (
+          <SidebarGroup title="Advanced">
+            {advancedLinks.map((item) => (
               <SidebarLink
                 key={item.segment}
                 href={`${projectBase}/${item.segment}`}
@@ -136,10 +138,10 @@ function SidebarLink({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`block rounded-xl px-3 py-2.5 text-sm transition ${
+      className={`block rounded-xl px-3 py-2.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 ${
         active
-          ? "bg-white text-black"
-          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
+          ? "bg-violet-400/10 text-violet-300"
+          : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
       }`}
     >
       {label}

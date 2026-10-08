@@ -1,365 +1,64 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  Check,
-  ChevronRight,
-  Circle,
-  Download,
-  Film,
-  Languages,
-  Sparkles,
-  UserRound,
-} from "lucide-react";
-
+import { ArrowLeft, ArrowUpRight, Film } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { localStorage, getAudioStorageKey } from "@/lib/storage";
+import { getMovieMediaJob } from "@/lib/queue/media-queue";
+import { getMovieTranscriptionJob } from "@/lib/queue/transcription-queue";
+import { getMovieTranslationJob } from "@/lib/queue/translation-queue";
+import { getSceneDetectionJob } from "@/lib/queue/scene-queue";
+import { getRecapJob } from "@/lib/queue/recap-queue";
+import { readMovieRecap } from "@/lib/recap/read-recap";
+import { readMovieCharacters } from "@/lib/character-analysis/read-analysis";
+import { buildOverview, overviewSelect, languageName, dateLabel, durationLabel, type OverviewFacts } from "./overview-model";
+import { cardClass, linkClass, StatusBadge, WorkflowPipeline, NextActionCard, MediaPreviewCard, ProjectOutputCard, RecentActivity } from "./overview-components";
+import { RefreshOverviewButton } from "./overview-action";
 
-const tabs = [
-  { name: "Overview", href: "" },
-  { name: "Translation", href: "/translation" },
-  { name: "Recap", href: "/recap" },
-  { name: "Characters", href: "/characters" },
-  { name: "Scenes", href: "/scenes" },
-  { name: "Export", href: "/export" },
-];
-
-// Demo-only processing and story values; these are not read from the database.
-const pipeline = [
-  { name: "Upload", status: "done" },
-  { name: "Transcribe", status: "done" },
-  { name: "Story Analysis", status: "done" },
-  { name: "Translation", status: "processing" },
-  { name: "Recap", status: "pending" },
-  { name: "Export", status: "pending" },
-] as const;
-
-export default async function ProjectDetailPage({
-  params,
-}: PageProps<"/projects/[id]">) {
+export default async function ProjectDetailPage({ params }: PageProps<"/projects/[id]">) {
   const { id: projectSlug } = await params;
   let project;
-
-  try {
-    project = await prisma.project.findUnique({
-      where: { slug: projectSlug },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        sourceLanguage: true,
-        targetLanguage: true,
-        status: true,
-        _count: { select: { movies: true } },
-        movies: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            title: true,
-            sourceLanguage: true,
-            status: true,
-            durationSeconds: true,
-          },
-        },
-      },
-    });
-  } catch {
-    return (
-      <main className="min-w-0 flex-1 p-6 lg:p-10">
-        <div className="mx-auto max-w-7xl rounded-2xl border border-white/10 bg-white/[0.02] p-8">
-          <h1 className="font-medium">Project is unavailable</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            We couldn’t load this project right now. Please try again shortly.
-          </p>
-          <Link
-            href="/projects"
-            className="mt-5 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200"
-          >
-            <ArrowLeft size={16} />
-            Projects
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
+  try { project = await prisma.project.findUnique({ where: { slug: projectSlug }, select: overviewSelect }); }
+  catch { return <main className="p-6 lg:p-10"><section className={`${cardClass} mx-auto max-w-7xl p-8`}><h1 className="text-xl font-semibold">Project is unavailable</h1><p className="mt-2 text-sm text-zinc-400">We couldn’t load this project. Please try again shortly.</p><div className="mt-5 flex gap-5"><RefreshOverviewButton label="Try again" /><Link href="/projects" className={linkClass}><ArrowLeft size={14} aria-hidden="true" />Projects</Link></div></section></main>; }
   if (!project) notFound();
-
-  const sourceLanguage = languageName(project.sourceLanguage);
-  const targetLanguage = languageName(project.targetLanguage);
-  const projectStatus =
-    project.status.charAt(0) + project.status.slice(1).toLowerCase();
-
-  return (
-
-
-        <main className="min-w-0 flex-1">
-          {/* Header */}
-          <header className="border-b border-white/10 px-6 py-5 lg:px-10">
-            <div className="mx-auto max-w-7xl">
-              <Link
-                href="/projects"
-                className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-500 transition hover:text-zinc-200"
-              >
-                <ArrowLeft size={16} />
-                Projects
-              </Link>
-
-              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-                <div>
-                  <div className="mb-2 flex items-center gap-2 text-xs text-zinc-500">
-                    <span>Projects</span>
-                    <ChevronRight size={13} />
-                    <span>{project.name}</span>
-                  </div>
-
-                  <h1 className="text-2xl font-semibold tracking-tight">
-                    {project.name}
-                  </h1>
-
-                  <div className="mt-2 flex items-center gap-3 text-sm text-zinc-500">
-                    <span>{sourceLanguage}</span>
-                    <ChevronRight size={14} />
-                    <span className="text-zinc-300">{targetLanguage}</span>
-                    <span className="text-zinc-700">•</span>
-                    <span>{projectStatus}</span>
-                  </div>
-                </div>
-
-                <Link
-                  href={`/projects/${project.slug}/export`}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
-                >
-                  <Download size={16} />
-                  Export
-                </Link>
-              </div>
-            </div>
-          </header>
-
-          {/* Tabs */}
-          <div className="border-b border-white/10 px-6 lg:px-10">
-            <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto">
-              {tabs.map((tab, index) => (
-                <Link
-                  key={tab.name}
-                  href={`/projects/${project.slug}${tab.href}`}
-                  className={`whitespace-nowrap border-b-2 px-4 py-4 text-sm transition ${
-                    index === 0
-                      ? "border-white text-white"
-                      : "border-transparent text-zinc-500 hover:text-zinc-200"
-                  }`}
-                >
-                  {tab.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Content */}
-          <section className="px-6 py-8 lg:px-10">
-            <div className="mx-auto max-w-7xl space-y-6">
-              {/* Progress */}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <h2 className="font-medium">Processing Progress</h2>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Demo pipeline preview. Processing progress will appear here when connected.
-                    </p>
-                  </div>
-
-                  <span className="text-2xl font-semibold">68%</span>
-                </div>
-
-                <div className="mb-7 h-2 overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full w-[68%] rounded-full bg-white" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-5 md:grid-cols-6">
-                  {pipeline.map((item) => (
-                    <PipelineStep
-                      key={item.name}
-                      name={item.name}
-                      status={item.status}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid gap-4 md:grid-cols-3">
-                <InfoCard
-                  icon={<Film size={18} />}
-                  label="Movie"
-                  value={project.movies[0]?.title ?? "No movie metadata"}
-                  description={
-                    project.movies[0]
-                      ? `${languageName(project.movies[0].sourceLanguage)} source · ${projectStatusLabel(project.movies[0].status)}`
-                      : `${project._count.movies} movies in this project`
-                  }
-                />
-
-                <InfoCard
-                  icon={<Languages size={18} />}
-                  label="Translation"
-                  value={`${sourceLanguage} → ${targetLanguage}`}
-                  description="AI translation pipeline preview"
-                />
-
-                <InfoCard
-                  icon={<Sparkles size={18} />}
-                  label="Narrative Recap"
-                  value="Waiting"
-                  description="Character-driven storytelling"
-                />
-              </div>
-
-              {/* Workspace preview */}
-              <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                  <div className="mb-5 flex items-center justify-between">
-                    <div>
-                      <h2 className="font-medium">Story Understanding</h2>
-                      <p className="mt-1 text-sm text-zinc-500">
-                        AI analysis generated from the movie.
-                      </p>
-                    </div>
-
-                    <Sparkles size={18} className="text-zinc-500" />
-                  </div>
-
-                  <div className="space-y-3">
-                    <StoryRow
-                      icon={<Film size={17} />}
-                      title="Scenes"
-                      value="Sample: 42 analyzed"
-                    />
-
-                    <StoryRow
-                      icon={<UserRound size={17} />}
-                      title="Characters"
-                      value="Sample: 8 identified"
-                    />
-
-                    <StoryRow
-                      icon={<Sparkles size={17} />}
-                      title="Story Events"
-                      value="Sample: 126 detected"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                  <h2 className="font-medium">Next Step</h2>
-
-                  <p className="mt-2 text-sm leading-6 text-zinc-500">
-                    After translation is completed, generate a narrative recap
-                    based on characters, scenes, actions and consequences.
-                  </p>
-
-                  <Link
-                    href={`/projects/${project.slug}/recap`}
-                    className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-zinc-200"
-                  >
-                    <Sparkles size={16} />
-                    Open Recap
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </section>
-        </main>
-
-
-  );
-}
-
-function PipelineStep({
-  name,
-  status,
-}: {
-  name: string;
-  status: "done" | "processing" | "pending";
-}) {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <div
-        className={`mb-2 flex h-8 w-8 items-center justify-center rounded-full border ${
-          status === "done"
-            ? "border-white bg-white text-black"
-            : status === "processing"
-              ? "border-white bg-white/10 text-white"
-              : "border-white/10 text-zinc-600"
-        }`}
-      >
-        {status === "done" ? (
-          <Check size={15} />
-        ) : status === "processing" ? (
-          <Circle size={10} fill="currentColor" />
-        ) : (
-          <Circle size={10} />
-        )}
+  const movie = project.movies[0];
+  const facts: OverviewFacts = { sourceAvailable: null, audioAvailable: null, jobs: { media: null, transcription: null, translation: null, scenes: null, recap: null }, recapStale: null, charactersStale: null };
+  if (movie) {
+    // Existing read helpers only. Missing infrastructure cannot hide saved outputs.
+    const reads = await Promise.allSettled([
+      movie.storageKey ? localStorage.exists(movie.storageKey) : Promise.resolve(false),
+      localStorage.exists(getAudioStorageKey(movie.id)),
+      getMovieMediaJob(movie.id), getMovieTranscriptionJob(movie.id), getMovieTranslationJob(movie.id), getSceneDetectionJob(movie.id),
+      movie.transcript?._count.segments && movie._count.scenes ? getRecapJob(movie.id) : Promise.resolve(null),
+      movie.recap ? readMovieRecap(movie.id) : Promise.resolve({ recap: null }),
+      movie.characterAnalysis ? readMovieCharacters(movie.id) : Promise.resolve({ analysis: null }),
+    ] as const);
+    facts.sourceAvailable = reads[0].status === "fulfilled" ? reads[0].value : null;
+    facts.audioAvailable = reads[1].status === "fulfilled" ? reads[1].value : null;
+    for (const [index, key] of (["media", "transcription", "translation", "scenes", "recap"] as const).entries()) {
+      const result = reads[index + 2];
+      facts.jobs[key] = result.status === "fulfilled" ? (result.value as { state: string } | null)?.state ?? null : undefined;
+    }
+    facts.recapStale = reads[7].status === "fulfilled" ? reads[7].value.recap?.stale ?? null : null;
+    facts.charactersStale = reads[8].status === "fulfilled" ? reads[8].value.analysis?.stale ?? null : null;
+  }
+  const overview = buildOverview(project, facts);
+  const base = `/projects/${encodeURIComponent(project.slug)}`;
+  const workspace = [{ label: "Overview", href: base }, { label: "Transcription", href: overview.links.transcript }, { label: "Translation", href: overview.links.translation }, { label: "Review", href: overview.links.review }, { label: "Recap", href: overview.links.recap }, { label: "Export", href: overview.links.export }];
+  return <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header>
+        <div className="mb-6 flex items-center justify-between gap-4"><Link href="/projects" className={`${linkClass} text-zinc-400`}><ArrowLeft size={15} aria-hidden="true" />Projects</Link><RefreshOverviewButton /></div>
+        <div className="flex items-start gap-4 sm:gap-5"><div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#15151a] sm:h-20 sm:w-20"><Film size={26} className="text-zinc-500" aria-hidden="true" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><h1 className="break-words text-2xl font-semibold tracking-tight">{project.name}</h1><StatusBadge status={overview.status} /></div><p className="mt-2 break-all text-sm text-zinc-400">{movie?.filename ?? "No source movie uploaded"}</p><p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500"><span>{languageName(movie?.sourceLanguage ?? project.sourceLanguage)} → {languageName(project.targetLanguage)}</span><span>{durationLabel(movie?.durationSeconds)}</span><span>Updated <time dateTime={overview.latest.toISOString()}>{dateLabel(overview.latest)}</time></span></p></div></div>
+        <nav aria-label="Project workspace" className="mt-6 flex flex-wrap gap-1 border-b border-white/10 pb-3">{workspace.map((item, index) => <Link key={item.label} href={item.href} aria-current={index === 0 ? "page" : undefined} className={`rounded-lg px-3 py-2 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-violet-300 ${index === 0 ? "bg-violet-400/10 text-violet-300" : "text-zinc-400 hover:bg-white/5 hover:text-zinc-200"}`}>{item.label}</Link>)}</nav>
+      </header>
+      {project._count.movies > 1 && <p className="text-xs text-zinc-500">Showing the most recently uploaded movie · {project._count.movies} movies in this project.</p>}
+      {overview.statusUnavailable && <p role="status" className="rounded-xl border border-amber-300/15 bg-amber-300/5 p-3 text-xs leading-5 text-amber-200">Live processing status is temporarily unavailable. Saved outputs are shown below.</p>}
+      <NextActionCard overview={overview} />
+      <WorkflowPipeline stages={overview.stages} />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="min-w-0 space-y-6"><MediaPreviewCard overview={overview} sourceLanguage={movie?.sourceLanguage ?? project.sourceLanguage} /><RecentActivity activities={overview.activities} /></div>
+        <div className="min-w-0 space-y-6"><ProjectOutputCard outputs={overview.outputs} /><section aria-labelledby="advanced-heading" className={`${cardClass} p-5 md:p-6`}><h2 id="advanced-heading" className="text-sm font-semibold">Advanced tools</h2><p className="mt-2 text-xs leading-5 text-zinc-500">{overview.sceneCount} scenes · {movie?._count.characterEvidence ?? 0} character evidence items{movie?.characterAnalysis ? facts.charactersStale === true ? " · analysis needs checking" : facts.charactersStale === null ? " · analysis freshness unavailable" : " · current character analysis" : " · no character analysis"}</p><div className="mt-4 grid grid-cols-2 gap-3">{[{ label: "Scenes", href: overview.links.scenes }, { label: "Characters & evidence", href: overview.links.characters }, { label: "Glossary", href: `${base}/glossary` }, { label: "Translation Memory", href: `${base}/translation-memory` }].map((item) => <Link key={item.label} href={item.href} className={`${linkClass} rounded-lg border border-white/[0.07] p-3`}>{item.label}<ArrowUpRight size={13} className="shrink-0" aria-hidden="true" /></Link>)}</div></section></div>
       </div>
-
-      <span className="text-xs text-zinc-500">{name}</span>
     </div>
-  );
-}
-
-function InfoCard({
-  icon,
-  label,
-  value,
-  description,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
-      <div className="mb-4 flex items-center gap-2 text-zinc-500">
-        {icon}
-        <span className="text-xs uppercase tracking-wider">{label}</span>
-      </div>
-
-      <p className="font-medium">{value}</p>
-      <p className="mt-1 text-sm text-zinc-500">{description}</p>
-    </div>
-  );
-}
-
-function StoryRow({
-  icon,
-  title,
-  value,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/10 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span className="text-zinc-500">{icon}</span>
-        <span className="text-sm">{title}</span>
-      </div>
-
-      <span className="text-sm text-zinc-500">{value}</span>
-    </div>
-  );
-}
-
-function languageName(code: string) {
-  const knownLanguages: Record<string, string> = {
-    zh: "Chinese",
-    my: "Myanmar",
-  };
-
-  return knownLanguages[code.toLowerCase()] ?? code;
-}
-
-function projectStatusLabel(status: string) {
-  return status.charAt(0) + status.slice(1).toLowerCase();
+  </main>;
 }
