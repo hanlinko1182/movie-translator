@@ -49,10 +49,10 @@ export default async function TranslationPage({ params, searchParams }: PageProp
       jobAvailable: job.status === "fulfilled",
     };
   }
-  return <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-7xl space-y-6">
+  return <main className="min-w-0 flex-1 p-4 sm:p-5 lg:p-6"><div className="mx-auto max-w-[1600px] space-y-4">
     <header>
       <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500"><Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" /><Link href={projectPath} className={`${linkClass} min-w-0 break-words`}>{project.name}</Link><ChevronRight size={13} aria-hidden="true" /><span className="text-zinc-300">Translation</span></nav>
-      <h1 className="mt-5 text-2xl font-semibold tracking-tight">Translation</h1><p className="mt-2 text-sm text-zinc-400">Translate Chinese source dialogue into Myanmar and review the result.</p>
+      {!snapshot && <><h1 className="mt-5 text-2xl font-semibold tracking-tight">Translation</h1><p className="mt-2 text-sm text-zinc-400">Translate Chinese subtitles to Myanmar with AI and human review.</p></>}
     </header>
     {project.movies.length > 1 && <nav aria-label="Project movies" className="flex flex-wrap gap-2">{project.movies.map((item) => <Link key={item.id} href={`${projectPath}/translation?movieId=${encodeURIComponent(item.id)}`} aria-current={movie?.id === item.id ? "page" : undefined} className={`max-w-full break-words rounded-lg border border-white/10 px-3 py-2 text-xs focus-visible:outline-2 focus-visible:outline-violet-300 ${movie?.id === item.id ? "bg-violet-400/10 text-violet-300" : "text-zinc-500 hover:text-zinc-200"}`}>{item.title}</Link>)}</nav>}
     {snapshot ? <TranslationReviewPanel key={snapshot.movie.id} initialSnapshot={snapshot} projectPath={projectPath} projectSlug={slug} /> : <section className={`${cardClass} p-6 sm:p-8`}><Languages size={24} className="text-zinc-500" aria-hidden="true" /><h2 className="mt-4 text-lg font-medium">No movie uploaded</h2><p className="mt-2 text-sm text-zinc-400">Upload and transcribe a source movie before translating dialogue.</p><Link href={projectPath} className={`${linkClass} mt-5`}>Project overview</Link></section>}
