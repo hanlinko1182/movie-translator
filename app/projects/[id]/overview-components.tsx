@@ -15,8 +15,8 @@ const tones: Record<StageState, string> = {
   Waiting: "border-white/10 bg-white/[0.03] text-zinc-400",
   Failed: "border-rose-400/20 bg-rose-400/10 text-rose-300",
 };
-export function StatusBadge({ status }: { status: string }) {
-  const state: StageState = status === "Uploaded" ? "Completed" : status === "Needs Review" ? "Needs Attention" : status in tones ? status as StageState : "Waiting";
+export function StatusBadge({ status, tone }: { status: string; tone?: StageState }) {
+  const state: StageState = tone ?? (status === "Uploaded" ? "Completed" : status === "Needs Review" ? "Needs Attention" : status in tones ? status as StageState : "Waiting");
   const Icon = state === "Completed" ? Check : state === "Processing" ? LoaderCircle : state === "Failed" || state === "Needs Attention" ? CircleAlert : Circle;
   return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${tones[state]}`}><Icon size={12} aria-hidden="true" className={state === "Processing" ? "animate-spin" : ""} />{status}</span>;
 }

@@ -5,21 +5,20 @@ import { Check, Copy, Search } from "lucide-react";
 
 import { formatTimestamp } from "@/lib/format-timestamp";
 
-type Segment = {
-  sequence: number;
-  startMs: number;
-  endMs: number;
-  text: string;
-};
+import type { Segment } from "./transcription-model";
 
 export default function TranscriptSegments({
   segments,
   transcriptText,
   sourceLanguage,
+  selectedSequence,
+  onSelect,
 }: {
   segments: Segment[];
   transcriptText: string;
   sourceLanguage: string;
+  selectedSequence: number | null;
+  onSelect: (sequence: number) => void;
 }) {
   const [query, setQuery] = useState("");
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle");
@@ -38,14 +37,14 @@ export default function TranscriptSegments({
   }
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]" aria-labelledby="segments-title">
-      <div className="flex flex-col gap-4 border-b border-white/[0.08] p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
+    <section className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#111115]" aria-labelledby="segments-title">
+      <div className="flex flex-col gap-4 border-b border-white/[0.08] p-4 sm:p-5">
         <div>
-          <h2 id="segments-title" className="text-sm font-semibold text-zinc-100">Timed source dialogue</h2>
-          <p className="mt-1 text-xs text-zinc-500">Read the original speech in timestamp order.</p>
+          <h2 id="segments-title" className="text-sm font-semibold text-zinc-100">Source transcript</h2>
+          <p className="mt-1 text-xs text-zinc-500">Read-only Chinese dialogue in timestamp order.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="block min-w-0 sm:w-64">
+          <label className="block min-w-0 flex-1">
             <span className="mb-1.5 block text-xs text-zinc-400">Search transcript</span>
             <span className="relative block">
               <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -54,14 +53,14 @@ export default function TranscriptSegments({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Find dialogue..."
-                className="w-full rounded-lg border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/20"
+                className="w-full rounded-lg border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus-visible:border-violet-400/30 focus-visible:ring-2 focus-visible:ring-violet-400/20"
               />
             </span>
           </label>
           <button
             type="button"
             onClick={copyTranscript}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.05] hover:text-white focus-visible:outline-2 focus-visible:outline-violet-300"
           >
             {copyStatus === "success" ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
             Copy transcript
@@ -75,24 +74,29 @@ export default function TranscriptSegments({
         {copyStatus === "error" && <span className="ml-3 text-rose-300">Could not copy transcript.</span>}
       </div>
 
+      {!segments.length && transcriptText && <div className="border-b border-white/10 p-5"><p className="mb-3 text-xs text-amber-200">Saved transcript has no timed segments.</p><p lang={sourceLanguage} className="whitespace-pre-wrap break-words text-sm leading-7 text-zinc-200 [overflow-wrap:anywhere]">{transcriptText}</p></div>}
       {visibleSegments.length > 0 ? (
         <ol className="divide-y divide-white/[0.07]">
           {visibleSegments.map((segment) => (
-            <li key={segment.sequence} className="grid min-w-0 gap-3 px-4 py-5 sm:grid-cols-[190px_minmax(0,1fr)] sm:gap-6 sm:px-5">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:block">
-                <span className="text-[11px] text-zinc-600">Segment {segment.sequence + 1}</span>
-                <p className="whitespace-nowrap font-mono text-xs tabular-nums text-zinc-300 sm:mt-1">
-                  {formatTimestamp(segment.startMs)} <span className="text-zinc-600">→</span> {formatTimestamp(segment.endMs)}
-                </p>
+            <li key={segment.sequence} className={`min-w-0 space-y-3 px-4 py-5 sm:px-5 ${selectedSequence === segment.sequence ? "bg-violet-400/[0.06]" : ""}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:block">
+                  <span className="text-[11px] text-zinc-500">#{segment.sequence + 1}</span>
+                  <p className="break-words font-mono text-xs tabular-nums text-zinc-300 sm:mt-1">
+                    {formatTimestamp(segment.startMs)} <span className="text-zinc-600">→</span> {formatTimestamp(segment.endMs)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-zinc-500">{((segment.endMs - segment.startMs) / 1000).toFixed(2)} s</p>
+                </div>
+                <button type="button" onClick={() => onSelect(segment.sequence)} aria-pressed={selectedSequence === segment.sequence} aria-label={`Select segment ${segment.sequence + 1}`} className={`min-h-9 rounded-lg border px-3 py-2 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 ${selectedSequence === segment.sequence ? "border-violet-400/25 bg-violet-400/10 text-violet-300" : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"}`}>{selectedSequence === segment.sequence ? "Selected" : "Select"}</button>
               </div>
-              <p lang={sourceLanguage} className="min-w-0 break-words text-sm leading-7 text-zinc-200 [overflow-wrap:anywhere]">
+              <p lang={sourceLanguage} className="min-w-0 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-200 [overflow-wrap:anywhere]">
                 {segment.text}
               </p>
             </li>
           ))}
         </ol>
       ) : (
-        <p className="px-5 py-10 text-center text-sm text-zinc-500">No segments match your search.</p>
+        <p className="px-5 py-10 text-center text-sm text-zinc-500">{segments.length ? "No segments match your search." : "No timed segments are available."}</p>
       )}
     </section>
   );
