@@ -1,11 +1,54 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronRight, Clapperboard, Film, LoaderCircle, RefreshCw } from "lucide-react";
 import type { RecapRead } from "@/lib/recap/read-recap";
 import type { RecapJobStatus } from "@/lib/queue/recap-queue";
 
-const panel = "rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5";
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
-function timestamp(ms: number) { return `${Math.floor(ms / 60000).toString().padStart(2, "0")}:${Math.floor(ms / 1000 % 60).toString().padStart(2, "0")}.${(ms % 1000).toString().padStart(3, "0")}`; }
+type Scene = { sequence: number; startMs: number; endMs: number; detectionMethod: string; boundaryScore: number | null };
+type Props = {
+  projectName: string;
+  movie: { id: string; title: string; filename: string | null; durationSeconds: number | null } | null;
+  initial: RecapRead;
+  initialJob: RecapJobStatus;
+  scenes: Scene[];
+  transcriptState: "MISSING" | "EMPTY" | "READY";
+  characterState: "CURRENT" | "ABSENT" | "STALE" | "UNAVAILABLE";
+  sourceContext: "CURRENT" | "ABSENT" | "STALE" | null;
+  sourceReason: string | null;
+  jobUnavailable: boolean;
+  model: string | null;
+  transcriptionHref: string;
+  scenesHref: string;
+  exportHref: string;
+  projectHref: string;
+};
+
+const panel = "min-w-0 rounded-xl border border-white/[0.08] bg-[#101720] p-4 sm:p-5";
+const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300";
+const activeJobStates = new Set(["waiting", "active", "delayed", "paused", "waiting-children"]);
+function isActiveJob(job: RecapJobStatus) { return !!job && activeJobStates.has(job.state); }
+function timestamp(ms: number) {
+  const hours = Math.floor(ms / 3_600_000);
+  const minutes = Math.floor(ms / 60_000) % 60;
+  const seconds = Math.floor(ms / 1_000) % 60;
+  return hours ? `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}` : `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+function duration(seconds: number | null) {
+  if (seconds === null) return "Duration unavailable";
+  return `${timestamp(seconds * 1000)} runtime`;
+}
+function sceneRange(startSequence: number, endSequence: number, scenes: Scene[]) {
+  const start = scenes.find((scene) => scene.sequence === startSequence);
+  const end = scenes.find((scene) => scene.sequence === endSequence);
+  return start && end ? `${timestamp(start.startMs)} – ${timestamp(end.endMs)}` : "Scene interval unavailable";
+}
+function confidenceStyle(confidence: string) {
+  if (confidence === "HIGH") return "border-emerald-300/15 bg-emerald-300/[0.07] text-emerald-200";
+  if (confidence === "MEDIUM") return "border-amber-300/15 bg-amber-300/[0.06] text-amber-200";
+  return "border-zinc-400/15 bg-zinc-400/[0.06] text-zinc-300";
+}
 async function request<T>(url: string, method = "GET"): Promise<T> {
   const response = await fetch(url, { method, cache: "no-store" });
   const body = await response.json();
@@ -13,80 +56,272 @@ async function request<T>(url: string, method = "GET"): Promise<T> {
   return body.data;
 }
 type Evidence = NonNullable<RecapRead["recap"]>["sections"][number]["evidence"][number];
-function EvidenceDetails({ evidence }: { evidence: Evidence[] }) {
-  return <div className="mt-4 space-y-2">{evidence.map((row) => <details key={row.id} className="min-w-0 rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-zinc-400">
-    <summary className={`cursor-pointer rounded leading-5 ${focus}`}>Scene #{row.sceneSequence + 1} · Transcript Segment #{row.segment.sequence + 1} · {timestamp(row.segment.startMs)} · View evidence</summary>
-    <div className="mt-3 space-y-2 border-l border-zinc-700 pl-3">
-      <p lang="my" className="break-words leading-6 text-zinc-300">{row.note}</p>
-      <p className="font-mono">Scene {row.scene ? `${timestamp(row.scene.startMs)} – ${timestamp(row.scene.endMs)}` : "interval no longer available"}</p>
-      <p className="font-mono">Segment {timestamp(row.segment.startMs)} – {timestamp(row.segment.endMs)}</p>
-      <p lang="zh" className="whitespace-pre-wrap break-words leading-6 text-zinc-200">{row.segment.excerpt}{row.segment.truncated ? "…" : ""}</p>
-      <p className="text-zinc-500">Read-only source excerpt. References establish subtitle context, not verified speaker identity.</p>
-    </div>
-  </details>)}</div>;
+type EvidenceLink = Evidence & { linkedTo: string; type: string };
+
+function Confidence({ value }: { value: string }) {
+  return <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-medium tracking-wide ${confidenceStyle(value)}`}>{value} support</span>;
 }
-export default function RecapControls({ movieId, initial, model, canGenerate, unavailableReason, sourceContext }: { movieId: string; initial: RecapRead; model: string | null; canGenerate: boolean; unavailableReason: string | null; sourceContext: string | null }) {
-  const [data, setData] = useState(initial);
-  const [job, setJob] = useState<RecapJobStatus>(null);
+
+function EvidenceAnchor({ row, compact = false }: { row: Evidence; compact?: boolean }) {
+  return <details className="min-w-0 rounded-lg border border-white/[0.07] bg-black/10 p-3">
+    <summary className={`cursor-pointer break-words text-xs leading-5 text-zinc-300 ${focus}`}>
+      Scene {row.sceneSequence + 1} · Segment {row.segment.sequence + 1} · {timestamp(row.segment.startMs)} · Evidence note
+    </summary>
+    <div className="mt-3 space-y-2 border-l border-zinc-700 pl-3 text-xs leading-5 text-zinc-400">
+      <p lang="my" className="break-words text-zinc-300">{row.note}</p>
+      <p className="font-mono text-zinc-500">{row.scene ? `${timestamp(row.scene.startMs)}–${timestamp(row.scene.endMs)}` : "Scene interval unavailable"} · {timestamp(row.segment.startMs)}–{timestamp(row.segment.endMs)}</p>
+      {!compact && <p lang="zh" className="break-words text-zinc-300">{row.segment.excerpt.slice(0, 180)}{row.segment.excerpt.length > 180 || row.segment.truncated ? "…" : ""}</p>}
+    </div>
+  </details>;
+}
+
+function StatusChip({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "green" | "amber" | "violet" | "red" }) {
+  const toneClass = tone === "green" ? "border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200" : tone === "amber" ? "border-amber-300/20 bg-amber-300/[0.07] text-amber-200" : tone === "violet" ? "border-violet-300/20 bg-violet-300/[0.08] text-violet-200" : tone === "red" ? "border-rose-300/20 bg-rose-300/[0.07] text-rose-200" : "border-white/10 bg-white/[0.04] text-zinc-300";
+  return <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${toneClass}`}>{children}</span>;
+}
+
+export default function RecapControls(props: Props) {
+  const [data, setData] = useState(props.initial);
+  const [job, setJob] = useState<RecapJobStatus>(props.initialJob);
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const base = `/api/movies/${encodeURIComponent(movieId)}/recap`;
-  const busy = submitting || !!job && !["completed", "failed", "unknown"].includes(job.state);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(props.initial.recap?.sections[0]?.id ?? null);
+  const [activeTab, setActiveTab] = useState<"script" | "characters" | "relationships" | "evidence" | "scenes">("script");
+  const movieId = props.movie?.id ?? null;
+  const base = movieId ? `/api/movies/${encodeURIComponent(movieId)}/recap` : null;
+  const recap = data.recap;
+  const active = isActiveJob(job);
+  const currentJobId = job?.jobId ?? null;
+  const shouldPollJob = isActiveJob(job);
+  const readyTranscript = props.transcriptState === "READY";
+  const readyScenes = props.scenes.length > 0;
+  const sourceReady = !!movieId && readyTranscript && readyScenes && !props.sourceReason;
+  const canGenerate = sourceReady && !!props.model;
+  const contextTabIds = ["script", "characters", "relationships", "evidence", "scenes"] as const;
+
+  function moveContextTab(event: React.KeyboardEvent<HTMLButtonElement>, current: typeof contextTabIds[number]) {
+    const offset = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (!offset) return;
+    event.preventDefault();
+    const next = contextTabIds[(contextTabIds.indexOf(current) + offset + contextTabIds.length) % contextTabIds.length];
+    setActiveTab(next);
+    document.getElementById(`recap-tab-${next}`)?.focus();
+  }
+
   useEffect(() => {
-    if (!canGenerate) return;
+    if (!base || !shouldPollJob) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
-        const status = await request<RecapJobStatus>(`${base}/generate${job?.jobId ? `?jobId=${encodeURIComponent(job.jobId)}` : ""}`);
+        const status = await request<RecapJobStatus>(`${base}/generate${currentJobId ? `?jobId=${encodeURIComponent(currentJobId)}` : ""}`);
         if (cancelled) return;
         setJob(status);
-        if (status?.state === "completed") { const current = await request<RecapRead>(base); if (!cancelled) setData(current); }
-        else if (status && status.state !== "failed" && status.state !== "unknown") timer = setTimeout(poll, 1500);
-      } catch (error) { if (!cancelled) setError(error instanceof Error ? error.message : "Unable to read recap status"); }
+        if (status?.state === "completed") {
+          const current = await request<RecapRead>(base!);
+          if (!cancelled) setData(current);
+        } else if (isActiveJob(status)) timer = setTimeout(poll, 2000);
+      } catch (pollError) {
+        if (!cancelled) setError(pollError instanceof Error ? pollError.message : "Unable to refresh recap status");
+      }
     }
     void poll();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [base, canGenerate, job?.jobId]);
+  }, [base, currentJobId, shouldPollJob]);
+
+  const selectedSection = recap?.sections.find((section) => section.id === selectedSectionId) ?? recap?.sections[0] ?? null;
+  const evidenceRows = useMemo<EvidenceLink[]>(() => {
+    if (!recap) return [];
+    const rows: EvidenceLink[] = [];
+    for (const section of recap.sections) for (const evidence of section.evidence) rows.push({ ...evidence, linkedTo: section.heading, type: "Section" });
+    for (const insight of recap.characterInsights) for (const evidence of insight.evidence) rows.push({ ...evidence, linkedTo: insight.displayName, type: "Character" });
+    for (const insight of recap.relationshipInsights) for (const evidence of insight.evidence) rows.push({ ...evidence, linkedTo: `${insight.nameA} ↔ ${insight.nameB}`, type: "Relationship" });
+    return rows.sort((a, b) => a.sceneSequence - b.sceneSequence || a.segment.sequence - b.segment.sequence || a.id.localeCompare(b.id));
+  }, [recap]);
+
+  async function refreshStatus() {
+    if (!base || !job?.jobId || refreshing) return;
+    setRefreshing(true);
+    setError("");
+    try {
+      const status = await request<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(job.jobId)}`);
+      setJob(status);
+      if (status?.state === "completed") {
+        const current = await request<RecapRead>(base);
+        setData(current);
+        setSelectedSectionId(current.recap?.sections[0]?.id ?? null);
+      }
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Unable to refresh recap status");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function generate() {
-    if (!acknowledged || busy) return;
-    setSubmitting(true); setError("");
+    if (!base || !acknowledged || !canGenerate || submitting || active) return;
+    setSubmitting(true);
+    setError("");
     try {
       const queued = await request<{ jobId: string }>(`${base}/generate`, "POST");
-      setJob(await request<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(queued.jobId)}`));
+      const status = await request<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(queued.jobId)}`);
+      setJob(status);
       setAcknowledged(false);
-      setData(await request<RecapRead>(base));
-    } catch (error) { setError(error instanceof Error ? error.message : "Unable to queue recap"); }
-    finally { setSubmitting(false); }
+      const current = await request<RecapRead>(base);
+      setData(current);
+      setSelectedSectionId(current.recap?.sections[0]?.id ?? null);
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : "Unable to queue recap generation");
+    } finally {
+      setSubmitting(false);
+    }
   }
-  const recap = data.recap;
+
+  const stale = !!recap?.stale;
+  const stateLabel = !props.movie ? "Not available" : !readyTranscript ? "Transcript required" : !readyScenes ? "Scenes required" : active ? "Generating" : job?.state === "failed" ? "Failed" : stale ? "Stale" : recap ? "Completed" : !props.model ? "Not configured" : "Ready";
+  const stateTone = active ? "violet" : job?.state === "failed" ? "red" : stale || !readyTranscript || !readyScenes ? "amber" : recap && !stale ? "green" : "neutral";
+  const actionIsGenerate = readyTranscript && readyScenes && !!props.movie && (!recap || stale) && !active && job?.state !== "failed";
+  const actionIsRefresh = !!job && (active || job.state === "failed");
+
   return <div className="space-y-5">
-    <section className={panel} aria-labelledby="recap-policy"><h2 id="recap-policy" className="font-medium">Evidence → inference → recap claim</h2>
-      <p className="mt-2 text-sm leading-6 text-zinc-400">Myanmar recap from Chinese transcript and scene evidence. Character analysis is advisory: names, speaker roles, motivations and relationships are not verified identities or objective facts. There is no reliable speaker diarization or face/voice recognition.</p>
-      <p className="mt-2 text-xs leading-5 text-zinc-500">HIGH: explicit textual support. MEDIUM: contextual interpretation. LOW: weak or ambiguous evidence. Confidence is not an accuracy percentage or truth probability.</p>
-      {sourceContext && <p className="mt-3 text-xs text-zinc-400">{sourceContext === "CURRENT" ? "Current character evidence is available as advisory context." : sourceContext === "STALE" ? "Stale character analysis will be ignored. Character-specific context is limited." : "No character analysis yet. A plot-focused recap can still be generated; no characters will be fabricated."}</p>}
-      <div className="mt-5 space-y-3 border-t border-white/10 pt-4">
-        <p className="break-words text-xs text-zinc-400">Paid AI action · OpenRouter · {model ?? "Model not configured"}. Long movies use multiple bounded requests. Cost depends on usage. Unchanged source reuses its retained completed job.</p>
-        {unavailableReason && <p className="text-sm text-amber-200">{unavailableReason}</p>}
-        <label className="flex items-start gap-3 text-sm text-zinc-300"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy || !canGenerate || !model} className={`mt-1 accent-zinc-300 ${focus}`} /><span>I understand recap generation may incur an AI charge.</span></label>
-        <button type="button" className={`rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-40 ${focus}`} disabled={!acknowledged || busy || !canGenerate || !model} onClick={() => void generate()}>{busy ? "Generating recap…" : recap ? "Re-generate recap" : "Generate recap"}</button>
-        <p role="status" aria-live="polite" className="text-xs text-zinc-400">{job ? `Job ${job.state} · ${job.attemptsMade} attempts completed${job.state === "completed" ? " · Repeated requests reuse this source job" : ""}` : "Generation runs only after an explicit request."}</p>
-        {job?.state === "failed" && <p role="alert" className="text-sm text-amber-200">{job.error}</p>}
-        {error && <p role="alert" className="text-sm text-amber-200">{error}</p>}
+    <header className="flex min-w-0 flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <nav aria-label="Breadcrumb" className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+          <Link href="/projects" className={`${focus} rounded hover:text-zinc-200`}>Projects</Link><ChevronRight size={13} aria-hidden="true" />
+          <Link href={props.projectHref} className={`${focus} max-w-full truncate rounded hover:text-zinc-200`}>{props.projectName}</Link><ChevronRight size={13} aria-hidden="true" />
+          <span aria-current="page" className="text-zinc-300">Recap</span>
+        </nav>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Recap</h1>
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">Create a Myanmar recap from transcript and scene evidence.</p>
       </div>
-    </section>
-    {recap ? <>
-      <section className={panel} aria-label="Recap provenance"><p className="break-words text-sm text-zinc-300">{recap.provider} · {recap.model} · {recap.strategy === "SINGLE_STAGE" ? "One-stage recap" : "Hierarchical recap"} · {(recap.runtimeMs / 1000).toFixed(2)}s model runtime · {recap.modelCalls} model requests</p>
-        <p className="mt-2 text-xs text-zinc-500">Myanmar · {recap.sections.length} sections · {recap.characterInsights.length} character insights · {recap.relationshipInsights.length} relationship insights · Updated {recap.updatedAt}</p>
-        <p className="mt-2 text-xs text-zinc-500">Character context at generation: {recap.characterContext === "CURRENT" ? "Current analysis used as advisory evidence" : recap.characterContext === "STALE" ? "Stale analysis ignored; limited character context" : "No character analysis; plot-focused recap"}</p>
-        {recap.usage && <p className="mt-2 text-xs text-zinc-500">Tokens: {recap.usage.totalTokens ?? "not reported"} · Cost: {recap.usage.costUsd === undefined ? "not reported" : `$${recap.usage.costUsd.toFixed(6)}`}</p>}
-        {recap.stale ? <p role="status" className="mt-3 text-sm text-amber-200">Source changed since generation. This recap is stale; review it or request a recap for the current source.</p> : <p className="mt-3 text-xs text-zinc-400">Source snapshot is current. Semantic correctness still requires human review.</p>}
-      </section>
-      <section className={panel} aria-labelledby="recap-title"><h2 lang="my" id="recap-title" className="break-words text-lg font-semibold leading-8">{recap.title}</h2><p lang="my" className="mt-4 whitespace-pre-wrap break-words text-sm leading-8 text-zinc-300">{recap.summary}</p></section>
-      <section aria-labelledby="recap-sections"><h2 id="recap-sections" className="mb-3 font-medium">Scene-based recap sections</h2><div className="space-y-4">{recap.sections.map((section) => <article className={panel} key={section.id}><p className="text-xs text-zinc-500">Section {section.sequence + 1} · Scenes #{section.sceneStartSequence + 1}–#{section.sceneEndSequence + 1} · {section.confidence} evidence confidence</p><h3 lang="my" className="mt-3 break-words font-medium leading-7">{section.heading}</h3><p lang="my" className="mt-3 whitespace-pre-wrap break-words text-sm leading-8 text-zinc-300">{section.summary}</p><EvidenceDetails evidence={section.evidence} /></article>)}</div></section>
-      <section aria-labelledby="recap-character-insights"><h2 id="recap-character-insights" className="mb-3 font-medium">Character insights</h2>{!recap.characterInsights.length && <p className="text-sm text-zinc-400">No supported character-specific insights recorded.</p>}<div className="grid min-w-0 gap-4 xl:grid-cols-2">{recap.characterInsights.map((insight) => <article key={insight.id} className={`${panel} min-w-0`}><h3 className="break-words font-medium">{insight.displayName}</h3><p className="mt-2 text-xs text-zinc-500">Inferred from dialogue evidence · {insight.confidence} confidence{insight.uncertain ? " · Uncertain identity" : ""}</p><p lang="my" className="mt-3 break-words text-sm leading-8 text-zinc-300">{insight.observation}</p><EvidenceDetails evidence={insight.evidence} /></article>)}</div></section>
-      <section aria-labelledby="recap-relationship-insights"><h2 id="recap-relationship-insights" className="mb-3 font-medium">Suggested relationship dynamics</h2>{!recap.relationshipInsights.length && <p className="text-sm text-zinc-400">No supported relationship-specific insights recorded.</p>}<div className="grid min-w-0 gap-4 xl:grid-cols-2">{recap.relationshipInsights.map((insight) => <article key={insight.id} className={`${panel} min-w-0`}><h3 className="break-words font-medium">{insight.nameA} ↔ {insight.nameB}</h3><p className="mt-2 text-xs text-zinc-500">Suggested relationship dynamic · {insight.confidence} confidence{insight.uncertainA || insight.uncertainB ? " · Uncertain parties" : ""}</p><p lang="my" className="mt-3 break-words text-sm leading-8 text-zinc-300">{insight.observation}</p><EvidenceDetails evidence={insight.evidence} /></article>)}</div></section>
-    </> : <section className={panel}><p className="text-sm text-zinc-400">No recap yet. No mock story or character claims have been fabricated.</p></section>}
+      <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-auto sm:min-w-[220px] sm:items-end">
+        <StatusChip tone={stateTone}>{active && <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />}{stateLabel}</StatusChip>
+        {actionIsGenerate ? <>
+          <label className="flex max-w-[300px] items-start gap-2 text-left text-xs leading-5 text-zinc-400 sm:justify-end">
+            <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={!canGenerate || submitting || active} className={`mt-1 shrink-0 accent-violet-400 ${focus}`} />
+            <span>AI Action · OpenRouter. I understand this may incur usage cost.</span>
+          </label>
+          <button type="button" onClick={() => void generate()} disabled={!acknowledged || !canGenerate || submitting || active} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40 ${focus}`}>
+            {submitting ? <><LoaderCircle size={15} className="animate-spin" aria-hidden="true" />Queueing…</> : <><Clapperboard size={15} aria-hidden="true" />{stale ? "Regenerate Recap" : "Generate Recap"}</>}
+          </button>
+        </> : actionIsRefresh ? <button type="button" onClick={() => void refreshStatus()} disabled={refreshing} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08] disabled:opacity-50 ${focus}`}>
+          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />{refreshing ? "Refreshing…" : "Refresh Status"}
+        </button> : !props.movie ? <Link href={props.projectHref} className={`inline-flex min-h-10 items-center justify-center rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-400 ${focus}`}>Open Project</Link>
+          : !readyTranscript ? <Link href={props.transcriptionHref} className={`inline-flex min-h-10 items-center justify-center rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-400 ${focus}`}>Open Transcription</Link>
+            : !readyScenes ? <Link href={props.scenesHref} className={`inline-flex min-h-10 items-center justify-center rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-400 ${focus}`}>Detect Scenes</Link>
+              : recap && !stale ? <Link href={props.exportHref} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-400 ${focus}`}>Open Export<ChevronRight size={15} aria-hidden="true" /></Link>
+                : <button type="button" disabled className="min-h-10 rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-400 disabled:opacity-60">{job?.state === "failed" ? "Generation failed" : "Recap unavailable"}</button>}
+      </div>
+    </header>
+
+    {stale && <section className="flex gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4" role="status"><AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-200" aria-hidden="true" /><div><h2 className="text-sm font-medium text-amber-100">This recap is stale</h2><p className="mt-1 text-xs leading-5 text-amber-100/75">Source transcript, scenes, or character context changed after this recap was generated. The saved recap remains available for review; regenerate only when you choose.</p></div></section>}
+    {props.sourceReason && !active && <section className="flex gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.045] p-4 text-sm text-amber-100" role="status"><AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><p className="leading-6">{!readyTranscript ? "Transcription is required before generating a recap." : !readyScenes ? "Scene detection is required to build the recap." : props.sourceReason}</p></section>}
+    {job?.state === "failed" && <section className="rounded-xl border border-rose-300/15 bg-rose-300/[0.04] p-4" role="alert"><p className="text-sm font-medium text-rose-200">Recap generation could not be completed.</p><p className="mt-1 text-xs leading-5 text-zinc-400">{job.error ?? "The saved generation job failed. Check worker configuration and source data."}</p></section>}
+    {props.jobUnavailable && <p role="status" className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-3 text-xs leading-5 text-amber-200">Live generation status is unavailable. Saved recap data is still shown.</p>}
+    {error && <p role="alert" className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-3 text-xs leading-5 text-amber-200">{error}</p>}
+
+    <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.95fr)]">
+      <div className="min-w-0 space-y-4">
+        <section className={panel} aria-labelledby="recap-source-heading">
+          <div className="relative flex min-h-[230px] min-w-0 flex-col justify-between overflow-hidden rounded-lg border border-white/[0.07] bg-[#0b111a] p-5 sm:min-h-[285px]">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-950/20 via-transparent to-slate-800/20" />
+            <div className="relative flex items-start justify-between gap-3"><StatusChip>{props.movie ? "Movie source" : "No movie"}</StatusChip><StatusChip>{duration(props.movie?.durationSeconds ?? null)}</StatusChip></div>
+            <div className="relative flex flex-1 flex-col items-center justify-center py-8 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400"><Film size={22} aria-hidden="true" /></div>
+              <p className="text-sm font-medium text-zinc-200">Preview unavailable</p>
+              <p className="mt-1 max-w-sm text-xs leading-5 text-zinc-500">This workspace has no playable video preview. Scene ranges and transcript evidence are shown below.</p>
+            </div>
+            <div className="relative min-w-0 border-t border-white/[0.08] pt-3">
+              <h2 id="recap-source-heading" className="break-words text-sm font-semibold text-zinc-100">{props.movie?.title ?? "No movie uploaded"}</h2>
+              <p className="mt-1 break-all text-xs text-zinc-500">{props.movie?.filename ?? "Upload a movie from Project Overview to begin."}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Prerequisite label="Transcript" value={props.transcriptState === "READY" ? "Completed" : props.transcriptState === "EMPTY" ? "Needs attention" : "Not ready"} tone={props.transcriptState === "READY" ? "green" : "amber"} />
+            <Prerequisite label="Scenes" value={readyScenes ? `${props.scenes.length} detected` : "Not detected"} tone={readyScenes ? "green" : "amber"} />
+            <Prerequisite label="Character Analysis" value={characterStateLabel(props.characterState)} tone={props.characterState === "CURRENT" ? "green" : props.characterState === "STALE" ? "amber" : "neutral"} note="Optional · advisory" />
+            <Prerequisite label="Recap" value={recap ? stale ? "Stale" : "Completed" : active ? "Generating" : job?.state === "failed" ? "Failed" : "Not generated"} tone={recap && !stale ? "green" : stale || job?.state === "failed" ? "amber" : active ? "violet" : "neutral"} />
+          </div>
+        </section>
+
+        <section className={panel} aria-labelledby="scene-chapters-heading">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="scene-chapters-heading" className="text-sm font-semibold text-zinc-100">Scenes &amp; Chapters</h2><p className="mt-1 text-xs text-zinc-500">Saved scene intervals · no generated titles or thumbnails</p></div><Link href={props.scenesHref} className={`rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.05] ${focus}`}>{readyScenes ? "Open Scenes" : "Detect Scenes"}</Link></div>
+          {!readyScenes ? <p className="mt-4 rounded-lg border border-dashed border-white/10 bg-black/10 p-4 text-xs leading-5 text-zinc-400">{readyTranscript ? "Scene detection is required to build the recap." : "Scene intervals will appear after transcript preparation and scene detection."}</p> : <div className="mt-4 grid max-h-[245px] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+            {props.scenes.map((scene) => <div key={scene.sequence} className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"><p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Scene {String(scene.sequence + 1).padStart(2, "0")}</p><p className="mt-1 break-words font-mono text-xs text-zinc-200">{timestamp(scene.startMs)}–{timestamp(scene.endMs)}</p><p className="mt-1 break-words text-[10px] leading-4 text-zinc-600">{scene.detectionMethod.replaceAll("_", " ")}</p></div>)}
+          </div>}
+        </section>
+
+        <section className={panel} aria-labelledby="recap-summary-heading">
+          <div><h2 id="recap-summary-heading" className="text-sm font-semibold text-zinc-100">Recap Summary</h2><p className="mt-1 text-xs text-zinc-500">Saved Myanmar narrative · read-only</p></div>
+          {recap ? <>
+            <h3 lang="my" className="mt-4 break-words text-base font-medium leading-7 text-zinc-200">{recap.title}</h3>
+            <p lang="my" className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{recap.summary}</p>
+            <details className="mt-4 border-t border-white/[0.07] pt-3 text-xs text-zinc-500"><summary className={`cursor-pointer ${focus}`}>Generation details</summary><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1"><span>{recap.provider} · {recap.model}</span><span>{recap.strategy === "SINGLE_STAGE" ? "One-stage" : "Hierarchical"}</span><span>{(recap.runtimeMs / 1000).toFixed(2)}s · {recap.modelCalls} model requests</span>{recap.usage && <span>{recap.usage.totalTokens ?? "Token usage not reported"} tokens · {recap.usage.costUsd === undefined ? "cost not reported" : `$${recap.usage.costUsd.toFixed(6)}`}</span>}<span>Updated {new Date(recap.updatedAt).toLocaleString()}</span></div><p className="mt-2">Character context at generation: {recap.characterContext === "CURRENT" ? "current advisory analysis" : recap.characterContext === "STALE" ? "stale analysis ignored" : "no analysis; plot-focused"}.</p></details>
+          </> : <p className="mt-4 rounded-lg border border-dashed border-white/10 bg-black/10 p-4 text-sm leading-6 text-zinc-400">{!readyTranscript ? "Transcription is required before generating a recap." : !readyScenes ? "Scene detection is required to build the recap." : props.sourceReason || "Generate a Myanmar recap from the current transcript and scene evidence."}</p>}
+          {props.sourceContext && <p className="mt-3 border-t border-white/[0.07] pt-3 text-xs leading-5 text-zinc-500">{props.sourceContext === "CURRENT" ? "Current character analysis may inform the recap as advisory evidence." : props.sourceContext === "STALE" ? "Stale character analysis is ignored; character context is limited." : "No character analysis is present. A plot-focused recap can still be generated without fabricated characters."}</p>}
+        </section>
+      </div>
+
+      <aside className="min-w-0 overflow-hidden rounded-xl border border-white/[0.08] bg-[#101720]" aria-label="Recap script and evidence">
+        <div role="tablist" aria-label="Recap views" className="grid grid-cols-2 gap-1 border-b border-white/[0.08] bg-black/15 p-2 sm:grid-cols-3 xl:grid-cols-5">
+          {([{ id: "script", label: "Recap Script" }, { id: "characters", label: "Characters" }, { id: "relationships", label: "Relationships" }, { id: "evidence", label: "Evidence" }, { id: "scenes", label: "Scene List" }] as const).map((tab) => <button key={tab.id} id={`recap-tab-${tab.id}`} type="button" role="tab" tabIndex={activeTab === tab.id ? 0 : -1} aria-selected={activeTab === tab.id} aria-controls="recap-context-panel" onKeyDown={(event) => moveContextTab(event, tab.id)} onClick={() => setActiveTab(tab.id)} className={`min-h-10 rounded-md px-2 text-xs transition ${focus} ${activeTab === tab.id ? "border-b-2 border-violet-400 bg-violet-500/[0.12] text-violet-200" : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"}`}>{tab.label}</button>)}
+        </div>
+        <div id="recap-context-panel" role="tabpanel" aria-labelledby={`recap-tab-${activeTab}`} className="min-w-0 p-4 sm:p-5">
+          {activeTab === "script" && <div className="space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-violet-200/80">Read-only Myanmar script</p><h2 className="mt-1 text-lg font-semibold text-zinc-100">Movie Recap</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Character-driven summary grounded in saved scene and transcript evidence.</p></div>{recap && <StatusChip tone={stale ? "amber" : "green"}>{stale ? "Stale source" : "Current"}</StatusChip>}</div>
+            {!recap && <EmptyContext text={!readyTranscript ? "Transcription is required before generating a recap." : !readyScenes ? "Scene detection is required to build the recap." : props.sourceReason || "Generate a Myanmar recap from the current transcript and scene evidence."} />}
+            {recap && !recap.sections.length && <EmptyContext text="No recap sections were saved for this result." />}
+            {recap?.sections.map((section) => <article key={section.id} className={`min-w-0 overflow-hidden rounded-lg border transition ${selectedSection?.id === section.id ? "border-violet-400/55 bg-violet-500/[0.09] shadow-[inset_0_0_0_1px_rgba(139,92,246,0.1)]" : "border-white/[0.07] bg-[#0d141d]"}`}>
+              <button type="button" aria-current={selectedSection?.id === section.id ? "true" : undefined} aria-label={`Show recap section ${section.sequence + 1}: ${section.heading}`} onClick={() => setSelectedSectionId(section.id)} className={`flex w-full min-w-0 items-start gap-3 p-3 text-left ${focus}`}>
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${selectedSection?.id === section.id ? "bg-violet-500 text-white" : "bg-white/[0.07] text-zinc-300"}`}>{section.sequence + 1}</span>
+                <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500"><span>{sceneRange(section.sceneStartSequence, section.sceneEndSequence, props.scenes)}</span><span>Scenes {section.sceneStartSequence + 1}–{section.sceneEndSequence + 1}</span></span><span lang="my" className="mt-1 block break-words text-sm font-medium leading-6 text-zinc-100">{section.heading}</span><span className="mt-2 flex flex-wrap items-center gap-2"><Confidence value={section.confidence} /><span className="text-[10px] text-zinc-500">{section.evidence.length} evidence anchors</span></span></span>
+              </button>
+              {selectedSection?.id === section.id && <div className="border-t border-violet-300/15 px-4 pb-4 pt-3"><p lang="my" className="whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{section.summary}</p><div className="mt-4 border-t border-white/[0.07] pt-3"><h3 className="text-xs font-medium text-zinc-300">Supporting evidence</h3>{section.evidence.length ? <div className="mt-2 space-y-2">{section.evidence.map((row) => <EvidenceAnchor key={row.id} row={row} compact />)}</div> : <p className="mt-2 text-xs text-zinc-500">No evidence anchors saved for this section.</p>}</div></div>}
+            </article>)}
+            {recap && <p className="text-[11px] leading-5 text-zinc-500">Confidence labels describe support strength, not accuracy or truth probability. Review claims against the linked Chinese source.</p>}
+          </div>}
+
+          {activeTab === "characters" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
+            <div><h2 className="text-base font-semibold text-zinc-100">Characters</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Recap insights from persisted analysis · advisory, not verified identity.</p><p className="mt-2 text-xs text-zinc-500">Character analysis: <span className={props.characterState === "STALE" ? "text-amber-200" : props.characterState === "CURRENT" ? "text-emerald-200" : "text-zinc-300"}>{characterStateLabel(props.characterState)}</span></p></div>
+            {!recap?.characterInsights.length && <EmptyContext text={recap ? "No supported character-specific insights were saved." : "Character insights appear after a recap is generated."} />}
+            {recap?.characterInsights.map((insight) => <article key={insight.id} className="min-w-0 rounded-lg border border-white/[0.07] bg-[#0d141d] p-3"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="break-words text-sm font-medium text-zinc-200">{insight.displayName}</h3>{insight.uncertain && <StatusChip tone="amber">Uncertain identity</StatusChip>}</div><p className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500"><span>Inferred observation</span><Confidence value={insight.confidence} /><span>{insight.evidence.length} anchors</span></p><p lang="my" className="mt-2 break-words text-xs leading-6 text-zinc-300">{insight.observation}</p>{insight.evidence[0] && <div className="mt-3"><EvidenceAnchor row={insight.evidence[0]} compact /></div>}</article>)}
+          </div>}
+
+          {activeTab === "relationships" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
+            <div><h2 className="text-base font-semibold text-zinc-100">Relationships</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Suggested relationship interpretations from saved recap evidence.</p></div>
+            {!recap?.relationshipInsights.length && <EmptyContext text={recap ? "No supported relationship interpretations were saved." : "Relationship context appears after a recap is generated."} />}
+            {recap?.relationshipInsights.map((insight) => <article key={insight.id} className="min-w-0 rounded-lg border border-white/[0.07] bg-[#0d141d] p-3"><h3 className="break-words text-sm font-medium text-zinc-200">{insight.nameA} <span className="text-zinc-500">↔</span> {insight.nameB}</h3>{(insight.uncertainA || insight.uncertainB) && <p className="mt-1 text-[10px] text-amber-200">One or more parties have uncertain identity.</p>}<p className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500"><span>Suggested dynamic</span><Confidence value={insight.confidence} /><span>{insight.evidence.length} anchors</span></p><p lang="my" className="mt-2 break-words text-xs leading-6 text-zinc-300">{insight.observation}</p>{insight.evidence[0] && <div className="mt-3"><EvidenceAnchor row={insight.evidence[0]} compact /></div>}</article>)}
+          </div>}
+
+          {activeTab === "evidence" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
+            <div><h2 className="text-base font-semibold text-zinc-100">Evidence</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Real scene and transcript anchors linked to saved recap claims.</p></div>
+            {!evidenceRows.length && <EmptyContext text={recap ? "No evidence anchors were saved." : "Evidence anchors appear after a recap is generated."} />}
+            {evidenceRows.map((row) => <article key={`${row.type}-${row.id}`} className="min-w-0 rounded-lg border border-white/[0.07] bg-[#0d141d] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><StatusChip>{row.type}</StatusChip><span className="max-w-full break-words text-[10px] text-zinc-500">Supports {row.linkedTo}</span></div><EvidenceAnchor row={row} compact /></article>)}
+          </div>}
+
+          {activeTab === "scenes" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
+            <div><h2 className="text-base font-semibold text-zinc-100">Scene List</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Saved intervals only. Scene names and visual previews are unavailable.</p></div>
+            {!props.scenes.length && <EmptyContext text="No scene intervals are saved. Detect scenes before generating a recap." />}
+            {props.scenes.map((scene) => <article key={scene.sequence} className="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-white/[0.07] bg-[#0d141d] p-3"><div className="min-w-0"><p className="text-xs font-medium text-zinc-200">Scene {String(scene.sequence + 1).padStart(2, "0")}</p><p className="mt-1 break-words font-mono text-[11px] text-zinc-400">{timestamp(scene.startMs)}–{timestamp(scene.endMs)}</p><p className="mt-1 break-words text-[10px] text-zinc-600">{scene.detectionMethod.replaceAll("_", " ")}</p></div>{recap?.sections.some((section) => scene.sequence >= section.sceneStartSequence && scene.sequence <= section.sceneEndSequence) && <StatusChip tone="violet">In recap</StatusChip>}</article>)}
+          </div>}
+        </div>
+      </aside>
+    </div>
+    <p className="text-xs leading-5 text-zinc-500">Recap uses the newest movie in this project. Review important claims against the referenced Chinese source. Confidence labels describe support strength, not accuracy or truth probability.</p>
   </div>;
+}
+
+function characterStateLabel(state: Props["characterState"]) {
+  return state === "CURRENT" ? "Current" : state === "STALE" ? "Stale" : state === "ABSENT" ? "Not run" : "Unavailable";
+}
+
+function Prerequisite({ label, value, tone, note }: { label: string; value: string; tone: "neutral" | "green" | "amber" | "violet"; note?: string }) {
+  const toneClass = tone === "green" ? "text-emerald-200" : tone === "amber" ? "text-amber-200" : tone === "violet" ? "text-violet-200" : "text-zinc-300";
+  return <div className="min-w-0 rounded-lg border border-white/[0.06] bg-black/10 p-2.5 sm:p-3"><p className="break-words text-[10px] text-zinc-500">{label}{note && <span className="ml-1 text-zinc-600">· {note}</span>}</p><p className={`mt-1 break-words text-xs font-medium ${toneClass}`}>{value}</p></div>;
+}
+
+function EmptyContext({ text }: { text: string }) {
+  return <p className="rounded-lg border border-dashed border-white/10 bg-black/10 p-4 text-xs leading-5 text-zinc-500">{text}</p>;
 }
