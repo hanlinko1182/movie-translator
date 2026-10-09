@@ -1,243 +1,121 @@
-import {
-  FolderKanban,
-  Film,
-  Subtitles,
-  Upload,
-  MoreHorizontal,
-  Clock3,
-  CheckCircle2,
-  Loader2,
-  ArrowUpRight,
-} from "lucide-react";
+import Link from "next/link";
+import { connection } from "next/server";
+import { ArrowUpRight, CheckCircle2, CircleAlert, Clock3, Film, FolderKanban, Plus, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { readDashboard } from "./dashboard-data";
+import type { buildDashboard } from "./dashboard-model";
+import { dateLabel, languageName } from "./projects/[id]/overview-model";
+import { cardClass, linkClass, StatusBadge } from "./projects/[id]/overview-components";
 
+type Dashboard = ReturnType<typeof buildDashboard>;
+const primaryClass = "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300";
 
-const projects = [
-  {
-    title: "The Hidden Dragon",
-    language: "Chinese → Myanmar",
-    progress: 82,
-    status: "Processing",
-    icon: Loader2,
-  },
-  {
-    title: "Moonlight Sword",
-    language: "Chinese → Myanmar",
-    progress: 100,
-    status: "Completed",
-    icon: CheckCircle2,
-  },
-  {
-    title: "Legend of the Phoenix",
-    language: "Chinese → Myanmar",
-    progress: 34,
-    status: "Processing",
-    icon: Loader2,
-  },
-];
+export default async function Home() {
+  // Fresh on request; never bake workflow data into the production build.
+  await connection();
+  let dashboard;
+  try { dashboard = await readDashboard(); }
+  catch { /* Show unavailable state without exposing database errors. */ }
 
-const stats = [
-  {
-    label: "Total Projects",
-    value: "24",
-    icon: FolderKanban,
-  },
-  {
-    label: "Processing",
-    value: "03",
-    icon: Clock3,
-  },
-  {
-    label: "Completed",
-    value: "18",
-    icon: CheckCircle2,
-  },
-  {
-    label: "Subtitles",
-    value: "1,284",
-    icon: Subtitles,
-  },
-];
+  return <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">Workspace</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">Manage your movie localization and recap workflow.</p>
+        </div>
+        <Link href="/projects/new" className={primaryClass}><Plus size={16} aria-hidden="true" />New Project</Link>
+      </header>
+      {!dashboard ? <section className={`${cardClass} p-8`} role="status">
+        <CircleAlert size={24} className="text-amber-300" aria-hidden="true" />
+        <h2 className="mt-4 font-semibold">Dashboard is unavailable</h2>
+        <p className="mt-2 text-sm text-zinc-400">We couldn’t load saved projects. Refresh the page to try again.</p>
+        <Link href="/projects" className={`${linkClass} mt-5`}>View projects<ArrowUpRight size={14} aria-hidden="true" /></Link>
+      </section> : !dashboard.totalProjects ? <section className={`${cardClass} flex flex-col items-center p-8 text-center sm:p-16`}>
+        <Film size={32} className="text-violet-300" aria-hidden="true" />
+        <h2 className="mt-5 text-xl font-semibold">Start your first movie localization project.</h2>
+        <p className="mt-3 max-w-md text-sm leading-6 text-zinc-400">Upload a source movie, then work through transcription, translation and human review.</p>
+        <Link href="/projects/new" className={`${primaryClass} mt-6`}><Plus size={16} aria-hidden="true" />New Project</Link>
+      </section> : <DashboardContent dashboard={dashboard} />}
+    </div>
+  </main>;
+}
 
-export default function Home() {
-  return (
-
-
-        <section className="flex-1">
-          {/* Header */}
-          <header className="flex h-20 items-center justify-between border-b border-white/10 px-6 lg:px-10">
-            <div>
-              <p className="text-xs text-zinc-500">Workspace</p>
-              <h2 className="text-lg font-semibold">Dashboard</h2>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button className="hidden rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 sm:block">
-                Settings
-              </button>
-
-              <button className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200">
-                <Upload size={16} />
-                New Movie
-              </button>
-            </div>
-          </header>
-
-          {/* Content */}
-          <div className="p-6 lg:p-10">
-            <div className="mb-8">
-              <p className="text-sm text-zinc-500">Welcome back</p>
-              <h3 className="mt-1 text-2xl font-semibold tracking-tight">
-                Movie Translation Studio
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm text-zinc-500">
-                Translate Chinese movies into natural Myanmar subtitles with
-                AI-powered transcription and translation.
-              </p>
-            </div>
-
-            {/* Stats */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {stats.map((stat) => {
-                const Icon = stat.icon;
-
-                return (
-                  <div
-                    key={stat.label}
-                    className="rounded-2xl border border-white/10 bg-white/[0.025] p-5 transition hover:bg-white/[0.04]"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-500">
-                        {stat.label}
-                      </span>
-
-                      <div className="rounded-lg border border-white/10 p-2 text-zinc-400">
-                        <Icon size={16} />
-                      </div>
-                    </div>
-
-                    <p className="mt-5 text-3xl font-semibold tracking-tight">
-                      {stat.value}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Upload */}
-            <div className="mt-8 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-8">
-              <div className="flex flex-col items-center justify-center text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-                  <Upload size={23} className="text-zinc-400" />
-                </div>
-
-                <h4 className="mt-4 text-base font-medium">
-                  Upload a movie
-                </h4>
-
-                <p className="mt-2 max-w-md text-sm text-zinc-500">
-                  Upload your Chinese movie and start the AI transcription and
-                  Myanmar subtitle translation workflow.
-                </p>
-
-                <button className="mt-5 rounded-xl bg-white px-5 py-2.5 text-sm font-medium text-black hover:bg-zinc-200">
-                  Choose Movie
-                </button>
-
-                <p className="mt-3 text-xs text-zinc-600">
-                  MP4, MKV, MOV · Large files supported
-                </p>
-              </div>
-            </div>
-
-            {/* Projects */}
-            <div className="mt-10">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium">Recent Projects</h4>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Your latest movie translation jobs
-                  </p>
-                </div>
-
-                <button className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white">
-                  View all
-                  <ArrowUpRight size={14} />
-                </button>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl border border-white/10">
-                {projects.map((project, index) => {
-                  const Icon = project.icon;
-
-                  return (
-                    <div
-                      key={project.title}
-                      className={`flex flex-col gap-4 p-5 transition hover:bg-white/[0.025] sm:flex-row sm:items-center ${
-                        index !== projects.length - 1
-                          ? "border-b border-white/10"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex flex-1 items-center gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.05]">
-                          <Film size={19} className="text-zinc-400" />
-                        </div>
-
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {project.title}
-                          </p>
-
-                          <p className="mt-1 text-xs text-zinc-500">
-                            {project.language}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="w-full sm:w-48">
-                        <div className="mb-2 flex justify-between text-xs">
-                          <span className="text-zinc-500">
-                            {project.status}
-                          </span>
-
-                          <span className="text-zinc-400">
-                            {project.progress}%
-                          </span>
-                        </div>
-
-                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div
-                            className="h-full rounded-full bg-white"
-                            style={{ width: `${project.progress}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                          <Icon
-                            size={14}
-                            className={
-                              project.status === "Processing"
-                                ? "animate-spin"
-                                : ""
-                            }
-                          />
-                          {project.status}
-                        </span>
-
-                        <button className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white">
-                          <MoreHorizontal size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
+  return <>
+    <section aria-labelledby="upload-heading" className={`${cardClass} flex flex-col justify-between gap-5 border-violet-400/20 p-5 sm:flex-row sm:items-center sm:p-6`}>
+      <div className="flex items-start gap-4">
+        <span className="rounded-xl border border-violet-400/20 bg-violet-400/10 p-3 text-violet-300"><Upload size={23} aria-hidden="true" /></span>
+        <div><h2 id="upload-heading" className="text-base font-semibold">Start a new translation</h2><p className="mt-1 text-sm leading-6 text-zinc-400">Bring a source movie into your localization workspace.</p></div>
+      </div>
+      <Link href="/projects/new" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium transition hover:bg-white/[0.08] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300"><Upload size={16} aria-hidden="true" />Upload Movie</Link>
+    </section>
+    <section aria-label="Saved workflow summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {[
+        { label: "Total Projects", value: dashboard.totalProjects, detail: "All saved projects", icon: FolderKanban, color: "text-violet-300" },
+        { label: "Needs Review", value: dashboard.needsReview, detail: "Projects with unapproved segments", icon: CircleAlert, color: "text-amber-300" },
+        { label: "Fully Approved", value: dashboard.fullyApproved, detail: "All saved segments human approved", icon: ShieldCheck, color: "text-emerald-300" },
+        { label: "Saved Recaps", value: dashboard.savedRecaps, detail: "Saved scripts · freshness checked in workspace", icon: Sparkles, color: "text-indigo-300" },
+      ].map(({ label, value, detail, icon: Icon, color }) => <div key={label} className={`${cardClass} p-5`}>
+        <div className="flex items-center justify-between gap-2"><h2 className="text-xs font-medium text-zinc-400">{label}</h2><Icon size={17} className={color} aria-hidden="true" /></div>
+        <p className="mt-3 text-3xl font-semibold tabular-nums tracking-tight">{value}</p><p className="mt-2 text-[11px] leading-5 text-zinc-500">{detail}</p>
+      </div>)}
+    </section>
+    <p className="text-xs leading-5 text-zinc-500">Summary uses each project’s latest movie. Saved states only; check a project’s Overview for live jobs and media availability. Approval counts do not certify export readiness.</p>
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      <section aria-labelledby="projects-heading" className="min-w-0">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div><h2 id="projects-heading" className="text-base font-semibold">Recent projects</h2><p className="mt-1 text-xs text-zinc-500">Latest saved work · showing {dashboard.recent.length} of {dashboard.totalProjects}</p></div>
+          <Link href="/projects" className={`${linkClass} shrink-0`}>View all<ArrowUpRight size={14} aria-hidden="true" /></Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">{dashboard.recent.map((card) => <ProjectCard key={card.project.id} card={card} />)}</div>
+      </section>
+      <div className="min-w-0 space-y-6">
+        <Attention dashboard={dashboard} />
+        <section aria-labelledby="activity-heading" className={`${cardClass} p-5`}>
+          <h2 id="activity-heading" className="text-sm font-semibold">Recent activity</h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">Latest saved timestamps, not a full audit log.</p>
+          <ul className="mt-5 space-y-5">{dashboard.activities.map((item) => <li key={item.key} className="flex items-start gap-3">
+            <Clock3 size={14} className="mt-0.5 shrink-0 text-zinc-500" aria-hidden="true" />
+            <div className="min-w-0"><p className="text-xs font-medium text-zinc-300">{item.label}</p><Link href={item.href} className={`${linkClass} mt-1 break-all leading-5`}>{item.project}</Link><time dateTime={item.date.toISOString()} className="mt-1 block text-[11px] text-zinc-500">{dateLabel(item.date)}</time></div>
+          </li>)}</ul>
         </section>
+      </div>
+    </div>
+  </>;
+}
 
+function ProjectCard({ card }: { card: Dashboard["recent"][number] }) {
+  return <article className={`${cardClass} p-5`}>
+    <div className="flex items-start gap-3">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-[#0c0c10] text-zinc-500"><Film size={23} aria-hidden="true" /></div>
+      <div className="min-w-0 flex-1">
+        <Link href={card.base} className="block break-words text-sm font-semibold transition hover:text-violet-300 focus-visible:outline-2 focus-visible:outline-violet-300">{card.project.name}</Link>
+        {card.movie && card.movie.title !== card.project.name && <p className="mt-1 break-words text-xs text-zinc-400">{card.movie.title}</p>}
+        <p className="mt-1 break-all text-xs leading-5 text-zinc-500">{card.movie?.filename ?? "No source filename"}</p>
+        <p className="mt-2 text-xs text-zinc-400">{languageName(card.movie?.sourceLanguage ?? card.project.sourceLanguage)} → {languageName(card.project.targetLanguage)}</p>
+      </div>
+    </div>
+    <div className="mt-4"><StatusBadge status={card.stage} tone={card.tone} /><p className="mt-3 text-xs leading-5 text-zinc-400">{card.detail}</p></div>
+    {!!card.review?.total && <p className="mt-2 text-xs leading-5 text-zinc-500">{card.review.total} translated · {card.review.approved} approved · {card.transcriptCount} source segments</p>}
+    {!!card.transcriptCount && <p className="mt-2 text-xs leading-5 text-zinc-500">{card.movie?._count.scenes ?? 0} scenes saved{card.movie?.recap ? " · recap script saved" : " · no recap script"}</p>}
+    {card.project._count.movies > 1 && <p className="mt-2 text-xs text-zinc-500">Latest of {card.project._count.movies} movies</p>}
+    <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-white/[0.06] pt-4">
+      <time dateTime={card.latest.toISOString()} className="text-[11px] leading-5 text-zinc-500">Updated {dateLabel(card.latest)}</time>
+      <Link href={card.action.href} className={linkClass}>{card.action.label}<ArrowUpRight size={14} aria-hidden="true" /></Link>
+    </div>
+  </article>;
+}
 
-  );
+function Attention({ dashboard }: { dashboard: Dashboard }) {
+  return <section aria-labelledby="attention-heading" className={`${cardClass} p-5`}>
+    <div className="flex items-center gap-2"><CircleAlert size={17} className="text-amber-300" aria-hidden="true" /><h2 id="attention-heading" className="text-sm font-semibold">Needs attention</h2>{!!dashboard.attention.length && <span className="ml-auto rounded-md bg-amber-400/10 px-2 py-1 text-xs tabular-nums text-amber-200">{dashboard.attention.length}</span>}</div>
+    {dashboard.attention.length ? <>
+      <ul className="mt-3 divide-y divide-white/[0.06]">{dashboard.attention.slice(0, 6).map((item) => <li key={item.key} className="py-4">
+        <p className="break-words text-xs font-medium text-zinc-200">{item.project}</p><p className="mt-1 text-xs leading-5 text-zinc-400">{item.message}</p>
+        <Link href={item.href} className={`${linkClass} mt-2`}>Open workspace<ArrowUpRight size={13} aria-hidden="true" /></Link>
+      </li>)}</ul>
+      {dashboard.attention.length > 6 && <p className="mt-2 text-xs text-zinc-500">Showing 6 of {dashboard.attention.length} saved attention items.</p>}
+    </> : <div className="mt-5 flex gap-3 text-sm text-zinc-400"><CheckCircle2 size={18} className="shrink-0 text-emerald-300" aria-hidden="true" /><p>No attention items in saved workflow data.</p></div>}
+  </section>;
 }
