@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Users, Sparkles, LoaderCircle, Quote, Network, Info, ShieldQuestion } from "lucide-react";
+import { badgeClass, badgeTones, cardClass, focusClass, linkClass, primaryButtonClass } from "@/components/ui/styles";
 import type { CharacterRead } from "@/lib/character-analysis/read-analysis";
 import type { CharacterJobStatus } from "@/lib/queue/character-queue";
 
-const panel = "rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5";
-const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+const panel = `${cardClass} p-4 sm:p-5`;
+const focus = focusClass;
 function timestamp(ms: number) { return `${Math.floor(ms / 60000).toString().padStart(2, "0")}:${Math.floor(ms / 1000 % 60).toString().padStart(2, "0")}.${(ms % 1000).toString().padStart(3, "0")}`; }
 async function read<T>(url: string, method = "GET"): Promise<T> {
   const response = await fetch(url, { method, cache: "no-store" });
@@ -16,7 +19,7 @@ async function read<T>(url: string, method = "GET"): Promise<T> {
 type EvidenceRow = CharacterRead["characters"][number]["evidence"][number];
 function EvidenceDetails({ row }: { row: Omit<EvidenceRow, "type"> & { type?: string } }) {
   return <article className="min-w-0 rounded-xl border border-white/10 bg-black/10 p-4">
-    <p className="text-xs text-zinc-500">{row.type?.replaceAll("_", " ")} · {row.confidence} interpretation confidence</p>
+    <div className="flex flex-wrap items-center gap-2"><span className={`${badgeClass} ${badgeTones.neutral}`}>{row.type?.replaceAll("_", " ") ?? "Relationship evidence"}</span><span className={`${badgeClass} ${badgeTones[row.confidence === "LOW" ? "amber" : "neutral"]}`}>{row.confidence} interpretation confidence</span></div>
     <p className="mt-2 break-words text-sm text-zinc-200">{row.inference}</p>
     <p className="mt-3 break-words text-xs leading-5 text-zinc-400"><span className="text-zinc-300">Evidence rationale: </span>{row.evidence}</p>
     <details className="mt-3 text-xs text-zinc-400"><summary className={`cursor-pointer rounded py-1 ${focus}`}>Scene #{row.sceneSequence + 1} · Segment #{row.segment.sequence + 1} · View source evidence</summary>
@@ -30,8 +33,10 @@ function EvidenceDetails({ row }: { row: Omit<EvidenceRow, "type"> & { type?: st
   </article>;
 }
 
-export default function CharacterWorkspace({ movieId, initial, model, canAnalyze, unavailableReason }: { movieId: string; initial: CharacterRead; model: string | null; canAnalyze: boolean; unavailableReason: string | null }) {
+export default function CharacterWorkspace({ movieId, initial, model, canAnalyze, unavailableReason, overviewPath }: { movieId: string; initial: CharacterRead; model: string | null; canAnalyze: boolean; unavailableReason: string | null; overviewPath: string }) {
   const [data, setData] = useState(initial);
+  const [selectedId, setSelectedId] = useState(initial.characters[0]?.id ?? "");
+  const [view, setView] = useState("Characters");
   const [job, setJob] = useState<CharacterJobStatus>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -69,44 +74,58 @@ export default function CharacterWorkspace({ movieId, initial, model, canAnalyze
     } catch (error) { setError(error instanceof Error ? error.message : "Unable to queue analysis"); }
     finally { setSubmitting(false); }
   }
-  return <div className="space-y-5">
+  const selected = data.characters.find((character) => character.id === selectedId) ?? data.characters[0];
+  const evidenceCount = data.characters.reduce((count, character) => count + character.evidence.length, 0) + data.relationships.reduce((count, relationship) => count + relationship.evidence.length, 0);
+  const views = [{ label: "Characters", icon: Users }, { label: "Relationships", icon: Network }, { label: "Evidence", icon: Quote }, { label: "Analysis Info", icon: Info }];
+  return <div className="min-w-0 space-y-5">
     <section className={panel} aria-labelledby="analysis-heading">
-      <h2 id="analysis-heading" className="font-medium">Evidence → inference → confidence</h2>
-      <p className="mt-2 text-sm leading-6 text-zinc-400">Analysis uses scene intervals and subtitle text only. There is no reliable speaker diarization: a candidate is not a confirmed speaker or identity. Generic speakers stay scoped to their scene. No face or voice identification is performed.</p>
-      <p className="mt-2 text-xs leading-5 text-zinc-500">HIGH: strong explicit textual evidence. MEDIUM: contextual inference. LOW: ambiguous evidence. These labels describe interpretation confidence, not accuracy or truth probability.</p>
-      <div className="mt-5 space-y-3 border-t border-white/10 pt-4">
-        <p className="break-words text-xs text-zinc-400">Paid AI action · OpenRouter · {model ?? "Model not configured"}. Cost depends on text length and provider usage. Unchanged source reuses its retained completed job.</p>
-        {unavailableReason && <p className="text-sm text-amber-200">{unavailableReason}</p>}
-        <label className="flex items-start gap-3 text-sm text-zinc-300"><input type="checkbox" className={`mt-1 accent-zinc-300 ${focus}`} checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy || !canAnalyze || !model} /><span>I understand character analysis may incur an AI charge.</span></label>
-        <button type="button" className={`rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-40 ${focus}`} disabled={!acknowledged || busy || !canAnalyze || !model} onClick={() => void analyze()}>{busy ? "Analysis in progress…" : data.analysis ? "Re-run character analysis" : "Analyze characters"}</button>
-        <p role="status" aria-live="polite" className="text-xs text-zinc-400">{job ? `Job ${job.state} · ${job.attemptsMade} attempts completed${job.state === "completed" ? " · Current source job reused on repeated requests" : ""}` : "Analysis runs only after an explicit request."}</p>
-        {job?.state === "failed" && <p role="alert" className="text-sm text-amber-200">{job.error}</p>}
-        {error && <p role="alert" className="text-sm text-amber-200">{error}</p>}
-      </div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0 max-w-2xl">
+        <h2 id="analysis-heading" className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} className="text-violet-300" aria-hidden="true" />AI Action · OpenRouter</h2>
+        <p className="mt-2 break-words text-xs leading-6 text-zinc-400">May incur usage cost · {model ?? "Model not configured"}. Unchanged source reuses its retained completed job.</p>
+      </div>{canAnalyze && model && <button type="button" className={primaryButtonClass} disabled={!acknowledged || busy} onClick={() => void analyze()}>{busy ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />}{busy ? "Analysis in progress…" : data.analysis ? "Re-run character analysis" : "Analyze Characters"}</button>}</div>
+      {canAnalyze && model && <label className="mt-3 flex items-start gap-3 text-xs leading-6 text-zinc-300"><input type="checkbox" className={`mt-1.5 accent-violet-500 ${focus}`} checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={busy} /><span>I understand character analysis may incur an AI charge.</span></label>}
+      {unavailableReason && <div className="mt-3 text-sm leading-6 text-amber-200"><p>{unavailableReason}</p><Link href={unavailableReason.startsWith("Detect") ? `${overviewPath}/scenes` : `${overviewPath}/subtitles`} className={`${linkClass} mt-2`}>{unavailableReason.startsWith("Detect") ? "Open Scenes" : "Open Transcription"}</Link></div>}
+      <p role="status" aria-live="polite" className="mt-3 text-xs leading-6 text-zinc-500">{job ? `Job ${job.state} · ${job.attemptsMade} attempts completed${job.state === "completed" ? " · Current source job reused on repeated requests" : ""}` : "Analysis runs only after an explicit request."}</p>
+      {job?.state === "failed" && <p role="alert" className="mt-2 text-sm leading-6 text-rose-300">{job.error}</p>}
+      {error && <p role="alert" className="mt-2 break-words text-sm leading-6 text-rose-300">{error}</p>}
     </section>
-    {data.analysis ? <section className={panel} aria-label="Analysis provenance">
-      <p className="break-words text-sm text-zinc-300">{data.analysis.provider} · {data.analysis.model} · {data.analysis.sceneCount} scenes · {(data.analysis.runtimeMs / 1000).toFixed(2)}s model runtime · {data.analysis.modelCalls} model requests</p>
-      <p className="mt-2 text-xs text-zinc-500">{data.characters.length} character candidates · {data.relationships.length} suggested relationships · Updated {data.analysis.updatedAt}</p>
-      {data.analysis.usage && <p className="mt-2 text-xs text-zinc-500">Tokens: {data.analysis.usage.totalTokens ?? "not reported"} · Cost: {data.analysis.usage.costUsd === undefined ? "not reported" : `$${data.analysis.usage.costUsd.toFixed(6)}`}</p>}
-      {data.analysis.stale && <p role="status" className="mt-3 text-sm text-amber-200">Source changed since this analysis. These observations may be stale; request analysis for the current source.</p>}
-    </section> : <section className={panel}><p className="text-sm text-zinc-400">No character analysis yet. No candidates or relationships have been fabricated.</p></section>}
-    <section aria-labelledby="candidates-heading"><h2 id="candidates-heading" className="mb-3 font-medium">Character candidates</h2>
-      {!!data.analysis && !data.characters.length && <p className="text-sm text-zinc-400">No supported candidates were returned for this text.</p>}
-      <div className="grid min-w-0 gap-4 xl:grid-cols-2">{data.characters.map((character) => <article key={character.id} className={`${panel} min-w-0`}>
-        <h3 className="break-words font-semibold">{character.name}</h3>
-        <p className="mt-1 text-xs text-zinc-500">{character.uncertain ? "Uncertain identity · Scene-scoped placeholder" : "Text-supported name candidate"} · {character.evidence.length} evidence anchors</p>
-        {!!character.aliases.length && <p className="mt-2 break-words text-xs text-zinc-400">Aliases: {character.aliases.join(" · ")}</p>}
-        <div className="mt-4 space-y-3">{character.evidence.map((row) => <EvidenceDetails key={row.id} row={row} />)}</div>
-      </article>)}</div>
-    </section>
-    <section aria-labelledby="relationships-heading"><h2 id="relationships-heading" className="mb-3 font-medium">Suggested relationships</h2><p className="mb-3 text-xs leading-5 text-zinc-500">Inferred from dialogue evidence. Connections are interpretations and should be reviewed against the source.</p>
-      {!data.relationships.length && <p className="text-sm text-zinc-400">No supported relationships recorded.</p>}
-      <div className="grid gap-4 xl:grid-cols-2">{data.relationships.map((relationship) => <article className={`${panel} min-w-0`} key={relationship.id}>
-        <h3 className="break-words font-medium">{relationship.characterA.name} ↔ {relationship.characterB.name}</h3>
-        <p className="mt-2 text-xs text-zinc-500">Suggested {relationship.type.toLowerCase()} · {relationship.confidence} interpretation confidence</p>
-        <p className="mt-3 break-words text-sm leading-6 text-zinc-300">{relationship.summary}</p>
-        <div className="mt-4 space-y-3">{relationship.evidence.map((row) => <EvidenceDetails row={row} key={row.id} />)}</div>
-      </article>)}</div>
+    {data.analysis?.stale && <p role="status" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm leading-6 text-amber-200">Source changed since this analysis. Observations and source anchors may be stale; request analysis for the current source.</p>}
+    <div className="grid gap-3 sm:grid-cols-3">{[{ label: "Character candidates", count: data.characters.length }, { label: "Suggested relationships", count: data.relationships.length }, { label: "Evidence anchors", count: evidenceCount }].map((item) => <div className={`${cardClass} p-4`} key={item.label}><p className="text-xs text-zinc-500">{item.label}</p><p className="mt-2 text-xl font-semibold tabular-nums">{item.count}</p></div>)}</div>
+    <section className={`${cardClass} overflow-hidden`}>
+      <nav aria-label="Analysis views" className="grid grid-cols-2 border-b border-white/10 sm:flex sm:flex-wrap">{views.map(({ label, icon: Icon }) => <button key={label} type="button" aria-pressed={view === label} onClick={() => setView(label)} className={`flex min-h-12 items-center justify-center gap-2 border-b-2 px-4 py-3 text-xs font-medium transition ${focus} ${view === label ? "border-violet-500 bg-violet-500/10 text-violet-200" : "border-transparent text-zinc-400 hover:bg-white/[0.03] hover:text-zinc-200"}`}><Icon size={14} aria-hidden="true" />{label}</button>)}</nav>
+      {!data.analysis ? <div className="p-6 sm:p-8"><Users size={24} aria-hidden="true" className="text-zinc-500" /><h2 className="mt-4 text-base font-semibold">Character analysis has not been generated yet.</h2><p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">Scene intervals and source transcript text support character candidates and relationships. {canAnalyze && model ? "Acknowledge the usage cost above to enable Analyze Characters." : "Prepare the prerequisites above before requesting analysis."}</p></div> : <>
+        {view === "Characters" && <div className="grid items-start xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside aria-label="Character candidates" className="min-w-0 border-b border-white/10 p-3 xl:border-b-0 xl:border-r">
+            <h2 className="px-2 py-2 text-xs font-medium text-zinc-500">Candidates · {data.characters.length}</h2>
+            {!data.characters.length && <p className="p-2 text-sm leading-6 text-zinc-400">No supported candidates were returned for this text.</p>}
+            <div className="space-y-2">{data.characters.map((character) => <button key={character.id} type="button" aria-pressed={selected?.id === character.id} onClick={() => setSelectedId(character.id)} className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${focus} ${selected?.id === character.id ? "border-violet-400/40 bg-violet-500/10" : "border-transparent hover:bg-white/[0.03]"}`}>
+              <span className="block break-words text-sm font-medium">{character.name}</span><span className={`mt-2 block text-xs leading-5 ${character.uncertain ? "text-amber-200" : "text-zinc-400"}`}>{character.uncertain ? "Uncertain · scene-scoped placeholder" : "Text-supported name candidate"}</span>
+              <span className="mt-2 block text-[11px] leading-5 text-zinc-500">{character.evidence.length} evidence anchors · {Array.from(new Set(character.evidence.map((row) => row.confidence))).join(" / ")} support</span>
+              {!!character.aliases.length && <span className="mt-2 block break-words text-xs leading-5 text-zinc-400">Aliases: {character.aliases.join(" · ")}</span>}
+            </button>)}</div>
+          </aside>
+          {selected && <section className="min-w-0 p-4 sm:p-5" aria-label="Selected character details"><div className="flex flex-wrap items-center gap-3"><h2 className="break-words text-lg font-semibold">{selected.name}</h2><span className={`${badgeClass} ${badgeTones[selected.uncertain ? "amber" : "neutral"]}`}>{selected.uncertain ? "Uncertain identity" : "Name candidate"}</span></div>
+            <p className="mt-2 text-xs leading-6 text-zinc-500">{selected.uncertain ? "Placeholder scoped to source evidence; identity and speaker assignment are not confirmed." : "A name supported by source text; identity and speaker assignment are not verified."}</p>
+            {!!selected.aliases.length && <p className="mt-3 break-words text-sm leading-6 text-zinc-400">Aliases: {selected.aliases.join(" · ")}</p>}
+            <h3 className="mt-5 text-sm font-medium">Observations & supporting evidence</h3><div className="mt-3 space-y-3">{selected.evidence.map((row) => <EvidenceDetails key={row.id} row={row} />)}</div>
+          </section>}
+        </div>}
+        {view === "Relationships" && <section className="space-y-4 p-4 sm:p-5" aria-label="Suggested relationships"><p className="text-xs leading-6 text-zinc-500">Connections are interpretations of dialogue. UNKNOWN means the source does not establish a relationship.</p>
+          {!data.relationships.length && <p className="text-sm leading-6 text-zinc-400">No supported relationships recorded.</p>}
+          {data.relationships.map((relationship) => <article key={relationship.id} className="rounded-lg border border-white/10 p-4"><h2 className="break-words text-sm font-semibold">{relationship.characterA.name} ↔ {relationship.characterB.name}</h2><div className="mt-3 flex flex-wrap gap-2"><span className={`${badgeClass} ${badgeTones[relationship.type === "UNKNOWN" ? "amber" : "neutral"]}`}>{relationship.type === "UNKNOWN" ? "UNKNOWN · relationship not established" : `Suggested ${relationship.type.toLowerCase()}`}</span><span className={`${badgeClass} ${badgeTones.neutral}`}>{relationship.confidence} interpretation confidence · {relationship.evidence.length} anchors</span></div><p className="mt-3 break-words text-sm leading-6 text-zinc-300">{relationship.summary}</p><div className="mt-4 space-y-3">{relationship.evidence.map((row) => <EvidenceDetails row={row} key={row.id} />)}</div></article>)}
+        </section>}
+        {view === "Evidence" && <section className="space-y-5 p-4 sm:p-5" aria-label="All analysis evidence"><p className="text-xs leading-6 text-zinc-500">Evidence → inference → confidence. Expand an anchor to inspect its read-only Chinese source and timing.</p>
+          {!evidenceCount && <p className="text-sm text-zinc-400">No evidence anchors recorded.</p>}
+          {data.characters.map((character) => <div key={character.id}><h2 className="mb-3 break-words text-sm font-medium">{character.name} · character evidence</h2><div className="space-y-3">{character.evidence.map((row) => <EvidenceDetails row={row} key={row.id} />)}</div></div>)}
+          {data.relationships.map((relationship) => <div key={relationship.id}><h2 className="mb-3 break-words text-sm font-medium">{relationship.characterA.name} ↔ {relationship.characterB.name} · relationship evidence</h2><div className="space-y-3">{relationship.evidence.map((row) => <EvidenceDetails row={row} key={row.id} />)}</div></div>)}
+        </section>}
+        {view === "Analysis Info" && <section className="space-y-5 p-4 sm:p-5" aria-label="Analysis provenance"><div className="flex items-center gap-2 text-sm font-medium"><ShieldQuestion size={16} aria-hidden="true" className="text-amber-200" />Interpretations, not verified identities</div>
+          <p className="text-sm leading-7 text-zinc-400">Analysis uses scene intervals and subtitle text only. There is no reliable speaker diarization. Generic speakers stay scoped to their scene. No face or voice identification is performed.</p>
+          <p className="text-xs leading-6 text-zinc-500">HIGH: strong explicit textual evidence. MEDIUM: contextual inference. LOW: ambiguous evidence. These labels describe interpretation confidence, not accuracy or truth probability.</p>
+          <dl className="grid gap-4 text-xs sm:grid-cols-2">{[{ label: "Provider / model", value: `${data.analysis.provider} / ${data.analysis.model}` }, { label: "Analyzed scenes", value: String(data.analysis.sceneCount) }, { label: "Model runtime", value: `${(data.analysis.runtimeMs / 1000).toFixed(2)}s` }, { label: "Model requests", value: String(data.analysis.modelCalls) }, { label: "Updated", value: data.analysis.updatedAt }, { label: "Source freshness", value: data.analysis.stale ? "Stale · source changed" : "Current source" }, { label: "Total tokens", value: String(data.analysis.usage?.totalTokens ?? "Not reported") }, { label: "Reported cost", value: data.analysis.usage?.costUsd === undefined ? "Not reported" : `$${data.analysis.usage.costUsd.toFixed(6)}` }].map((item) => <div key={item.label} className="rounded-lg border border-white/10 p-3"><dt className="text-zinc-500">{item.label}</dt><dd className="mt-2 break-words leading-6 text-zinc-200">{item.value}</dd></div>)}</dl>
+          <div><h3 className="text-xs text-zinc-500">Source hash</h3><p className="mt-2 break-all font-mono text-xs leading-6 text-zinc-400">{data.analysis.sourceHash}</p></div>
+        </section>}
+      </>}
     </section>
   </div>;
 }
