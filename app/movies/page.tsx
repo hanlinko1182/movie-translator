@@ -1,3 +1,5 @@
+import { primaryButtonClass } from "@/components/ui/styles";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
 import { connection } from "next/server";
 import { CircleAlert, Upload } from "lucide-react";
@@ -48,11 +50,11 @@ export default async function MoviesPage() {
     }));
   } catch { /* Show unavailable state without leaking database errors. */ }
 
-  return <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-    <div className="mx-auto max-w-7xl space-y-6">
+  return <main className={pageClass}>
+    <div className={contentClass}>
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div><p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">Media library</p><h1 className="text-2xl font-semibold tracking-tight">Movies</h1><p className="mt-2 text-sm leading-6 text-zinc-400">Browse source media, inspect saved metadata and open related workspaces.</p></div>
-        <Link href="/projects/new" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300"><Upload size={16} aria-hidden="true" />Upload Movie</Link>
+        <Link href="/projects/new" className={primaryButtonClass}><Upload size={16} aria-hidden="true" />Upload Movie</Link>
       </header>
       {movies ? <MovieLibrary movies={movies} /> : <section role="status" className={`${cardClass} p-8`}><CircleAlert size={24} className="text-amber-300" aria-hidden="true" /><h2 className="mt-4 font-semibold">Movies are unavailable</h2><p className="mt-2 text-sm leading-6 text-zinc-400">We couldn’t load saved movies. Refresh the page to try again.</p><Link href="/projects" className={`${linkClass} mt-5`}>View projects</Link></section>}
     </div>

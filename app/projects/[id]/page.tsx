@@ -1,3 +1,5 @@
+import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, Film } from "lucide-react";
@@ -18,7 +20,7 @@ export default async function ProjectDetailPage({ params }: PageProps<"/projects
   const { id: projectSlug } = await params;
   let project;
   try { project = await prisma.project.findUnique({ where: { slug: projectSlug }, select: overviewSelect }); }
-  catch { return <main className="p-6 lg:p-10"><section className={`${cardClass} mx-auto max-w-7xl p-8`}><h1 className="text-xl font-semibold">Project is unavailable</h1><p className="mt-2 text-sm text-zinc-400">We couldn’t load this project. Please try again shortly.</p><div className="mt-5 flex gap-5"><RefreshOverviewButton label="Try again" /><Link href="/projects" className={linkClass}><ArrowLeft size={14} aria-hidden="true" />Projects</Link></div></section></main>; }
+  catch { return <WorkspaceUnavailable title="Project is unavailable" description="We couldn’t load this project. Please try again shortly." href="/projects" label="Projects" />; }
   if (!project) notFound();
   const movie = project.movies[0];
   const facts: OverviewFacts = { sourceAvailable: null, audioAvailable: null, jobs: { media: null, transcription: null, translation: null, scenes: null, recap: null }, recapStale: null, charactersStale: null };
@@ -44,15 +46,15 @@ export default async function ProjectDetailPage({ params }: PageProps<"/projects
   const overview = buildOverview(project, facts);
   const base = `/projects/${encodeURIComponent(project.slug)}`;
   const workspace = [{ label: "Overview", href: base }, { label: "Transcription", href: overview.links.transcript }, { label: "Translation", href: overview.links.translation }, { label: "Review", href: overview.links.review }, { label: "Recap", href: overview.links.recap }, { label: "Export", href: overview.links.export }];
-  return <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-    <div className="mx-auto max-w-7xl space-y-6">
+  return <main className={pageClass}>
+    <div className={contentClass}>
       <header>
         <div className="mb-6 flex items-center justify-between gap-4"><Link href="/projects" className={`${linkClass} text-zinc-400`}><ArrowLeft size={15} aria-hidden="true" />Projects</Link><RefreshOverviewButton /></div>
         <div className="flex items-start gap-4 sm:gap-5"><div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#15151a] sm:h-20 sm:w-20"><Film size={26} className="text-zinc-500" aria-hidden="true" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><h1 className="break-words text-2xl font-semibold tracking-tight">{project.name}</h1><StatusBadge status={overview.status} /></div><p className="mt-2 break-all text-sm text-zinc-400">{movie?.filename ?? "No source movie uploaded"}</p><p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500"><span>{languageName(movie?.sourceLanguage ?? project.sourceLanguage)} → {languageName(project.targetLanguage)}</span><span>{durationLabel(movie?.durationSeconds)}</span><span>Updated <time dateTime={overview.latest.toISOString()}>{dateLabel(overview.latest)}</time></span></p></div></div>
         <nav aria-label="Project workspace" className="mt-6 flex flex-wrap gap-1 border-b border-white/10 pb-3">{workspace.map((item, index) => <Link key={item.label} href={item.href} aria-current={index === 0 ? "page" : undefined} className={`rounded-lg px-3 py-2 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-violet-300 ${index === 0 ? "bg-violet-400/10 text-violet-300" : "text-zinc-400 hover:bg-white/5 hover:text-zinc-200"}`}>{item.label}</Link>)}</nav>
       </header>
       {project._count.movies > 1 && <p className="text-xs text-zinc-500">Showing the most recently uploaded movie · {project._count.movies} movies in this project.</p>}
-      {overview.statusUnavailable && <p role="status" className="rounded-xl border border-amber-300/15 bg-amber-300/5 p-3 text-xs leading-5 text-amber-200">Live processing status is temporarily unavailable. Saved outputs are shown below.</p>}
+      {overview.statusUnavailable && <p role="status" className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-5 text-zinc-400">Live processing status is temporarily unavailable. Saved outputs are shown below.</p>}
       <NextActionCard overview={overview} />
       <WorkflowPipeline stages={overview.stages} />
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">

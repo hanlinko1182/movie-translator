@@ -1,22 +1,24 @@
 "use client";
 
+import { focusClass, secondaryButtonClass } from "@/components/ui/styles";
+
 import { useState, type ReactNode } from "react";
 import { Captions, ChevronRight, Cpu, Download, Film, Info, RefreshCw, Server, Settings2 } from "lucide-react";
 
 const icons = [Settings2, Cpu, Captions, Film, Download, Server];
-const focusClass = "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300";
+
 
 export default function SettingsWorkspace({ panels }: { panels: { id: string; label: string; description: string; content: ReactNode }[] }) {
   const [selected, setSelected] = useState(panels[0].id);
   const active = panels.find((panel) => panel.id === selected)!;
   return <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[220px_minmax(0,1fr)] xl:gap-6">
     <aside className="min-w-0 rounded-xl border border-white/10 bg-[#111115] p-2 xl:sticky xl:top-6 xl:p-3">
-      <p className="hidden px-3 pb-3 pt-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500 xl:block">Preferences & system</p>
+      <p className="hidden px-3 pb-3 pt-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-500 xl:block">Preferences & system</p>
       <nav aria-label="Settings categories" className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-1">
         {panels.map((panel, index) => {
           const Icon = icons[index];
           const isActive = panel.id === selected;
-          return <button key={panel.id} type="button" aria-current={isActive ? "page" : undefined} aria-controls={`settings-${panel.id}`} onClick={() => setSelected(panel.id)} className={`flex min-w-0 items-center gap-2.5 rounded-lg border px-3 py-3 text-left text-sm transition ${focusClass} ${isActive ? "border-violet-500/25 bg-violet-500/15 font-medium text-violet-200" : "border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200"}`}><Icon size={16} aria-hidden="true" className="shrink-0" /><span>{panel.label}</span><ChevronRight size={14} className="ml-auto hidden shrink-0 xl:block" aria-hidden="true" /></button>;
+          return <button key={panel.id} type="button" aria-current={isActive ? "page" : undefined} aria-controls={isActive ? `settings-${panel.id}` : undefined} onClick={() => setSelected(panel.id)} className={`flex min-w-0 items-center gap-2.5 rounded-lg border px-3 py-3 text-left text-sm transition ${focusClass} ${isActive ? "border-violet-500/25 bg-violet-500/15 font-medium text-violet-200" : "border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200"}`}><Icon size={16} aria-hidden="true" className="shrink-0" /><span>{panel.label}</span><ChevronRight size={14} className="ml-auto hidden shrink-0 xl:block" aria-hidden="true" /></button>;
         })}
       </nav>
       <div className="mt-5 hidden border-t border-white/10 px-3 pb-2 pt-4 xl:block"><Info size={15} className="mb-2 text-zinc-500" aria-hidden="true" /><p className="text-xs leading-5 text-zinc-500">Configuration is read only here. Project actions live in their workspaces.</p></div>
@@ -60,10 +62,10 @@ export function RuntimeReadiness() {
     setBusy(false);
   }
   return <section aria-labelledby="runtime-check-title" className="min-w-0 rounded-xl border border-white/10 bg-[#111115]">
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4"><div><h3 id="runtime-check-title" className="text-sm font-semibold">Runtime readiness</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Existing health checks · on demand</p></div><button type="button" disabled={busy} onClick={refresh} className={`inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-50 ${focusClass}`}><RefreshCw size={14} aria-hidden="true" className={busy ? "animate-spin" : ""} />{busy ? "Checking…" : "Refresh status"}</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4"><div><h3 id="runtime-check-title" className="text-sm font-semibold">Runtime readiness</h3><p className="mt-1 text-xs leading-5 text-zinc-500">Existing health checks · on demand</p></div><button type="button" disabled={busy} onClick={refresh} className={secondaryButtonClass}><RefreshCw size={14} aria-hidden="true" className={busy ? "animate-spin" : ""} />{busy ? "Checking…" : "Refresh status"}</button></div>
     <dl className="grid grid-cols-1 gap-px bg-white/5 sm:grid-cols-2 lg:grid-cols-3">{[["web", "Web"], ...components].map(([key, label]) => {
       const status = states[key] ?? "Not checked";
-      return <div key={key} className="min-w-0 bg-[#111115] px-5 py-4"><dt className="text-xs text-zinc-400">{label}</dt><dd className={`mt-2 flex items-center gap-2 text-sm font-medium ${status === "Ready" ? "text-emerald-300" : status === "Unavailable" ? "text-amber-300" : "text-zinc-500"}`}><span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status === "Ready" ? "bg-emerald-400" : status === "Unavailable" ? "bg-amber-400" : "bg-zinc-600"}`} />{busy ? "Checking…" : status}</dd></div>;
+      return <div key={key} className="min-w-0 bg-[#111115] px-5 py-4"><dt className="text-xs text-zinc-400">{label}</dt><dd className={`mt-2 flex items-center gap-2 text-sm font-medium ${status === "Ready" ? "text-emerald-300" : status === "Unavailable" ? "text-zinc-400" : "text-zinc-500"}`}><span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status === "Ready" ? "bg-emerald-400" : status === "Unavailable" ? "bg-zinc-400" : "bg-zinc-600"}`} />{busy ? "Checking…" : status}</dd></div>;
     })}</dl>
     <p role="status" className="border-t border-white/10 px-5 py-4 text-xs leading-5 text-zinc-400">{message}{checkedAt && <span className="mt-1 block text-zinc-500">Checked at {checkedAt}. Results are a snapshot.</span>}</p>
   </section>;

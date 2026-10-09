@@ -8,13 +8,13 @@ import { activeIssues, buttonClass, primaryClass, provenance } from "./workspace
 
 export type Draft = { text: string; version: string };
 export function ReviewBadge({ status }: { status: ReviewStatus }) {
-  return <span className="inline-flex whitespace-nowrap [&>span]:px-1.5 [&>span]:text-[10px]"><StatusBadge status={status === "APPROVED" ? "Approved" : status === "NEEDS_REVIEW" ? "Needs Review" : "Unreviewed"} tone={status === "APPROVED" ? "Completed" : status === "NEEDS_REVIEW" ? "Needs Attention" : "Waiting"} /></span>;
+  return <span className="inline-flex whitespace-nowrap [&>span]:px-1.5 [&>span]:text-[11px]"><StatusBadge status={status === "APPROVED" ? "Approved" : status === "NEEDS_REVIEW" ? "Needs Review" : "Unreviewed"} tone={status === "APPROVED" ? "Completed" : status === "NEEDS_REVIEW" ? "Needs Attention" : "Waiting"} /></span>;
 }
 export function QcIssueList({ row, scanned }: { row: ReviewRow; scanned: boolean }) {
   const issues = activeIssues(row);
   return <div className="space-y-3">
     <p className="text-xs leading-5 text-zinc-500">{issues.length ? `${issues.length} unresolved QC findings` : scanned || row.editedAt ? "No local QC findings" : "Local QC has not run"}. Human review remains a separate decision.</p>
-    {!!issues.length && <ul className="space-y-3">{issues.map((issue) => <li key={issue.id} className="rounded-lg border border-amber-400/15 bg-amber-400/[0.03] p-3 text-xs leading-5"><p className="font-medium text-amber-200">{issue.category.replaceAll("_", " ")} · {issue.severity}</p><p className="mt-1 break-words text-zinc-400">{issue.message}</p><p className="mt-2 text-[10px] text-zinc-500">{issue.source}</p></li>)}</ul>}
+    {!!issues.length && <ul className="space-y-3">{issues.map((issue) => <li key={issue.id} className="rounded-lg border border-amber-400/15 bg-amber-400/[0.03] p-3 text-xs leading-5"><p className="font-medium text-amber-200">{issue.category.replaceAll("_", " ")} · {issue.severity}</p><p className="mt-1 break-words text-zinc-400">{issue.message}</p><p className="mt-2 text-[11px] text-zinc-500">{issue.source}</p></li>)}</ul>}
     {row.issues.some((issue) => issue.resolvedAt) && <details className="text-xs text-zinc-500"><summary className="cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-violet-300">Previous findings</summary>{row.issues.filter((issue) => issue.resolvedAt).map((issue) => <p key={issue.id} className="mt-2 break-words leading-5">{issue.category.replaceAll("_", " ")}: {issue.resolution}</p>)}</details>}
   </div>;
 }
@@ -29,7 +29,7 @@ export default function SegmentEditor({ row, draft, busy, saving, feedback, sour
   return <section id="segment-editor" aria-labelledby="editor-heading" className={`${cardClass} scroll-mt-6 p-4`}>
     <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="editor-heading" tabIndex={-1} className="rounded text-sm font-semibold focus-visible:outline-2 focus-visible:outline-violet-300">Edit Translation</h2>{row && <ReviewBadge status={row.reviewStatus} />}</div>
     {!row ? <p className="mt-4 text-sm leading-6 text-zinc-400">Select a saved, aligned translation row to edit its Myanmar text. Source text and timestamps stay read-only.</p> : <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap justify-between gap-2 text-[10px] text-zinc-500"><span>#{row.sequence + 1} · {formatTimestamp(row.startMs)} → {formatTimestamp(row.endMs)}</span><span>{((row.endMs - row.startMs) / 1000).toFixed(1)}s</span></div>
+      <div className="flex flex-wrap justify-between gap-2 text-[11px] text-zinc-500"><span>#{row.sequence + 1} · {formatTimestamp(row.startMs)} → {formatTimestamp(row.endMs)}</span><span>{((row.endMs - row.startMs) / 1000).toFixed(1)}s</span></div>
       <div><h3 className="sr-only">Chinese source · read only</h3><p lang={sourceLanguage} tabIndex={0} aria-label="Read-only Chinese source" className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words rounded text-sm leading-7 text-zinc-300 focus-visible:outline-2 focus-visible:outline-violet-300 [overflow-wrap:anywhere]">{row.sourceText}</p></div>
       <div>
         <label htmlFor={`target-${row.sequence}`} className="mb-2 block text-xs font-medium text-zinc-300">Myanmar translation · segment #{row.sequence + 1}</label>

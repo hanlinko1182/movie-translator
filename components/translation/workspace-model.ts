@@ -1,3 +1,4 @@
+import { primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 import type { ReviewRow, TranslationReview } from "@/lib/translation-qc/types";
 
 export type SourceRow = { sequence: number; startMs: number; endMs: number; text: string };
@@ -13,8 +14,8 @@ export type WorkspaceSnapshot = {
 };
 export const POLL_INTERVAL_MS = 5_000;
 export const SELECTION_LIMIT = 24;
-export const buttonClass = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.05] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 disabled:cursor-not-allowed disabled:opacity-40";
-export const primaryClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-violet-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300 disabled:cursor-not-allowed disabled:opacity-40";
+export const buttonClass = secondaryButtonClass;
+export const primaryClass = primaryButtonClass;
 export const filters = [
   ["ALL", "All"], ["UNREVIEWED", "Unreviewed"], ["NEEDS_REVIEW", "Needs Review"], ["APPROVED", "Approved"],
   ["MANUAL", "Manual"], ["REFINED", "Refined"], ["QC", "QC Issues"],

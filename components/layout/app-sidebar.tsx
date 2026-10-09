@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Clapperboard } from "lucide-react";
+import { ChevronDown, Clapperboard, Menu } from "lucide-react";
 
 const globalLinks = [
   { label: "Dashboard", href: "/" },
@@ -41,19 +41,8 @@ function SidebarNavigation() {
       : null;
   const projectBase = projectId ? `/projects/${projectId}` : null;
 
-  return (
-    <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
-      <Link href="/" className="flex items-center gap-3 px-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
-          <Clapperboard size={21} />
-        </span>
-        <span>
-          <span className="block text-sm font-semibold">Movie Translator</span>
-          <span className="block text-xs text-zinc-500">Localization & Recap Studio</span>
-        </span>
-      </Link>
-
-      <nav aria-label="Main navigation" className="mt-10 space-y-1">
+  const navigation = <>
+      <nav aria-label="Main navigation" className="space-y-1">
         {globalLinks.map((item) => {
           const active = pathname === item.href;
           return (
@@ -93,7 +82,7 @@ function SidebarNavigation() {
       )}
 
       <div className="mt-8 border-t border-white/10 pt-5">
-        <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
+        <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
           System
         </p>
         <SidebarLink
@@ -102,8 +91,29 @@ function SidebarNavigation() {
           active={pathname === "/settings"}
         />
       </div>
+  </>;
+  return <>
+    <aside aria-label="Application navigation" className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0d0d10] px-4 py-5 lg:block">
+      <Link href="/" className="flex items-center gap-3 px-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-black">
+          <Clapperboard size={21} aria-hidden="true" />
+        </span>
+        <span>
+          <span className="block text-sm font-semibold">Movie Translator</span>
+          <span className="block text-xs text-zinc-500">Localization & Recap Studio</span>
+        </span>
+      </Link>
+
+      <div className="mt-8">{navigation}</div>
     </aside>
-  );
+    <header className="border-b border-white/10 bg-[#0d0d10] px-4 py-3 sm:px-6 lg:hidden">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Clapperboard size={18} aria-hidden="true" />Movie Translator</div>
+      <details className="group rounded-lg border border-white/10 bg-white/[0.02]">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 focus-visible:outline-2 focus-visible:outline-violet-300"><Menu size={16} aria-hidden="true" />Navigation<ChevronDown size={14} aria-hidden="true" className="ml-auto transition group-open:rotate-180" /></summary>
+        <div className="border-t border-white/10 p-3">{navigation}</div>
+      </details>
+    </header>
+  </>;
 }
 
 function SidebarGroup({
@@ -115,7 +125,7 @@ function SidebarGroup({
 }) {
   return (
     <div className="mt-8">
-      <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
+      <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         {title}
       </p>
       <nav aria-label={title} className="space-y-1">
@@ -138,9 +148,9 @@ function SidebarLink({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`block rounded-xl px-3 py-2.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 ${
+      className={`block rounded-lg px-3 py-2.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 ${
         active
-          ? "bg-violet-400/10 text-violet-300"
+          ? "bg-violet-500/15 text-violet-200"
           : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
       }`}
     >

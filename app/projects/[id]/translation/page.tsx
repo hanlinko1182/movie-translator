@@ -1,3 +1,5 @@
+import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight, Languages } from "lucide-react";
@@ -8,7 +10,6 @@ import TranslationReviewPanel from "@/components/translation/translation-review"
 import ReviewWorkspace from "@/components/translation/review-workspace";
 import type { WorkspaceSnapshot } from "@/components/translation/workspace-model";
 import { cardClass, linkClass } from "../overview-components";
-import { RefreshOverviewButton } from "../overview-action";
 
 export default async function TranslationPage({ params, searchParams }: PageProps<"/projects/[id]/translation">) {
   const { id: slug } = await params; const query = await searchParams;
@@ -23,7 +24,7 @@ export default async function TranslationPage({ params, searchParams }: PageProp
       } },
     } });
   } catch {
-    return <main className="p-4 sm:p-6 lg:p-8"><section className={`${cardClass} mx-auto max-w-7xl p-6`}><h1 className="text-xl font-semibold">Translation is unavailable</h1><p role="alert" className="mt-2 text-sm text-zinc-400">We couldn’t load this project right now. Please try again.</p><div className="mt-5 flex flex-wrap gap-5"><RefreshOverviewButton label="Try again" /><Link href={projectPath} className={linkClass}>Project overview</Link></div></section></main>;
+    return <WorkspaceUnavailable title="Translation is unavailable" description="We couldn’t load this project right now. Please try again." href={projectPath} />;
   }
   if (!project) notFound();
   const movie = query.movieId ? project.movies.find((item) => item.id === query.movieId) : project.movies[0];
@@ -38,7 +39,7 @@ export default async function TranslationPage({ params, searchParams }: PageProp
         translation: { select: { sourceTranscriptId: true, provider: true, model: true, updatedAt: true, segments: { orderBy: { sequence: "asc" }, select: { sequence: true, startMs: true, endMs: true, text: true } } } },
       } }), getTranslationReview(movie.id), getMovieTranslationJob(movie.id),
     ]);
-    if (dialogue.status === "rejected") return <main className="p-4 sm:p-6 lg:p-8"><section className={`${cardClass} mx-auto max-w-7xl p-6`}><h1 className="text-xl font-semibold">Translation is unavailable</h1><p role="alert" className="mt-2 text-sm text-zinc-400">We couldn’t load saved dialogue right now. Please try again.</p><div className="mt-5 flex flex-wrap gap-5"><RefreshOverviewButton label="Try again" /><Link href={projectPath} className={linkClass}>Project overview</Link></div></section></main>;
+    if (dialogue.status === "rejected") return <WorkspaceUnavailable title="Translation is unavailable" description="We couldn’t load saved dialogue right now. Please try again." href={projectPath} />;
     if (!dialogue.value) notFound();
     const { transcript, translation } = dialogue.value;
     snapshot = {
@@ -51,10 +52,10 @@ export default async function TranslationPage({ params, searchParams }: PageProp
       jobAvailable: job.status === "fulfilled",
     };
   }
-  return <main className="min-w-0 flex-1 p-4 sm:p-5 lg:p-6"><div className="mx-auto max-w-[1600px] space-y-4">
+  return <main className={pageClass}><div className={contentClass}>
     <header>
       <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500"><Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" /><Link href={projectPath} className={`${linkClass} min-w-0 break-words`}>{project.name}</Link><ChevronRight size={13} aria-hidden="true" /><span className="text-zinc-300">{reviewView ? "Review" : "Translation"}</span></nav>
-      {(!snapshot || reviewView) && <><h1 className="mt-4 text-2xl font-semibold tracking-tight">{reviewView ? "Review" : "Translation"}</h1><p className="mt-1 text-sm text-zinc-400">{reviewView ? "Verify the Myanmar subtitles and approve them for export." : "Translate Chinese subtitles to Myanmar with AI and human review."}</p></>}
+      {(!snapshot || reviewView) && <><h1 className="mt-4 text-2xl font-semibold tracking-tight">{reviewView ? "Review" : "Translation"}</h1><p className="mt-2 text-sm leading-6 text-zinc-400">{reviewView ? "Verify the Myanmar subtitles and approve them for export." : "Translate Chinese subtitles to Myanmar with AI and human review."}</p></>}
     </header>
     {project.movies.length > 1 && <nav aria-label="Project movies" className="flex flex-wrap gap-2">{project.movies.map((item) => <Link key={item.id} href={`${projectPath}/translation?movieId=${encodeURIComponent(item.id)}${reviewView ? "&view=review" : ""}`} aria-current={movie?.id === item.id ? "page" : undefined} className={`max-w-full break-words rounded-lg border border-white/10 px-3 py-2 text-xs focus-visible:outline-2 focus-visible:outline-violet-300 ${movie?.id === item.id ? "bg-violet-400/10 text-violet-300" : "text-zinc-500 hover:text-zinc-200"}`}>{item.title}</Link>)}</nav>}
     {reviewView ? <ReviewWorkspace key={snapshot?.movie.id ?? "empty"} initialSnapshot={snapshot} projectPath={projectPath} exportTargetMovie={project.movies[0] ? { id: project.movies[0].id, title: project.movies[0].title } : null} /> : snapshot ? <TranslationReviewPanel key={snapshot.movie.id} initialSnapshot={snapshot} projectPath={projectPath} projectSlug={slug} /> : <section className={`${cardClass} p-6 sm:p-8`}><Languages size={24} className="text-zinc-500" aria-hidden="true" /><h2 className="mt-4 text-lg font-medium">No movie uploaded</h2><p className="mt-2 text-sm text-zinc-400">Upload and transcribe a source movie before translating dialogue.</p><Link href={projectPath} className={`${linkClass} mt-5`}>Project overview</Link></section>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { controlClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
 import { Check, Copy, Search } from "lucide-react";
 
 import { formatTimestamp } from "@/lib/format-timestamp";
@@ -53,14 +54,14 @@ export default function TranscriptSegments({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Find dialogue..."
-                className="w-full rounded-lg border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus-visible:border-violet-400/30 focus-visible:ring-2 focus-visible:ring-violet-400/20"
+                className={`${controlClass} w-full pl-9`}
               />
             </span>
           </label>
           <button
             type="button"
             onClick={copyTranscript}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.05] hover:text-white focus-visible:outline-2 focus-visible:outline-violet-300"
+            className={secondaryButtonClass}
           >
             {copyStatus === "success" ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
             Copy transcript
@@ -83,7 +84,7 @@ export default function TranscriptSegments({
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:block">
                   <span className="text-[11px] text-zinc-500">#{segment.sequence + 1}</span>
                   <p className="break-words font-mono text-xs tabular-nums text-zinc-300 sm:mt-1">
-                    {formatTimestamp(segment.startMs)} <span className="text-zinc-600">→</span> {formatTimestamp(segment.endMs)}
+                    {formatTimestamp(segment.startMs)} <span className="text-zinc-500">→</span> {formatTimestamp(segment.endMs)}
                   </p>
                   <p className="mt-1 text-[11px] text-zinc-500">{((segment.endMs - segment.startMs) / 1000).toFixed(2)} s</p>
                 </div>
@@ -96,7 +97,7 @@ export default function TranscriptSegments({
           ))}
         </ol>
       ) : (
-        <p className="px-5 py-10 text-center text-sm text-zinc-500">{segments.length ? "No segments match your search." : "No timed segments are available."}</p>
+        <div className="px-5 py-8 text-center"><p className="text-sm leading-6 text-zinc-400">{segments.length ? "No segments match your search." : "No timed segments are available."}</p>{segments.length > 0 && <button type="button" onClick={() => setQuery("")} className={`${linkClass} mt-3`}>Clear search</button>}</div>
       )}
     </section>
   );

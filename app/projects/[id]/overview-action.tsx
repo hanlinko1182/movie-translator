@@ -1,12 +1,14 @@
 "use client";
 
+import { primaryButtonClass } from "@/components/ui/styles";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ArrowRight, LoaderCircle, RefreshCw } from "lucide-react";
 import type { OverviewAction } from "./overview-model";
 
-const buttonClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-violet-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300 disabled:cursor-not-allowed disabled:opacity-50";
+const buttonClass = primaryButtonClass;
 
 export function RefreshOverviewButton({ label = "Refresh overview" }: { label?: string }) {
   const router = useRouter();

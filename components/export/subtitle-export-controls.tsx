@@ -1,5 +1,7 @@
 "use client";
 
+import { badgeClass, badgeTones, cardClass, focusClass, primaryButtonClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
+
 import Link from "next/link";
 import { useState } from "react";
 import { AlertTriangle, ArrowRight, BadgeCheck, ChevronRight, Circle, Clock3, Download, FileText, Film, Info, LoaderCircle } from "lucide-react";
@@ -24,8 +26,8 @@ type Props = {
   previews: { all: PreviewSegment | null; approved: PreviewSegment | null };
 };
 
-const panelClass = "min-w-0 rounded-xl border border-white/[0.08] bg-[#101720]";
-const focusClass = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300";
+const panelClass = cardClass;
+
 const formatOptions: { id: SubtitleFormat; label: string; extension: string; detail: string; icon: typeof FileText }[] = [
   { id: "srt", label: "SubRip Subtitle", extension: ".srt", detail: "Plain subtitle text · millisecond timing", icon: FileText },
   { id: "ass", label: "Advanced SubStation Alpha", extension: ".ass", detail: "Subtitle text · centisecond timing", icon: FileText },
@@ -56,8 +58,8 @@ function SegmentCount({ value, label }: { value: number; label: string }) {
 }
 
 function StatusPill({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "green" | "amber" | "violet" }) {
-  const styles = tone === "green" ? "border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200" : tone === "amber" ? "border-amber-300/20 bg-amber-300/[0.07] text-amber-200" : tone === "violet" ? "border-violet-300/20 bg-violet-300/[0.08] text-violet-200" : "border-white/10 bg-white/[0.04] text-zinc-300";
-  return <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${styles}`}>{children}</span>;
+  const styles = badgeTones[tone];
+  return <span className={`${badgeClass} ${styles}`}>{children}</span>;
 }
 
 export default function SubtitleExportControls({ projectName, projectHref, reviewHref, movie, translation, summary, filenames, previews }: Props) {
@@ -106,14 +108,14 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
     <header className="flex min-w-0 flex-col gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         <nav aria-label="Breadcrumb" className="mb-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500">
-          <Link href="/projects" className={`rounded hover:text-zinc-200 ${focusClass}`}>Projects</Link><ChevronRight size={13} aria-hidden="true" />
-          <Link href={projectHref} className={`max-w-full truncate rounded hover:text-zinc-200 ${focusClass}`}>{projectName}</Link><ChevronRight size={13} aria-hidden="true" />
+          <Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" />
+          <Link href={projectHref} className={`${linkClass} min-w-0 break-words`}>{projectName}</Link><ChevronRight size={13} aria-hidden="true" />
           <span aria-current="page" className="text-zinc-300">Export</span>
         </nav>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Export</h1>
-        <p className="mt-1 text-sm leading-6 text-zinc-400">Download current Myanmar subtitles for this project.</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">Download current Myanmar subtitles for this project.</p>
       </div>
-      <button type="button" onClick={() => void download()} disabled={busy || !canDownload} className={`inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40 ${focusClass}`}>
+      <button type="button" onClick={() => void download()} disabled={busy || !canDownload} className={primaryButtonClass}>
         {busy ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
         {busy ? "Preparing…" : `Download ${format.toUpperCase()}`}
       </button>
@@ -126,14 +128,14 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
           <span className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400"><Film size={22} aria-hidden="true" /></span>
           <p className="relative text-sm font-medium text-zinc-200">Preview unavailable</p>
           <p className="relative mt-1 max-w-sm text-xs leading-5 text-zinc-500">Source video playback and video rendering are not available in this workspace. Subtitle files are exported separately.</p>
-          <StatusPill tone={translationAvailable ? "green" : "amber"}>
+          <StatusPill tone={translationAvailable ? "green" : "neutral"}>
             {translationAvailable ? <BadgeCheck size={12} aria-hidden="true" /> : <Circle size={9} aria-hidden="true" />}
             {translationAvailable ? "Subtitle files available" : !movie ? "No movie uploaded" : !translation ? "Translation required" : "No subtitle rows"}
           </StatusPill>
         </div>
         <div className="p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Current project movie</p><h2 id="export-source-heading" className="mt-1 break-words text-base font-semibold text-zinc-100">{movie?.title ?? "No movie uploaded"}</h2></div>
+            <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Current project movie</p><h2 id="export-source-heading" className="mt-1 break-words text-base font-semibold text-zinc-100">{movie?.title ?? "No movie uploaded"}</h2></div>
             {movie && <StatusPill>{movie.status.toLowerCase().replaceAll("_", " ")}</StatusPill>}
           </div>
           <p className="mt-2 break-all text-xs text-zinc-500">{movie?.filename ?? "Upload a movie from Project Overview to begin."}</p>
@@ -152,9 +154,9 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
             const Icon = option.icon;
             const selected = format === option.id;
             return <button key={option.id} type="button" aria-pressed={selected} onClick={() => { setFormat(option.id); setError(""); setMessage(""); }} className={`min-w-0 rounded-lg border p-3 text-left transition ${focusClass} ${selected ? "border-violet-400/70 bg-violet-500/[0.12] shadow-[0_0_0_1px_rgba(139,92,246,0.12)]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"}`}>
-              <div className="flex items-start justify-between gap-2"><Icon size={19} className={selected ? "text-violet-300" : "text-zinc-400"} aria-hidden="true" /><span className={`rounded-md px-2 py-0.5 font-mono text-[10px] ${selected ? "bg-violet-400/15 text-violet-200" : "bg-white/[0.05] text-zinc-400"}`}>{option.extension}</span></div>
+              <div className="flex items-start justify-between gap-2"><Icon size={19} className={selected ? "text-violet-300" : "text-zinc-400"} aria-hidden="true" /><span className={`rounded-md px-2 py-0.5 font-mono text-[11px] ${selected ? "bg-violet-400/15 text-violet-200" : "bg-white/[0.05] text-zinc-400"}`}>{option.extension}</span></div>
               <p className="mt-3 break-words text-xs font-semibold leading-5 text-zinc-100">{option.label}</p>
-              <p className="mt-1 text-[10px] leading-4 text-zinc-500">{option.detail}</p>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-500">{option.detail}</p>
             </button>;
           })}
         </div>
@@ -167,24 +169,24 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
           <p className="mt-2 text-xs leading-5 text-zinc-500">SRT and ASS files are generated on request. Video-render jobs and their status are not available.</p>
         </div>
         <div className="mt-3 space-y-2">
-          {["Translated Video", "Recap Video"].map((label) => <div key={label} className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"><div className="flex min-w-0 items-center gap-2"><Film size={14} className="shrink-0 text-zinc-500" aria-hidden="true" /><span className="break-words text-xs text-zinc-300">{label}</span></div><span className="shrink-0 text-[10px] text-zinc-500">Not generated · Not implemented yet</span></div>)}
+          {["Translated Video", "Recap Video"].map((label) => <div key={label} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"><div className="flex min-w-0 items-center gap-2"><Film size={14} className="shrink-0 text-zinc-500" aria-hidden="true" /><span className="break-words text-xs text-zinc-300">{label}</span></div><span className="min-w-0 text-[11px] leading-5 text-zinc-500">Not generated · Not implemented yet</span></div>)}
         </div>
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-8`} aria-labelledby="export-settings-heading">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h2 id="export-settings-heading" className="text-sm font-semibold text-zinc-100">Export Settings</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Choose which saved translation rows to include.</p></div>
-          {translation && <StatusPill tone="green">Revision {translation.revision}</StatusPill>}
+          {translation && <StatusPill>Revision {translation.revision}</StatusPill>}
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div className="min-w-0">
             <p className="mb-2 text-[11px] font-medium text-zinc-400">Subtitle Source</p>
-            <div className="rounded-lg border border-white/[0.08] bg-black/10 p-3"><p className="text-xs font-medium text-zinc-200">Myanmar Translation</p><p className="mt-1 break-words text-[10px] text-zinc-500">{translation ? `${languageLabel(translation.sourceLanguage)} → ${languageLabel(translation.targetLanguage)} · saved revision ${translation.revision}` : "A saved project translation is required"}</p></div>
+            <div className="rounded-lg border border-white/[0.08] bg-black/10 p-3"><p className="text-xs font-medium text-zinc-200">Myanmar Translation</p><p className="mt-1 break-words text-[11px] text-zinc-500">{translation ? `${languageLabel(translation.sourceLanguage)} → ${languageLabel(translation.targetLanguage)} · saved revision ${translation.revision}` : "A saved project translation is required"}</p></div>
           </div>
           <fieldset className="min-w-0">
             <legend className="mb-2 text-[11px] font-medium text-zinc-400">Review Scope</legend>
             <div className="grid grid-cols-2 rounded-lg border border-white/[0.08] bg-black/15 p-1">
-              {([{ id: "ALL_CURRENT", label: "All Current", value: summary.total }, { id: "APPROVED_ONLY", label: "Approved Only", value: summary.approved }] as const).map((option) => <button key={option.id} type="button" aria-pressed={mode === option.id} onClick={() => { setMode(option.id); setError(""); setMessage(""); }} className={`min-h-9 min-w-0 rounded-md px-2 text-[11px] font-medium transition ${focusClass} ${mode === option.id ? "bg-violet-500/20 text-violet-200" : "text-zinc-400 hover:text-zinc-200"}`}><span className="block truncate">{option.label}</span><span className="mt-0.5 block text-[10px] tabular-nums opacity-75">{option.value.toLocaleString("en-US")} rows</span></button>)}
+              {([{ id: "ALL_CURRENT", label: "All Current", value: summary.total }, { id: "APPROVED_ONLY", label: "Approved Only", value: summary.approved }] as const).map((option) => <button key={option.id} type="button" aria-pressed={mode === option.id} onClick={() => { setMode(option.id); setError(""); setMessage(""); }} className={`min-h-9 min-w-0 rounded-md px-2 text-[11px] font-medium transition ${focusClass} ${mode === option.id ? "bg-violet-500/20 text-violet-200" : "text-zinc-400 hover:text-zinc-200"}`}><span className="block truncate">{option.label}</span><span className="mt-0.5 block text-[11px] tabular-nums opacity-75">{option.value.toLocaleString("en-US")} rows</span></button>)}
             </div>
           </fieldset>
         </div>
@@ -197,7 +199,7 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
           <SegmentCount value={summary.needsReview} label="Needs review" />
           <SegmentCount value={summary.unreviewed} label="Unreviewed" />
         </dl>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3"><p className="text-[11px] leading-5 text-zinc-500">Review states are human decisions. Export does not change translation or approval.</p><Link href={reviewHref} className={`inline-flex items-center gap-1.5 text-xs font-medium text-violet-300 hover:text-violet-200 ${focusClass}`}>Review subtitles<ArrowRight size={13} aria-hidden="true" /></Link></div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3"><p className="text-[11px] leading-5 text-zinc-500">Review states are human decisions. Export does not change translation or approval.</p><Link href={reviewHref} className={linkClass}>Review subtitles<ArrowRight size={13} aria-hidden="true" /></Link></div>
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-4`} aria-labelledby="output-files-heading">
@@ -205,13 +207,13 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
         <ul className="mt-3 divide-y divide-white/[0.07]">
           {(["srt", "ass"] as const).map((fileFormat) => <li key={fileFormat} className="flex min-w-0 items-center gap-3 py-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-black/10 text-zinc-400"><FileText size={17} aria-hidden="true" /></span>
-            <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium text-zinc-200">Subtitle File ({fileFormat.toUpperCase()})</p><p className="mt-1 break-words text-[10px] text-zinc-500">{canDownload ? `${count.toLocaleString("en-US")} segments · ${mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}` : translation ? "No rows in the selected scope" : "Translation unavailable"}</p>{translationAvailable && <p className="mt-1 break-all font-mono text-[9px] text-zinc-600">{filenames[fileFormat]}</p>}</div>
-            <button type="button" onClick={() => void download(fileFormat)} disabled={busy || !canDownload} aria-label={`Download ${fileFormat.toUpperCase()} subtitles`} className={`inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-[11px] text-zinc-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40 ${focusClass}`}><Download size={13} aria-hidden="true" />Download</button>
+            <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium text-zinc-200">Subtitle File ({fileFormat.toUpperCase()})</p><p className="mt-1 break-words text-[11px] text-zinc-500">{canDownload ? `${count.toLocaleString("en-US")} segments · ${mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}` : translation ? "No rows in the selected scope" : "Translation unavailable"}</p>{translationAvailable && <p className="mt-1 break-all font-mono text-[11px] text-zinc-500">{filenames[fileFormat]}</p>}</div>
+            <button type="button" onClick={() => void download(fileFormat)} disabled={busy || !canDownload} aria-label={`Download ${fileFormat.toUpperCase()} subtitles`} className={secondaryButtonClass}><Download size={13} aria-hidden="true" />Download</button>
           </li>)}
           {["Translated Video", "Recap Video"].map((label) => <li key={label} className="flex min-w-0 items-center gap-3 py-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-black/10 text-zinc-600"><Film size={17} aria-hidden="true" /></span>
-            <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">{label}</p><p className="mt-1 text-[10px] leading-4 text-zinc-500">Not generated · Not implemented yet</p></div>
-            <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[10px] text-zinc-600">Unavailable</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-black/10 text-zinc-500"><Film size={17} aria-hidden="true" /></span>
+            <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">{label}</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">Not generated · Not implemented yet</p></div>
+            <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[11px] text-zinc-500">Unavailable</span>
           </li>)}
         </ul>
       </section>
@@ -219,13 +221,13 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-8`} aria-labelledby="subtitle-preview-heading">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="subtitle-preview-heading" className="text-sm font-semibold text-zinc-100">Preview &amp; Check</h2><p className="mt-1 text-xs leading-5 text-zinc-500">A saved subtitle sample and its original timing. No video playback is available.</p></div><StatusPill>{format.toUpperCase()} · {mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}</StatusPill></div>
         {activePreview ? <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
-          <div className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] text-zinc-500">Segment {activePreview.sequence + 1} · {formatTime(activePreview.startMs)} → {formatTime(activePreview.endMs)}</p><StatusPill tone={activePreview.reviewStatus === "APPROVED" ? "green" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "amber" : "neutral"}>{activePreview.reviewStatus === "APPROVED" ? "Approved" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "Needs review" : "Unreviewed"}</StatusPill></div>
-            {activePreview.sourceText ? <p lang="zh" className="mt-3 break-words text-sm leading-6 text-zinc-200">{activePreview.sourceText}</p> : <p className="mt-3 text-xs text-zinc-600">Chinese source text unavailable.</p>}
+          <div className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] text-zinc-500">Segment {activePreview.sequence + 1} · {formatTime(activePreview.startMs)} → {formatTime(activePreview.endMs)}</p><StatusPill tone={activePreview.reviewStatus === "APPROVED" ? "green" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "amber" : "neutral"}>{activePreview.reviewStatus === "APPROVED" ? "Approved" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "Needs review" : "Unreviewed"}</StatusPill></div>
+            {activePreview.sourceText ? <p lang="zh" className="mt-3 break-words text-sm leading-6 text-zinc-200">{activePreview.sourceText}</p> : <p className="mt-3 text-xs text-zinc-500">Chinese source text unavailable.</p>}
             <p lang="my" className="mt-2 break-words text-sm leading-7 text-zinc-200">{activePreview.text}</p>
           </div>
-          <div className="flex min-w-0 flex-col justify-center rounded-lg border border-white/[0.07] bg-gradient-to-br from-[#0b111a] to-[#131126] p-4 text-center"><p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Saved Myanmar subtitle</p><p lang="my" className="mt-3 break-words text-lg leading-8 text-zinc-100">{activePreview.text}</p><p className="mt-3 font-mono text-[10px] text-zinc-500">{formatTime(activePreview.startMs)} – {formatTime(activePreview.endMs)}</p></div>
+          <div className="flex min-w-0 flex-col justify-center rounded-lg border border-white/[0.07] bg-gradient-to-br from-[#0b111a] to-[#131126] p-4 text-center"><p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Saved Myanmar subtitle</p><p lang="my" className="mt-3 break-words text-lg leading-8 text-zinc-100">{activePreview.text}</p><p className="mt-3 font-mono text-[11px] text-zinc-500">{formatTime(activePreview.startMs)} – {formatTime(activePreview.endMs)}</p></div>
         </div> : <div className="mt-4 rounded-lg border border-dashed border-white/10 bg-black/10 p-5 text-center"><Info size={18} className="mx-auto text-zinc-500" aria-hidden="true" /><p className="mt-2 text-xs leading-5 text-zinc-400">{!translation ? "A saved translation is required before subtitle preview is available." : mode === "APPROVED_ONLY" ? "No approved subtitle segment is available to preview." : "No saved subtitle segment is available to preview."}</p></div>}
-        <p className="mt-3 text-[10px] leading-5 text-zinc-500">{translation ? `${translation.provider} · ${translation.model} · revision ${translation.revision} · updated ${translation.updatedAt.slice(0, 10)}` : "Translation metadata unavailable"} · UTF-8 Myanmar text.</p>
+        <p className="mt-3 text-[11px] leading-5 text-zinc-500">{translation ? `${translation.provider} · ${translation.model} · revision ${translation.revision} · updated ${translation.updatedAt.slice(0, 10)}` : "Translation metadata unavailable"} · UTF-8 Myanmar text.</p>
       </section>
 
       <section className="min-w-0 rounded-xl border border-violet-400/15 bg-[linear-gradient(135deg,rgba(91,33,182,0.14),rgba(16,23,32,0.95)_52%)] p-4 sm:p-5 xl:col-span-4" aria-labelledby="export-tips-heading">

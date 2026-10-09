@@ -1,3 +1,5 @@
+import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { readMovieRecap } from "@/lib/recap/read-recap";
@@ -32,7 +34,7 @@ export default async function RecapPage({ params }: PageProps<"/projects/[id]/re
       },
     });
   } catch {
-    return <p role="alert" className="p-6 text-sm text-amber-200">Unable to load recap. Please try again.</p>;
+    return <WorkspaceUnavailable title="Recap is unavailable" description="We couldn’t load this project right now. Please try again." href={`/projects/${encodeURIComponent(slug)}`} />;
   }
   if (!project) notFound();
 
@@ -81,8 +83,8 @@ export default async function RecapPage({ params }: PageProps<"/projects/[id]/re
   const hasTranscriptSegments = (movie?.transcript?._count.segments ?? 0) > 0;
   const model = process.env.RECAP_MODEL?.trim() || null;
 
-  return <main className="min-w-0 flex-1">
-    <div className="mx-auto max-w-[1550px] p-4 sm:p-6 lg:p-8">
+  return <main className={pageClass}>
+    <div className={contentClass}>
       <RecapControls
         projectName={project.name}
         movie={movie ? { id: movie.id, title: movie.title, filename: movie.filename, durationSeconds: movie.durationSeconds } : null}

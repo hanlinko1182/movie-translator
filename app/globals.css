@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme {
+  /* Keep small metadata readable on the shared dark panels. */
+  --color-zinc-500: #8b8b96;
+}
+
 :root {
   color-scheme: dark;
 }
@@ -24,4 +29,20 @@ body {
     Padauk,
     system-ui,
     sans-serif;
+}
+
+@layer base {
+  :where(button, a, input, select, textarea, summary):focus-visible {
+    outline: 2px solid #c4b5fd;
+    outline-offset: 2px;
+  }
+
+  :where(p, textarea, td, dd, h1, h2, h3, span)[lang="my"] {
+    line-height: 2;
+    overflow-wrap: anywhere;
+  }
+
+  :where(button, input, select, textarea):disabled {
+    cursor: not-allowed;
+  }
 }

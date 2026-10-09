@@ -1,5 +1,7 @@
 "use client";
 
+import { controlClass } from "@/components/ui/styles";
+
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Check, Circle, Clock3, Film, Search, Upload } from "lucide-react";
@@ -14,7 +16,6 @@ export type LibraryMovie = {
   transcriptCount: number | null; translationCount: number | null; scenes: number; recapSaved: boolean;
   projectName: string; projectHref: string; isNewestMovie: boolean;
 };
-const controlClass = "min-w-0 rounded-lg border border-white/10 bg-[#0c0c10] px-3 py-2.5 text-sm text-zinc-200 outline-none focus-visible:border-violet-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400";
 const statusTones: Record<MovieStatus, string> = {
   UPLOADED: "border-white/10 bg-white/[0.03] text-zinc-300",
   QUEUED: "border-violet-400/20 bg-violet-400/10 text-violet-300",
@@ -62,7 +63,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
   return <>
     <section aria-label="Movie search and filters" className={`${cardClass} p-4`}>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="min-w-0 sm:col-span-2 xl:col-span-4"><label htmlFor="movie-search" className="mb-2 block text-xs text-zinc-400">Search movies</label><div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" /><input id="movie-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Title, filename or project…" className={`${controlClass} w-full pl-9 placeholder:text-zinc-600`} /></div></div>
+        <div className="min-w-0 sm:col-span-2 xl:col-span-4"><label htmlFor="movie-search" className="mb-2 block text-xs text-zinc-400">Search movies</label><div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" /><input id="movie-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Title, filename or project…" className={`${controlClass} w-full pl-9 placeholder:text-zinc-500`} /></div></div>
         <div className="min-w-0"><label htmlFor="movie-status" className="mb-2 block text-xs text-zinc-400">Recorded movie status</label><select id="movie-status" value={status} onChange={(event) => setStatus(event.target.value)} className={`${controlClass} w-full`}><option value="">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></div>
         <div className="min-w-0"><label htmlFor="movie-language" className="mb-2 block text-xs text-zinc-400">Source language</label><select id="movie-language" value={language} onChange={(event) => setLanguage(event.target.value)} className={`${controlClass} w-full`}><option value="">All languages</option>{languages.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
         <div className="min-w-0"><label htmlFor="movie-availability" className="mb-2 block text-xs text-zinc-400">Media & saved outputs</label><select id="movie-availability" value={availability} onChange={(event) => setAvailability(event.target.value)} className={`${controlClass} w-full`}><option value="">All movies</option><option value="uploaded">Upload recorded</option><option value="metadata">Metadata only</option><option value="transcript">With transcript segments</option><option value="translation">With translated segments</option></select></div>
@@ -76,7 +77,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
         <h2 id="library-heading" className="mb-4 text-sm font-semibold">Movie library</h2>
         {visible.length ? <div className="grid items-stretch gap-4 sm:grid-cols-2">
           {visible.map((movie) => <article key={movie.id} aria-labelledby={`movie-title-${movie.id}`} className={`${cardClass} flex flex-col overflow-hidden transition ${selected?.id === movie.id ? "border-violet-400/50" : "hover:border-white/20"}`}>
-            <div className="relative flex aspect-video items-center justify-center border-b border-white/[0.06] bg-[#0c0c10]"><Film size={34} strokeWidth={1.25} className="text-zinc-600" aria-hidden="true" /><span className="absolute left-3 top-3"><MovieStatusBadge status={movie.status} /></span><span className="absolute bottom-3 left-3 text-[10px] text-zinc-500">No thumbnail</span>{movie.durationSeconds !== null && <span className="absolute bottom-3 right-3 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] tabular-nums text-zinc-300">{movie.durationLabel}</span>}</div>
+            <div className="relative flex aspect-video items-center justify-center border-b border-white/[0.06] bg-[#0c0c10]"><Film size={34} strokeWidth={1.25} className="text-zinc-500" aria-hidden="true" /><span className="absolute left-3 top-3"><MovieStatusBadge status={movie.status} /></span><span className="absolute bottom-3 left-3 text-[11px] text-zinc-500">No thumbnail</span>{movie.durationSeconds !== null && <span className="absolute bottom-3 right-3 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] tabular-nums text-zinc-300">{movie.durationLabel}</span>}</div>
             <div className="flex flex-1 flex-col p-4">
               <h3 id={`movie-title-${movie.id}`} className="break-words text-sm font-semibold">{movie.title}</h3>
               {movie.originalTitle && <p lang={movie.sourceLanguage} className="mt-1 break-words text-xs text-zinc-400">{movie.originalTitle}</p>}
@@ -85,7 +86,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
               <p className="mt-2 text-xs leading-5 text-zinc-400">{movie.languageLabel} · {movie.fileSizeLabel}</p>
               <p className="mt-1 text-[11px] leading-5 text-zinc-500">{movie.uploadRecorded ? "Source upload recorded" : "Metadata only · no upload recorded"}</p>
               <div className="mt-3 flex flex-wrap gap-2"><OutputBadge label="Transcript" count={movie.transcriptCount} /><OutputBadge label="Translation" count={movie.translationCount} /></div>
-              <div className="mt-auto pt-4"><p className="mb-3 flex items-start gap-1.5 text-[10px] leading-5 text-zinc-500"><Clock3 size={12} className="mt-1 shrink-0" aria-hidden="true" />Updated <time dateTime={movie.updatedAt}>{movie.updatedLabel}</time></p><button type="button" aria-label={`View details for ${movie.title}`} aria-pressed={selected?.id === movie.id} aria-controls="movie-details" onClick={() => inspect(movie)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs font-medium text-zinc-200 transition hover:border-violet-400/30 hover:bg-violet-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">{selected?.id === movie.id ? "Selected movie" : "View media details"}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
+              <div className="mt-auto pt-4"><p className="mb-3 flex items-start gap-1.5 text-[11px] leading-5 text-zinc-500"><Clock3 size={12} className="mt-1 shrink-0" aria-hidden="true" />Updated <time dateTime={movie.updatedAt}>{movie.updatedLabel}</time></p><button type="button" aria-label={`View details for ${movie.title}`} aria-pressed={selected?.id === movie.id} aria-controls="movie-details" onClick={() => inspect(movie)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs font-medium text-zinc-200 transition hover:border-violet-400/30 hover:bg-violet-400/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300">{selected?.id === movie.id ? "Selected movie" : "View media details"}<ArrowUpRight size={13} aria-hidden="true" /></button></div>
             </div>
           </article>)}
         </div> : <div className={`${cardClass} p-8 text-center`}><Search size={24} className="mx-auto text-zinc-500" aria-hidden="true" /><h3 className="mt-4 font-medium">No matching movies</h3><p className="mt-2 text-sm leading-6 text-zinc-400">Try another title or broaden your media filters.</p><button type="button" onClick={clearFilters} className={`${linkClass} mt-5`}>Clear filters</button></div>}
@@ -107,7 +108,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
         <section aria-labelledby="availability-heading" className="mt-5 border-t border-white/[0.06] pt-5"><h3 id="availability-heading" className="text-xs font-semibold">Saved output availability</h3><ul className="mt-3 space-y-3 text-xs text-zinc-400"><li>Transcript · {outputLabel(selected.transcriptCount)}</li><li>Translation · {outputLabel(selected.translationCount)}</li><li>Scenes · {selected.scenes} saved</li><li>Recap · {selected.recapSaved ? "Script saved · check freshness in Recap" : "Not generated"}</li></ul><p className="mt-3 text-[11px] leading-5 text-zinc-500">Saved translation does not imply human approval or export readiness.</p></section>
         <section aria-labelledby="workspaces-heading" className="mt-5 border-t border-white/[0.06] pt-5"><h3 id="workspaces-heading" className="text-xs font-semibold">Related workspaces</h3>
           {!selected.isNewestMovie && <p className="mt-2 text-[11px] leading-5 text-amber-200">Translation and Review open this movie. Other project workspaces open the project’s newest movie.</p>}
-          <nav aria-label="Selected movie workspaces" className="mt-3 grid grid-cols-2 gap-2">{workspaceLinks(selected).map((link) => <Link key={link.label} href={link.href} className={`${linkClass} flex-wrap rounded-lg border border-white/[0.07] p-3`}><span>{link.label}{link.newest && !selected.isNewestMovie && <span className="mt-1 block text-[10px] font-normal text-zinc-500">Newest movie</span>}</span><ArrowUpRight size={12} className="shrink-0" aria-hidden="true" /></Link>)}</nav>
+          <nav aria-label="Selected movie workspaces" className="mt-3 grid grid-cols-2 gap-2">{workspaceLinks(selected).map((link) => <Link key={link.label} href={link.href} className={`${linkClass} flex-wrap rounded-lg border border-white/[0.07] p-3`}><span>{link.label}{link.newest && !selected.isNewestMovie && <span className="mt-1 block text-[11px] font-normal text-zinc-500">Newest movie</span>}</span><ArrowUpRight size={12} className="shrink-0" aria-hidden="true" /></Link>)}</nav>
         </section>
         <button type="button" onClick={() => {libraryRef.current?.focus({preventScroll:true});libraryRef.current?.scrollIntoView({behavior:"smooth",block:"start"});}} className={`${linkClass} mt-5 xl:hidden`}><ArrowLeft size={14} aria-hidden="true" />Back to library</button>
       </aside>}
@@ -122,7 +123,7 @@ function outputLabel(count: number | null) { return count === null ? "Not genera
 function OutputBadge({ label, count }: { label: string; count: number | null }) {
   const saved = count !== null && count > 0;
   const Icon = saved ? Check : Circle;
-  return <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] ${saved ? "border-emerald-400/15 bg-emerald-400/5 text-emerald-300" : "border-white/[0.07] text-zinc-500"}`}><Icon size={11} aria-hidden="true" />{label} · {count === null ? "none" : count === 0 ? "empty" : count}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${saved ? "border-emerald-400/15 bg-emerald-400/5 text-emerald-300" : "border-white/[0.07] text-zinc-500"}`}><Icon size={11} aria-hidden="true" />{label} · {count === null ? "none" : count === 0 ? "empty" : count}</span>;
 }
 function Metadata({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><dt className="text-zinc-500">{label}</dt><dd className="mt-1 break-words leading-5 text-zinc-300">{value}</dd></div>; }
 function workspaceLinks(movie: LibraryMovie) {

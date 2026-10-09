@@ -1,5 +1,7 @@
 "use client";
 
+import { primaryButtonClass } from "@/components/ui/styles";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +12,7 @@ import { languageName, durationLabel } from "../overview-model";
 import TranscriptSegments from "./transcript-segments";
 import { deriveTranscription, isRunningJob, pollingTarget, POLL_INTERVAL_MS, type JobStatus, type TranscriptionSnapshot } from "./transcription-model";
 
-const primaryButton = "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-violet-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300 disabled:cursor-not-allowed disabled:opacity-50";
+const primaryButton = primaryButtonClass + " w-full";
 
 export default function TranscriptionWorkspace({ initialSnapshot, projectPath }: { initialSnapshot: TranscriptionSnapshot; projectPath: string }) {
   const router = useRouter();
@@ -127,7 +129,7 @@ export default function TranscriptionWorkspace({ initialSnapshot, projectPath }:
         <div className="border-t border-white/10 p-5">
           <div className="flex flex-wrap justify-between gap-2 text-xs"><h3 className="font-medium text-zinc-300">Transcript position</h3><p className="text-zinc-500">{selected ? `Segment #${selected.sequence + 1} · ${formatTimestamp(selected.startMs)} → ${formatTimestamp(selected.endMs)}` : "No segment selected"}</p></div>
           <div className="relative mt-4 h-2 rounded-full bg-white/[0.07]" aria-hidden="true">{selected && extent > 0 && <span className="absolute h-full min-w-1 rounded-full bg-violet-500" style={{ left: `${selectedPosition}%`, width: `${selectedWidth}%` }} />}</div>
-          {extent > 0 && <div className="mt-2 flex justify-between font-mono text-[10px] text-zinc-600"><span>{formatTimestamp(0)}</span><span>{formatTimestamp(extent)}</span></div>}
+          {extent > 0 && <div className="mt-2 flex justify-between font-mono text-[11px] text-zinc-500"><span>{formatTimestamp(0)}</span><span>{formatTimestamp(extent)}</span></div>}
           <p className="mt-3 text-xs leading-5 text-zinc-500">{transcript?.segments.length ? "Select a row to highlight its timestamp range. Playback and seeking are unavailable." : "Timed dialogue will appear after transcription. No waveform data is available."}</p>
         </div>
       </section>

@@ -1,3 +1,5 @@
+import { primaryButtonClass } from "@/components/ui/styles";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ArrowUpRight, CheckCircle2, CircleAlert, Clock3, Film, FolderKanban, Plus, ShieldCheck, Sparkles, Upload } from "lucide-react";
@@ -7,7 +9,7 @@ import { dateLabel, languageName } from "./projects/[id]/overview-model";
 import { cardClass, linkClass, StatusBadge } from "./projects/[id]/overview-components";
 
 type Dashboard = ReturnType<typeof buildDashboard>;
-const primaryClass = "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300";
+const primaryClass = primaryButtonClass;
 
 export default async function Home() {
   // Fresh on request; never bake workflow data into the production build.
@@ -16,8 +18,8 @@ export default async function Home() {
   try { dashboard = await readDashboard(); }
   catch { /* Show unavailable state without exposing database errors. */ }
 
-  return <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-    <div className="mx-auto max-w-7xl space-y-6">
+  return <main className={pageClass}>
+    <div className={contentClass}>
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">Workspace</p>

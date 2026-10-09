@@ -1,3 +1,5 @@
+import { cardClass } from "@/components/ui/styles";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
@@ -8,7 +10,7 @@ import { RECAP_LANGUAGE } from "@/lib/recap/types";
 import { readSettingsConfiguration } from "./settings-config";
 import SettingsWorkspace, { RuntimeReadiness } from "./settings-workspace";
 
-const cardClass = "min-w-0 rounded-xl border border-white/10 bg-[#111115]";
+
 
 export default async function SettingsPage() {
   await connection();
@@ -54,7 +56,7 @@ export default async function SettingsPage() {
     </> },
   ];
 
-  return <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-7xl space-y-7"><header className="flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">Application</p><h1 className="text-2xl font-semibold tracking-tight">Settings</h1><p className="mt-2 text-sm leading-6 text-zinc-400">Configure Movie Translator preferences and processing defaults.</p></div><span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#111115] px-3 py-2 text-xs text-zinc-400"><LockKeyhole size={13} aria-hidden="true" />Environment managed</span></header><SettingsWorkspace panels={panels} /></div></main>;
+  return <main className={pageClass}><div className={contentClass}><header className="flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">Application</p><h1 className="text-2xl font-semibold tracking-tight">Settings</h1><p className="mt-2 text-sm leading-6 text-zinc-400">Configure Movie Translator preferences and processing defaults.</p></div><span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#111115] px-3 py-2 text-xs text-zinc-400"><LockKeyhole size={13} aria-hidden="true" />Environment managed</span></header><SettingsWorkspace panels={panels} /></div></main>;
 }
 
 function Card({ title, description, children }: { title: string; description: string; children: ReactNode }) {

@@ -1,3 +1,5 @@
+import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
+import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight, FileText } from "lucide-react";
@@ -34,11 +36,7 @@ export default async function SourceTranscriptPage({ params }: PageProps<"/proje
       },
     });
   } catch {
-    return <main className="p-4 sm:p-6 lg:p-8"><section className={`${cardClass} mx-auto max-w-7xl p-6`}>
-      <h1 className="text-xl font-semibold">Transcription is unavailable</h1>
-      <p className="mt-2 text-sm text-zinc-400">We couldn’t load this project right now. Please try again shortly.</p>
-      <div className="mt-5 flex flex-wrap gap-5"><RefreshOverviewButton label="Try again" /><Link href={projectPath} className={linkClass}>Project overview</Link></div>
-    </section></main>;
+    return <WorkspaceUnavailable title="Transcription is unavailable" description="We couldn’t load this project right now. Please try again shortly." href={projectPath} />;
   }
   if (!project) notFound();
   const movie = project.movies[0];
@@ -65,8 +63,8 @@ export default async function SourceTranscriptPage({ params }: PageProps<"/proje
       transcriptionStatusAvailable: results[3].status === "fulfilled",
     };
   }
-  return <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
-    <div className="mx-auto max-w-7xl space-y-6">
+  return <main className={pageClass}>
+    <div className={contentClass}>
       <header>
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500">
           <Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" />

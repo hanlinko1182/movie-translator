@@ -1,5 +1,7 @@
 "use client";
 
+import { controlClass } from "@/components/ui/styles";
+
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, CheckCircle2, Film, FolderKanban, LayoutGrid, List, Plus, Search, ShieldCheck, Sparkles } from "lucide-react";
@@ -16,7 +18,6 @@ export type ProjectWorkspaceItem = {
   action: { label: string; href: string };
 };
 
-const controlClass = "min-w-0 rounded-lg border border-white/10 bg-[#0c0c10] px-3 py-2.5 text-sm text-zinc-200 outline-none focus-visible:border-violet-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400";
 function statusLabel(value: string) { return value.charAt(0) + value.slice(1).toLowerCase(); }
 
 export default function ProjectsWorkspace({ projects }: { projects: ProjectWorkspaceItem[] }) {
@@ -51,7 +52,7 @@ export default function ProjectsWorkspace({ projects }: { projects: ProjectWorks
       <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_12rem_14rem_auto]">
         <div className="min-w-0 sm:col-span-2 xl:col-span-1">
           <label htmlFor="project-search" className="mb-2 block text-xs text-zinc-400">Search projects</label>
-          <div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" /><input id="project-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Project, movie or filename…" className={`${controlClass} w-full pl-9 placeholder:text-zinc-600`} /></div>
+          <div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" /><input id="project-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Project, movie or filename…" className={`${controlClass} w-full pl-9 placeholder:text-zinc-500`} /></div>
         </div>
         <div className="min-w-0"><label htmlFor="project-status" className="mb-2 block text-xs text-zinc-400">Saved project status</label><select id="project-status" value={status} onChange={(event) => setStatus(event.target.value)} className={`${controlClass} w-full`}><option value="">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></div>
         <div className="min-w-0"><label htmlFor="project-stage" className="mb-2 block text-xs text-zinc-400">Workflow stage</label><select id="project-stage" value={stage} onChange={(event) => setStage(event.target.value)} className={`${controlClass} w-full`}><option value="">All stages</option>{stages.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
@@ -98,7 +99,7 @@ function ProjectItem({ project, view }: { project: ProjectWorkspaceItem; view: "
       <p className={`mt-3 inline-flex items-center gap-1.5 text-xs ${project.recapSaved ? "text-indigo-300" : "text-zinc-500"}`}>{project.recapSaved ? <CheckCircle2 size={13} aria-hidden="true" /> : <Sparkles size={13} aria-hidden="true" />}{project.recapSaved ? "Recap script saved" : "Recap not generated"}</p>
     </div>
     <div className={`flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-4 ${list ? "xl:w-40 xl:shrink-0 xl:flex-col xl:items-start xl:border-t-0 xl:pt-0" : ""}`}>
-      <div><p className="text-[10px] uppercase tracking-wider text-zinc-600">Updated</p><time dateTime={project.updatedAt} className="mt-1 block text-[11px] leading-5 text-zinc-400">{project.updatedLabel}</time></div>
+      <div><p className="text-[11px] uppercase tracking-wider text-zinc-500">Updated</p><time dateTime={project.updatedAt} className="mt-1 block text-[11px] leading-5 text-zinc-400">{project.updatedLabel}</time></div>
       <Link href={project.action.href} className={`${linkClass} rounded-lg border border-violet-400/15 bg-violet-400/[0.05] px-3 py-2.5`}>{project.action.label}<ArrowUpRight size={14} className="shrink-0" aria-hidden="true" /></Link>
     </div>
   </article>;
