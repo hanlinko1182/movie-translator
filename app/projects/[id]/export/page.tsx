@@ -1,49 +1,127 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ChevronRight, FileText } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { subtitleFilename } from "@/lib/subtitle-export/filename";
 import { summarizeSubtitleReview } from "@/lib/subtitle-export/service";
 import SubtitleExportControls from "@/components/export/subtitle-export-controls";
 
+const previewSelect = {
+  sequence: true,
+  startMs: true,
+  endMs: true,
+  text: true,
+  reviewStatus: true,
+} as const;
+
 export default async function ExportPage({ params }: PageProps<"/projects/[id]/export">) {
   const { id: slug } = await params;
   let project;
   try {
-    project = await prisma.project.findUnique({ where: { slug }, select: {
-      name: true,
-      movies: { take: 1, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: {
-        id: true, title: true, filename: true,
-        translation: { select: { segments: { select: { reviewStatus: true } } } },
-      } },
-    } });
+    project = await prisma.project.findUnique({
+      where: { slug },
+      select: {
+        name: true,
+        movies: {
+          take: 1,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            title: true,
+            filename: true,
+            durationSeconds: true,
+            sourceLanguage: true,
+            status: true,
+            createdAt: true,
+            translation: {
+              select: {
+                id: true,
+                sourceTranscriptId: true,
+                provider: true,
+                model: true,
+                revision: true,
+                updatedAt: true,
+                sourceLanguage: true,
+                targetLanguage: true,
+                segments: { select: { reviewStatus: true } },
+              },
+            },
+          },
+        },
+      },
+    });
   } catch {
     return <p role="alert" className="p-6 text-sm text-amber-200">Unable to load subtitle export. Please try again.</p>;
   }
   if (!project) notFound();
-  const movie = project.movies[0];
-  const path = `/projects/${encodeURIComponent(slug)}`;
-  const reviewPath = movie ? `${path}/translation?movieId=${encodeURIComponent(movie.id)}` : `${path}/translation`;
-  const summary = summarizeSubtitleReview(movie?.translation?.segments ?? []);
 
-  return <main className="min-w-0 flex-1">
-    <header className="border-b border-white/10 px-5 py-5 sm:px-6 lg:px-10"><div className="mx-auto max-w-[1550px]">
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs text-zinc-500"><Link href="/projects" className="hover:text-zinc-200">Projects</Link><ChevronRight size={13} /><Link href={path} className="hover:text-zinc-200">{project.name}</Link><ChevronRight size={13} /><span className="text-zinc-300">Export</span></nav>
-      <h1 className="mt-4 text-2xl font-semibold tracking-tight">Export</h1><p className="mt-1 text-sm text-zinc-500">Download current Myanmar subtitles as SRT or ASS.</p>
-    </div></header>
-    <div className="mx-auto max-w-[1550px] space-y-5 p-4 sm:p-6 lg:p-8">
-      <section className="min-w-0 space-y-5 rounded-2xl border border-white/10 bg-white/[0.025] p-5 sm:p-6" aria-labelledby="review-summary-title">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0"><h2 id="review-summary-title" className="text-sm font-medium">Review summary</h2><p className="mt-2 break-words text-sm text-zinc-300">Project: {project.name}</p><p className="mt-1 break-words text-sm text-zinc-400">Movie: {movie?.title ?? "No movie uploaded"}</p></div>
-          <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400"><FileText size={14} />{movie?.translation ? "Translation available" : "No translation available"}</span>
-        </div>
-        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">{[
-          ["Total segments", summary.total], ["Approved", summary.approved], ["Needs review", summary.needsReview], ["Unreviewed", summary.unreviewed],
-        ].map(([label, value]) => <div key={label} className="rounded-xl border border-white/10 bg-black/10 p-3"><dt className="text-xs text-zinc-500">{label}</dt><dd className="mt-2 text-xl font-semibold text-zinc-200">{value}</dd></div>)}</dl>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"><p className="text-xs leading-5 text-zinc-500">Review states are human decisions. Export does not change approval or translation.</p><Link href={reviewPath} className="inline-flex items-center gap-2 text-sm text-zinc-200 hover:text-white focus-visible:outline-2 focus-visible:outline-white">Review translation <ArrowRight size={14} /></Link></div>
-      </section>
-      {movie?.translation ? <SubtitleExportControls movieId={movie.id} summary={summary} filenames={{ srt: subtitleFilename(movie.filename, movie.title, "srt"), ass: subtitleFilename(movie.filename, movie.title, "ass") }} /> : <section className="rounded-2xl border border-white/10 p-6 text-sm text-zinc-400"><p>{movie ? "This movie has no translation yet. Generate and review its translation before exporting subtitles." : "No movie uploaded for this project yet. Upload a movie before exporting subtitles."}</p><Link href={path} className="mt-4 inline-block text-zinc-200 hover:text-white focus-visible:outline-2 focus-visible:outline-white">Project overview</Link></section>}
-      {movie && <p className="text-xs leading-5 text-zinc-500">Export uses the newest movie in this project. Only subtitle files are generated; no video processing or export history is stored.</p>}
+  const movie = project.movies[0] ?? null;
+  const translation = movie?.translation ?? null;
+  const summary = summarizeSubtitleReview(translation?.segments ?? []);
+  const projectPath = `/projects/${encodeURIComponent(slug)}`;
+  let previews: { all: PreviewSegment | null; approved: PreviewSegment | null } = { all: null, approved: null };
+
+  if (movie && translation) {
+    try {
+      const [allSegment, approvedSegment] = await Promise.all([
+        prisma.translatedSegment.findFirst({ where: { translationId: translation.id }, orderBy: { sequence: "asc" }, select: previewSelect }),
+        prisma.translatedSegment.findFirst({ where: { translationId: translation.id, reviewStatus: "APPROVED" }, orderBy: { sequence: "asc" }, select: previewSelect }),
+      ]);
+      const candidates = [allSegment, approvedSegment].filter((segment): segment is NonNullable<typeof segment> => segment !== null);
+      const sequences = [...new Set(candidates.map((segment) => segment.sequence))];
+      const sourceSegments = sequences.length ? await prisma.transcriptSegment.findMany({
+        where: { transcriptId: translation.sourceTranscriptId, sequence: { in: sequences } },
+        select: { sequence: true, text: true },
+      }) : [];
+      const sourceBySequence = new Map(sourceSegments.map((segment) => [segment.sequence, segment.text]));
+      const toPreview = (segment: typeof allSegment): PreviewSegment | null => segment ? {
+        ...segment,
+        sourceText: sourceBySequence.get(segment.sequence) ?? null,
+      } : null;
+      previews = { all: toPreview(allSegment), approved: toPreview(approvedSegment) };
+    } catch {
+      // A preview is optional; the download actions continue to use the export API.
+    }
+  }
+
+  const reviewPath = movie ? `${projectPath}/translation?movieId=${encodeURIComponent(movie.id)}&view=review#review` : `${projectPath}/translation?view=review#review`;
+  const movieProps = movie ? {
+    id: movie.id,
+    title: movie.title,
+    filename: movie.filename,
+    durationSeconds: movie.durationSeconds,
+    sourceLanguage: movie.sourceLanguage,
+    status: movie.status,
+    createdAt: movie.createdAt.toISOString(),
+  } : null;
+  const translationProps = translation ? {
+    provider: translation.provider,
+    model: translation.model,
+    revision: translation.revision,
+    updatedAt: translation.updatedAt.toISOString(),
+    sourceLanguage: translation.sourceLanguage,
+    targetLanguage: translation.targetLanguage,
+  } : null;
+
+  return <main className="min-w-0 flex-1 p-4 sm:p-5 lg:p-6">
+    <div className="mx-auto max-w-[1600px]">
+      <SubtitleExportControls
+        projectName={project.name}
+        projectHref={projectPath}
+        reviewHref={reviewPath}
+        movie={movieProps}
+        translation={translationProps}
+        summary={summary}
+        filenames={{ srt: subtitleFilename(movie?.filename ?? null, movie?.title ?? project.name, "srt"), ass: subtitleFilename(movie?.filename ?? null, movie?.title ?? project.name, "ass") }}
+        previews={previews}
+      />
     </div>
   </main>;
 }
+
+type PreviewSegment = {
+  sequence: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+  reviewStatus: string;
+  sourceText: string | null;
+};
