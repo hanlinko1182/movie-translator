@@ -54,6 +54,10 @@ Planned backend technologies include PostgreSQL, Prisma, Redis, BullMQ, FFmpeg, 
 25. Before finishing a coding task, run `pnpm lint`.
 26. Report files created, files modified, commands run, lint result, and any remaining issues.
 
+## UI/UX Design Freeze
+
+The current UI/UX is the approved baseline documented in [docs/UI_UX_BASELINE.md](docs/UI_UX_BASELINE.md). Do not redesign approved layouts or change the theme, navigation, spacing scales, or shared visual patterns without explicit user approval. Reuse existing shared styles/components and integrate authorized new features into existing layouts. Targeted bug fixes, accessibility fixes, and security improvements are allowed; preserve real-data behavior, honest unavailable states, and existing functionality. Never introduce fabricated UI capabilities.
+
 ## Frontend Roadmap
 
 - Dashboard
