@@ -108,6 +108,7 @@ export function buildDashboard(projects: DashboardProject[], counts: ReviewCount
     needsReview: cards.filter((card) => card.pending > 0).length,
     fullyApproved: cards.filter((card) => card.fullyApproved).length,
     savedRecaps: cards.filter((card) => card.movie?.recap).length,
+    projects: cards,
     recent: cards.slice(0, 6),
     attention: cards.flatMap((card) => card.attention.map((item) => ({ ...item, project: card.project.name, key: `${card.project.id}-${item.message}` }))),
     activities: cards.flatMap((card) => card.activities.map((item) => ({ ...item, project: card.project.name, key: `${card.project.id}-${item.label}` })))
