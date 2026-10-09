@@ -33,7 +33,7 @@ export default async function Home() {
         <h2 className="mt-4 font-semibold">Dashboard is unavailable</h2>
         <p className="mt-2 text-sm text-zinc-400">We couldn’t load saved projects. Refresh the page to try again.</p>
         <Link href="/projects" className={`${linkClass} mt-5`}>View projects<ArrowUpRight size={14} aria-hidden="true" /></Link>
-      </section> : !dashboard.totalProjects ? <section className={`${cardClass} flex flex-col items-center p-8 text-center sm:p-16`}>
+      </section> : !dashboard.totalProjects ? <section className={`${cardClass} flex flex-col items-center p-8 text-center sm:p-10`}>
         <Film size={32} className="text-violet-300" aria-hidden="true" />
         <h2 className="mt-5 text-xl font-semibold">Start your first movie localization project.</h2>
         <p className="mt-3 max-w-md text-sm leading-6 text-zinc-400">Upload a source movie, then work through transcription, translation and human review.</p>
@@ -52,14 +52,14 @@ function DashboardContent({ dashboard }: { dashboard: Dashboard }) {
       </div>
       <Link href="/projects/new" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium transition hover:bg-white/[0.08] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300"><Upload size={16} aria-hidden="true" />Upload Movie</Link>
     </section>
-    <section aria-label="Saved workflow summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section aria-label="Saved workflow summary" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       {[
         { label: "Total Projects", value: dashboard.totalProjects, detail: "All saved projects", icon: FolderKanban, color: "text-violet-300" },
         { label: "Needs Review", value: dashboard.needsReview, detail: "Projects with unapproved segments", icon: CircleAlert, color: "text-amber-300" },
         { label: "Fully Approved", value: dashboard.fullyApproved, detail: "All saved segments human approved", icon: ShieldCheck, color: "text-emerald-300" },
         { label: "Saved Recaps", value: dashboard.savedRecaps, detail: "Saved scripts · freshness checked in workspace", icon: Sparkles, color: "text-indigo-300" },
-      ].map(({ label, value, detail, icon: Icon, color }) => <div key={label} className={`${cardClass} p-5`}>
-        <div className="flex items-center justify-between gap-2"><h2 className="text-xs font-medium text-zinc-400">{label}</h2><Icon size={17} className={color} aria-hidden="true" /></div>
+      ].map(({ label, value, detail, icon: Icon, color }) => <div key={label} className={`${cardClass} p-4 sm:p-5`}>
+        <div className="flex items-center justify-between gap-2"><h2 className="text-xs font-medium text-zinc-400">{label}</h2><Icon size={17} className={`shrink-0 ${color}`} aria-hidden="true" /></div>
         <p className="mt-3 text-3xl font-semibold tabular-nums tracking-tight">{value}</p><p className="mt-2 text-[11px] leading-5 text-zinc-500">{detail}</p>
       </div>)}
     </section>

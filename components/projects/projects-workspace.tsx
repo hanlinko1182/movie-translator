@@ -35,7 +35,7 @@ export default function ProjectsWorkspace({ projects }: { projects: ProjectWorks
   const filtered = !!(search || status || stage);
   function clearFilters() { setSearch(""); setStatus(""); setStage(""); }
 
-  if (!projects.length) return <section className={`${cardClass} flex flex-col items-center p-8 text-center sm:p-16`}>
+  if (!projects.length) return <section className={`${cardClass} flex flex-col items-center p-8 text-center sm:p-10`}>
     <FolderKanban size={32} className="text-violet-300" aria-hidden="true" />
     <h2 className="mt-5 text-xl font-semibold">Start your first movie localization project.</h2>
     <p className="mt-3 max-w-md text-sm leading-6 text-zinc-400">Upload a source movie to begin transcription, translation and human review.</p>

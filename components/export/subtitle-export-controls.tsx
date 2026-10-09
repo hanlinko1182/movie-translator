@@ -1,6 +1,6 @@
 "use client";
 
-import { badgeClass, badgeTones, cardClass, focusClass, primaryButtonClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
+import { mediaFallbackClass, badgeClass, badgeTones, cardClass, focusClass, primaryButtonClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useState } from "react";
@@ -123,7 +123,7 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
 
     <div className="grid min-w-0 items-start gap-4 xl:grid-cols-12">
       <section className={`${panelClass} overflow-hidden xl:col-span-5`} aria-labelledby="export-source-heading">
-        <div className="relative flex min-h-[225px] flex-col items-center justify-center overflow-hidden border-b border-white/[0.07] bg-[#0b111a] px-5 py-7 text-center sm:min-h-[270px]">
+        <div className={`${mediaFallbackClass} relative overflow-hidden border-b border-white/[0.07] bg-[#0b111a]`}>
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-950/20 via-transparent to-slate-800/20" />
           <span className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400"><Film size={22} aria-hidden="true" /></span>
           <p className="relative text-sm font-medium text-zinc-200">Preview unavailable</p>

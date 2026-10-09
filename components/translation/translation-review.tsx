@@ -1,6 +1,6 @@
 "use client";
 
-import { controlClass } from "@/components/ui/styles";
+import { controlClass, mediaFallbackClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -227,7 +227,7 @@ export default function TranslationReviewPanel({ initialSnapshot, projectPath, p
     <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
       <div className="min-w-0 space-y-3">
         <section aria-label="Source media" className={`${cardClass} overflow-hidden`}>
-          <div className="flex min-h-48 w-full min-w-0 flex-col sm:aspect-[16/7] items-center justify-center gap-3 bg-[#0b0e14] px-6 text-center"><span className="rounded-xl border border-white/10 bg-white/[0.02] p-4"><Film size={28} className="text-zinc-500" aria-hidden="true" /></span><p className="text-sm text-zinc-300">Preview playback unavailable</p><p className="max-w-sm text-xs leading-5 text-zinc-500">Use the saved dialogue and timestamp strip below to review this movie.</p></div>
+          <div className={`${mediaFallbackClass} w-full bg-[#0b0e14]`}><span className="rounded-xl border border-white/10 bg-white/[0.02] p-4"><Film size={28} className="text-zinc-500" aria-hidden="true" /></span><p className="text-sm text-zinc-300">Preview playback unavailable</p><p className="max-w-sm text-xs leading-5 text-zinc-500">Use the saved dialogue and timestamp strip below to review this movie.</p></div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-3"><div className="min-w-0 flex-1"><h2 className="break-words text-sm font-medium text-zinc-300">{movie.title}</h2><p className="mt-1 break-all text-[11px] text-zinc-500">{movie.filename ?? "No source filename"} · {durationLabel(movie.durationSeconds)}</p></div><Link href={`${projectPath}/subtitles`} className={linkClass}>Source transcript<ArrowRight size={13} aria-hidden="true" /></Link></div>
         </section>
         {!!sources.length && <section aria-label="Transcript timing strip" className={`${cardClass} p-3`}>

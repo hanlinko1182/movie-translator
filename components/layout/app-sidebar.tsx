@@ -81,7 +81,7 @@ function SidebarNavigation() {
         </>
       )}
 
-      <div className="mt-8 border-t border-white/10 pt-5">
+      <div className="mt-6 border-t border-white/10 pt-4">
         <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
           System
         </p>
@@ -104,7 +104,7 @@ function SidebarNavigation() {
         </span>
       </Link>
 
-      <div className="mt-8">{navigation}</div>
+      <div className="mt-6">{navigation}</div>
     </aside>
     <header className="border-b border-white/10 bg-[#0d0d10] px-4 py-3 sm:px-6 lg:hidden">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Clapperboard size={18} aria-hidden="true" />Movie Translator</div>
@@ -124,7 +124,7 @@ function SidebarGroup({
   title: string;
 }) {
   return (
-    <div className="mt-8">
+    <div className="mt-6">
       <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         {title}
       </p>

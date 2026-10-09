@@ -92,8 +92,8 @@ export default function SceneWorkspace({ movieId, initialScenes, canDetect, dura
       </div>
       {error && !watching && <button type="button" onClick={() => { setError(""); setWatching(true); setPollGeneration((current) => current + 1); }} className={`${secondaryButtonClass} mt-3`}>Refresh detection status</button>}
     </section>
-    <dl className="grid gap-3 sm:grid-cols-3">
-      {[{ label: "Persisted intervals", value: String(scenes.length) }, { label: "Movie duration", value: durationSeconds === null ? "Not recorded" : formatTimestamp(durationSeconds * 1000) }, { label: "Detection method", value: scenes.length ? methodLabel : "No results yet" }].map((item) => <div key={item.label} className={`${cardClass} p-4`}><dt className="text-xs text-zinc-500">{item.label}</dt><dd className="mt-2 text-sm font-medium leading-6 text-zinc-200">{item.value}</dd></div>)}
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {[{ label: "Persisted intervals", value: String(scenes.length) }, { label: "Movie duration", value: durationSeconds === null ? "Not recorded" : formatTimestamp(durationSeconds * 1000) }, { label: "Detection method", value: scenes.length ? methodLabel : "No results yet" }].map((item) => <div key={item.label} className={`${cardClass} p-4 last:col-span-2 sm:last:col-span-1`}><dt className="text-xs text-zinc-500">{item.label}</dt><dd className="mt-2 text-sm font-medium leading-6 text-zinc-200">{item.value}</dd></div>)}
     </dl>
     {!scenes.length ? <section className={`${cardClass} p-6 sm:p-8`}>
       <Film size={24} aria-hidden="true" className="text-zinc-500" /><h2 className="mt-4 text-base font-semibold">No scenes have been detected for this movie.</h2>

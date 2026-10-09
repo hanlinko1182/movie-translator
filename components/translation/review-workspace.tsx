@@ -1,6 +1,6 @@
 "use client";
 
-import { controlClass } from "@/components/ui/styles";
+import { controlClass, mediaFallbackClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -140,7 +140,7 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
     {!snapshot ? <section className={`${cardClass} p-5`}><h2 className="text-sm font-semibold">No movie uploaded</h2><p className="mt-2 text-sm text-zinc-400">Transcription is required before review.</p><Link href={`${projectPath}/subtitles`} className={`${linkClass} mt-4`}>Open Transcription<ArrowRight size={13} aria-hidden="true" /></Link></section> : <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
       <div className="min-w-0 space-y-3">
         <section aria-label="Source media" className={`${cardClass} overflow-hidden`}>
-          <div className="flex min-h-48 w-full min-w-0 flex-col sm:aspect-[16/7] items-center justify-center gap-3 bg-[#0b0e14] px-6 text-center"><Film size={28} className="text-zinc-500" aria-hidden="true" /><p className="text-sm text-zinc-300">Preview playback unavailable</p><p className="max-w-sm text-xs leading-5 text-zinc-500">Review saved subtitle dialogue and timestamps below.</p></div>
+          <div className={`${mediaFallbackClass} w-full bg-[#0b0e14]`}><Film size={28} className="text-zinc-500" aria-hidden="true" /><p className="text-sm text-zinc-300">Preview playback unavailable</p><p className="max-w-sm text-xs leading-5 text-zinc-500">Review saved subtitle dialogue and timestamps below.</p></div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-3"><div className="min-w-0"><h2 className="break-words text-sm font-medium text-zinc-300">{snapshot.movie.title}</h2><p className="mt-1 break-all text-[11px] text-zinc-500">{snapshot.movie.filename ?? "No source filename"} · {durationLabel(snapshot.movie.durationSeconds)}</p></div>{translated && <Link href={`${projectPath}/translation${movieQuery}`} className={linkClass}>Open in Translation<Pencil size={12} aria-hidden="true" /></Link>}</div>
         </section>
 

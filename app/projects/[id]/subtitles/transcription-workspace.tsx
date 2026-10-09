@@ -1,6 +1,6 @@
 "use client";
 
-import { primaryButtonClass } from "@/components/ui/styles";
+import { mediaFallbackClass, primaryButtonClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -120,7 +120,7 @@ export default function TranscriptionWorkspace({ initialSnapshot, projectPath }:
 
     <div className="order-2 min-w-0 space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
       <section aria-labelledby="source-heading" className={`${cardClass} overflow-hidden`}>
-        <div className="flex aspect-video max-h-80 w-full flex-col items-center justify-center gap-4 border-b border-white/10 bg-[#0b0b0e] p-6 text-center">
+        <div className={`${mediaFallbackClass} w-full border-b border-white/10 bg-[#0b0b0e]`}>
           <span className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Film size={30} className="text-zinc-500" aria-hidden="true" /></span>
           <p className="text-sm text-zinc-300">Video preview unavailable</p>
           <p className="max-w-sm text-xs leading-5 text-zinc-500">Video preview is not available in the current local media pipeline.</p>

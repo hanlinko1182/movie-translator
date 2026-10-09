@@ -2,8 +2,9 @@
 export const pageClass = "min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8";
 export const contentClass = "mx-auto max-w-7xl space-y-6";
 export const cardClass = "min-w-0 rounded-xl border border-white/10 bg-[#111115]";
+export const mediaFallbackClass = "flex min-h-48 min-w-0 flex-col items-center justify-center gap-3 px-5 py-5 text-center sm:min-h-56";
 export const focusClass = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300";
-const buttonBase = `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`;
+const buttonBase = `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg font-medium transition [&>svg]:shrink-0 disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`;
 export const primaryButtonClass = `${buttonBase} bg-violet-600 px-4 py-2.5 text-sm text-white hover:bg-violet-500`;
 export const secondaryButtonClass = `${buttonBase} border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.07]`;
 export const linkClass = `inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`;
