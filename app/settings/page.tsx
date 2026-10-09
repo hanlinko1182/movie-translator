@@ -1,111 +1,77 @@
 import Link from "next/link";
-import {
-  Bot,
-  ChevronRight,
-  DollarSign,
-  HardDrive,
-  Languages,
-  LockKeyhole,
-  Save,
-  Settings2,
-  Sparkles,
-  Subtitles,
-  Workflow,
-} from "lucide-react";
+import { connection } from "next/server";
+import type { ReactNode } from "react";
+import { ArrowUpRight, Check, CircleAlert, LockKeyhole, ShieldCheck } from "lucide-react";
+import packageInfo from "@/package.json";
+import { ALLOWED_MOVIE_EXTENSIONS, MAX_MOVIE_UPLOAD_LABEL } from "@/lib/movie-upload-policy";
+import { RECAP_LANGUAGE } from "@/lib/recap/types";
+import { readSettingsConfiguration } from "./settings-config";
+import SettingsWorkspace, { RuntimeReadiness } from "./settings-workspace";
 
-const settingsSections = [
-  { id: "general", label: "General", icon: Settings2 },
-  { id: "ai-providers", label: "AI Providers", icon: Bot },
-  { id: "translation", label: "Translation", icon: Languages },
-  { id: "processing", label: "Processing", icon: Workflow },
-  { id: "storage", label: "Storage", icon: HardDrive },
-  { id: "export-defaults", label: "Export Defaults", icon: Subtitles },
-];
+const cardClass = "min-w-0 rounded-xl border border-white/10 bg-[#111115]";
 
-const pipeline = [
-  "Upload",
-  "Audio Extraction",
-  "Transcription",
-  "Scene Analysis",
-  "Character Analysis",
-  "Translation",
-  "Quality Check",
-  "Human Review",
-  "Export",
-];
+export default async function SettingsPage() {
+  await connection();
+  const config = readSettingsConfiguration();
+  const models = [
+    ["Transcription", config.models.transcription, "Speech to Chinese transcript"],
+    ["Translation", config.models.translation, "Normal subtitle translation"],
+    ["Refinement", config.models.refinement, "Explicit, selective AI refinement"],
+    ["Character analysis", config.models.character, "Evidence-based character observations"],
+    ["Recap", config.models.recap, "Scene-grounded recap generation"],
+  ];
 
-export default function SettingsPage() {
-  return (
+  const panels = [
+    { id: "general", label: "General", description: "Application defaults and the starting point for a new project.", content: <>
+      <Card title="Project defaults" description="Defaults used by the New Project form. Language choices belong to each project."><dl><Row label="Default source language" value="Chinese" detail="zh" /><Row label="Default target language" value="Myanmar" detail="my" /><Row label="New project behavior" value="Upload a source movie" detail="Create a project and attach its source media from New Project." /></dl><Link href="/projects/new" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300">New Project<ArrowUpRight size={14} aria-hidden="true" /></Link></Card>
+      <div className="grid gap-4 sm:grid-cols-2"><Card title="Source media" description="Current upload support"><p className="text-sm text-zinc-200">{ALLOWED_MOVIE_EXTENSIONS.map((extension) => extension.slice(1).toUpperCase()).join(" · ")}</p><p className="mt-2 text-xs text-zinc-500">Maximum upload: {MAX_MOVIE_UPLOAD_LABEL}</p></Card><Card title="Appearance" description="Application visual system"><p className="text-sm text-zinc-200">Dark cinematic</p><p className="mt-2 text-xs leading-5 text-zinc-500">The application uses a shared dark theme. No saved theme preference is available.</p></Card></div>
+      <Note>User preferences are not stored by the application. These are current defaults, not personal settings.</Note>
+    </> },
+    { id: "models", label: "AI Models", description: "Current model roles. Configuration is managed by the environment.", content: <>
+      <section className={`${cardClass} p-5`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.providerConfigured ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}><ShieldCheck size={19} aria-hidden="true" /></span><div><h3 className="text-sm font-semibold">OpenRouter</h3><p className="mt-1 text-xs text-zinc-500">Managed by environment</p></div></div><span className={`rounded-md border px-2.5 py-1 text-xs ${config.providerConfigured ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-amber-500/20 bg-amber-500/10 text-amber-300"}`}>{config.providerConfigured ? "Configured" : "Not configured"}</span></div><p className="mt-4 text-xs leading-5 text-zinc-400">{config.providerConfigured ? "Local configuration is valid. This does not verify credentials, model access or provider availability." : "OpenRouter configuration is missing or invalid. AI actions are unavailable until valid configuration is provided."}</p></section>
+      <Card title="Configured models" description="Validated model identifiers only. No provider request is made."><dl>{models.map(([role, model, detail]) => <Row key={role} label={role} value={<span className={`break-all font-mono text-xs ${model === "Not configured" || model === "Invalid configuration" ? "text-amber-300" : "text-zinc-200"}`}>{model}</span>} detail={detail} />)}</dl><p className="mt-4 flex items-center gap-2 text-xs text-zinc-500"><LockKeyhole size={13} aria-hidden="true" />Configured by environment · Read only</p></Card>
+      <Note>AI actions are initiated explicitly in project workspaces. This page does not test models or display credentials.</Note>
+    </> },
+    { id: "translation", label: "Translation", description: "Translation, quality checks and human review follow the current workflow rules.", content: <>
+      <Card title="Translation workflow" description="Current processing configuration"><dl><Row label="Normal translation model" value={<Model>{config.models.translation}</Model>} /><Row label="Refinement model" value={<Model>{config.models.refinement}</Model>} /><Row label="Target language" value="Myanmar" /><Row label="Maximum refinement selection" value="24 segments" detail="Selected rows only. Selecting the entire multi-segment translation is rejected." /></dl></Card>
+      <div className="grid gap-4 sm:grid-cols-2"><Card title="Human edits" description="Authoritative current target text"><p className="text-sm leading-6 text-zinc-300">Manual rows are preserved on translation reruns and protected from automatic refinement. Source changes that would invalidate manual work are rejected.</p></Card><Card title="Translation Memory" description="Project-scoped exact matches"><p className="text-sm leading-6 text-zinc-300">Saved translations are captured for reuse. Human edits create manual memory entries that automatic capture cannot overwrite.</p></Card></div>
+      <Card title="Quality & approval" description="Local checks support human decisions"><ul className="space-y-3 text-sm leading-6 text-zinc-300"><Rule>Local QC checks saved text and applicable glossary rules. A human edit refreshes local QC without a model call.</Rule><Rule>Approval is human-only. Changing approved text marks it Needs review.</Rule><Rule>Refinement is an explicit paid action in the Translation workspace. It never runs automatically after an edit.</Rule></ul></Card>
+    </> },
+    { id: "recap", label: "Recap", description: "Scene-grounded summaries with evidence and clearly stated uncertainty.", content: <>
+      <Card title="Recap workflow" description="Current generation behavior"><dl><Row label="Recap model" value={<Model>{config.models.recap}</Model>} /><Row label="Output language" value={RECAP_LANGUAGE === "my" ? "Myanmar" : RECAP_LANGUAGE} /><Row label="Scene evidence" value="Required" detail="A saved transcript and detected scenes are prerequisites for generation." /><Row label="Character analysis" value="Advisory" detail="Only current, supported character context is used. Missing or stale analysis falls back to a plot-focused recap." /></dl></Card>
+      <Card title="Confidence semantics" description="Evidence strength, not a probability of truth"><dl><Row label="HIGH" value="Explicit textual support" /><Row label="MEDIUM" value="Contextual interpretation" /><Row label="LOW" value="Ambiguous evidence" /></dl><p className="mt-4 text-xs leading-5 text-zinc-500">Uncertain characters and unknown relationships remain low confidence. Recap evidence should be reviewed in context.</p></Card>
+      <Note>Recap generation is an explicit paid action in the Recap workspace. Style, length and creativity controls are not available.</Note>
+    </> },
+    { id: "export", label: "Export", description: "Supported subtitle outputs and review modes for the current saved translation.", content: <>
+      <div className="grid gap-4 sm:grid-cols-2"><Card title="SRT" description="Subtitle file"><p className="text-sm leading-6 text-zinc-300">Timed text subtitles from current saved target text.</p><Capability /></Card><Card title="ASS" description="Styled subtitle file"><p className="text-sm leading-6 text-zinc-300">Styled subtitles using the existing exporter.</p><Capability /></Card></div>
+      <Card title="Export modes" description="Choose a mode when exporting from a project"><dl><Row label="All Current" value="All current translated segments" detail="Includes unreviewed and needs-review rows; not a claim of approval." /><Row label="Approved Only" value="Human-approved segments only" detail="Requires at least one approved subtitle." /></dl><p className="mt-4 text-xs leading-5 text-zinc-500">Exports use saved current text, including human edits, with existing segment timestamps.</p></Card>
+      <Card title="Video outputs" description="Not implemented yet"><dl><Row label="Translated Video" value="Not implemented yet" /><Row label="Recap Video" value="Not implemented yet" /></dl></Card>
+    </> },
+    { id: "system", label: "System", description: "Safe runtime information and on-demand service readiness.", content: <>
+      <Card title="Runtime information" description="Managed by environment · Read only"><dl><Row label="Application version" value={packageInfo.version} /><Row label="Node runtime" value={config.node} /><Row label="Environment" value={config.environment} /><Row label="Storage driver" value={config.storage} detail="Local storage configuration only. Availability is checked separately below." /></dl></Card>
+      <RuntimeReadiness />
+      <Note>Readiness checks cover the web runtime and its dependencies. They do not verify worker liveness or send paid AI requests. Infrastructure addresses and storage paths are never shown.</Note>
+    </> },
+  ];
 
-
-
-
-        <section className="min-w-0 flex-1">
-          <header className="border-b border-white/10 px-5 py-5 sm:px-6 lg:px-10"><div className="mx-auto max-w-[1500px]"><div className="flex items-center gap-2 text-xs text-zinc-500"><Link href="/" className="hover:text-zinc-300">Dashboard</Link><ChevronRight size={13} /><span className="text-zinc-300">Settings</span></div><div className="mt-3 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-1 text-xs text-zinc-500">Application configuration</p><h1 className="text-2xl font-semibold tracking-tight">Settings</h1><p className="mt-1 max-w-2xl text-sm text-zinc-500">Configure AI providers, translation behavior, processing, storage, and export defaults.</p></div><span className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Local Development</span></div></div></header>
-
-          <div className="mx-auto max-w-[1500px] p-4 sm:p-6 lg:p-8">
-            <div className="grid items-start gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
-              <nav aria-label="Settings sections" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.02] p-2 sm:grid-cols-3 lg:sticky lg:top-5 lg:grid-cols-1">{settingsSections.map(({ id, label, icon: Icon }) => <Link key={id} href={`#${id}`} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-200"><Icon size={14} />{label}</Link>)}</nav>
-
-              <div className="min-w-0 space-y-6">
-                <section id="general" className="scroll-mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="general-title"><SectionHeading id="general-title" title="General" subtitle="Application identity and default workspace preferences" icon={<Settings2 size={16} />} /><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><SettingsInput label="Application Name" value="Movie Translator" /><SettingsSelect label="Default Source Language" value="Chinese" options={["Chinese", "Cantonese", "Mandarin"]} /><SettingsSelect label="Default Target Language" value="Myanmar" options={["Myanmar"]} /><SettingsSelect label="Interface Theme" value="Dark" options={["Dark"]} /><SettingsSelect label="Timezone" value="Auto" options={["Auto", "UTC"]} /><SettingsSelect label="Autosave Interval" value="30 seconds" options={["15 seconds", "30 seconds", "1 minute"]} /></div></section>
-
-                <section id="ai-providers" className="scroll-mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="providers-title"><SectionHeading id="providers-title" title="AI Providers" subtitle="Configure the cloud services used by the future processing pipeline" icon={<Bot size={16} />} /><div className="mt-5 grid gap-3 xl:grid-cols-3"><ProviderCard title="Speech-to-Text" provider="OpenAI" purpose="Chinese speech transcription with timestamps." maskedKey="sk-••••••••••••••••" /><ProviderCard title="Translation" provider="DeepSeek" purpose="Chinese → Myanmar contextual translation." maskedKey="••••••••••••••••" /><ProviderCard title="Quality Review" provider="DeepSeek" purpose="Translation quality and consistency review." /></div><div className="mt-4 flex gap-3 rounded-xl border border-amber-500/15 bg-amber-500/[0.025] p-4"><LockKeyhole size={15} className="mt-0.5 shrink-0 text-amber-200/70" /><p className="text-[11px] leading-5 text-zinc-400">API credentials will eventually be stored securely on the server and must never be exposed to browser code. The masked values shown here are placeholders only.</p></div>
-                  <div className="mt-4 rounded-xl border border-white/[0.08] bg-black/10 p-4"><div className="flex items-center gap-2"><Sparkles size={14} className="text-zinc-500" /><h3 className="text-xs font-medium">Provider Strategy</h3></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><StrategyStep label="Speech-to-Text" provider="OpenAI" /><StrategyStep label="Translation" provider="DeepSeek" /><StrategyStep label="Quality Check" provider="DeepSeek" /></div><p className="mt-4 text-[10px] leading-5 text-zinc-600">The application will later use provider abstractions so models/providers can be changed without rewriting the processing pipeline. Provider abstractions are not implemented here.</p></div>
-                </section>
-
-                <section id="translation" className="scroll-mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="translation-title"><SectionHeading id="translation-title" title="Translation" subtitle="Default behavior for Chinese → Myanmar subtitle translation" icon={<Languages size={16} />} /><div className="mt-5 grid gap-4 sm:grid-cols-2"><SettingsSelect label="Translation Style" value="Natural Myanmar" options={["Natural Myanmar", "Formal", "Conversational"]} /><SettingsSelect label="Context Window" value="Previous 3 / Next 2 segments" options={["Previous 3 / Next 2 segments"]} /></div><p className="mt-4 text-[10px] leading-5 text-zinc-500">Translation should consider dialogue context, scene information, character information, glossary rules, and translation memory.</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{["Use Scene Context", "Use Character Context", "Use Glossary", "Use Translation Memory", "Preserve Names", "Prefer Natural Myanmar over Literal Translation"].map((label) => <ToggleSetting key={label} label={label} enabled />)}</div><div className="mt-6 border-t border-white/[0.07] pt-5"><h3 className="text-xs font-medium text-zinc-300">Quality Settings</h3><div className="mt-3 grid gap-2 sm:grid-cols-2">{["Auto Quality Check", "Flag Glossary Conflicts", "Flag Translation Memory Conflicts", "Flag Timing Issues", "Human Approval Required Before Export"].map((label) => <ToggleSetting key={label} label={label} enabled />)}<label className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.07] bg-black/10 px-3 py-2.5"><span className="text-[10px] text-zinc-400">Flag Low Confidence Below</span><select defaultValue="80%" className="rounded-md border border-white/10 bg-[#111114] px-2 py-1.5 text-[10px] text-zinc-300"><option>80%</option><option>70%</option><option>90%</option></select></label></div></div></section>
-
-                <section id="processing" className="scroll-mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="processing-title"><SectionHeading id="processing-title" title="Processing" subtitle="Future worker and media preparation defaults" icon={<Workflow size={16} />} /><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><SettingsSelect label="Movie Chunk Length" value="10 minutes" options={["5 minutes", "10 minutes", "15 minutes"]} /><SettingsSelect label="Concurrent Jobs" value="2" options={["1", "2", "4"]} /><SettingsSelect label="Retry Failed Jobs" value="3 attempts" options={["1 attempt", "3 attempts", "5 attempts"]} /><SettingsSelect label="Audio Format" value="WAV" options={["WAV"]} /><SettingsSelect label="Audio Sample Rate" value="16 kHz" options={["16 kHz"]} /><div className="rounded-lg border border-white/[0.07] bg-black/10 px-3 py-2.5"><p className="text-[10px] text-zinc-500">Processing Mode</p><p className="mt-1 text-xs text-zinc-300">Cloud AI</p></div></div><div className="mt-5 rounded-xl border border-white/[0.07] bg-black/10 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-medium">Processing Pipeline</h3><span className="text-[9px] text-zinc-600">Cloud processing</span></div><ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{pipeline.map((step, index) => <li key={step} className="flex items-center gap-2 text-[10px] text-zinc-400"><span className="flex h-5 w-5 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-[9px] text-zinc-500">{index + 1}</span>{step}</li>)}</ol></div></section>
-
-                <section id="storage" className="scroll-mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="storage-title"><SectionHeading id="storage-title" title="Storage" subtitle="Development storage and future production destination" icon={<HardDrive size={16} />} /><div className="mt-5 grid gap-4 xl:grid-cols-2"><div className="rounded-xl border border-white/[0.08] bg-black/10 p-4"><div className="flex items-center justify-between"><h3 className="text-xs font-medium">Current Development Storage</h3><span className="rounded-md border border-amber-500/15 px-2 py-1 text-[9px] text-amber-200/70">Development Only</span></div><div className="mt-4 grid grid-cols-2 gap-4"><DetailValue label="Storage" value="Local Storage" /><DetailValue label="Path" value="./storage" /></div></div><div className="rounded-xl border border-white/[0.08] bg-black/10 p-4"><div className="flex items-center justify-between"><h3 className="text-xs font-medium">Future Production Storage</h3><span className="rounded-md border border-white/10 px-2 py-1 text-[9px] text-zinc-500">S3-compatible</span></div><div className="mt-3 grid gap-3 sm:grid-cols-2">{["Endpoint", "Bucket", "Region", "Access Key", "Secret Key"].map((label) => <label key={label} className="block"><span className="mb-1 block text-[9px] text-zinc-600">{label}</span><input type="password" placeholder={label.includes("Key") ? "••••••••••••••••" : `Enter ${label.toLowerCase()}`} className="w-full rounded-md border border-white/[0.07] bg-black/20 px-2.5 py-2 text-[10px] text-zinc-400 outline-none placeholder:text-zinc-700" /></label>)}</div></div></div><div className="mt-4 rounded-xl border border-white/[0.07] bg-black/10 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-medium">Storage Usage</h3><span className="text-xs text-zinc-300">38.4 GB</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3"><StorageItem label="Movies" value="31.7 GB" /><StorageItem label="Extracted Audio" value="5.2 GB" /><StorageItem label="Generated Files" value="1.5 GB" /></div></div></section>
-
-                <section id="export-defaults" className="scroll-mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="export-defaults-title"><SectionHeading id="export-defaults-title" title="Export Defaults" subtitle="Default subtitle rendering and delivery preferences" icon={<Subtitles size={16} />} /><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><SettingsSelect label="Default Subtitle Format" value="SRT" options={["SRT", "ASS"]} /><SettingsSelect label="Encoding" value="UTF-8" options={["UTF-8"]} /><SettingsSelect label="Maximum Lines" value="2" options={["1", "2", "3"]} /><SettingsSelect label="Line Length" value="42 characters" options={["42 characters"]} /><SettingsSelect label="Minimum Duration" value="1.0 seconds" options={["1.0 seconds"]} /><SettingsSelect label="Default ASS Font" value="Noto Sans Myanmar" options={["Noto Sans Myanmar"]} /><SettingsSelect label="Subtitle Position" value="Bottom Center" options={["Bottom Center", "Top Center"]} /></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><ToggleSetting label="Include Speaker Names" /><ToggleSetting label="Export Only Approved" enabled /></div><p className="mt-3 text-[10px] text-zinc-600">Font selection is a future setting only; no fonts are installed or bundled.</p></section>
-
-                <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6" aria-labelledby="cost-title"><SectionHeading id="cost-title" title="AI Usage & Cost Controls" subtitle="Mock usage estimates for the current month" icon={<DollarSign size={16} />} /><div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]"><div className="grid grid-cols-2 gap-3"><SettingsInput label="Monthly Budget" value="$25" /><SettingsInput label="Warning Threshold" value="80%" /></div><div className="rounded-xl border border-white/[0.07] bg-black/10 p-4"><div className="flex items-center justify-between"><p className="text-[10px] text-zinc-500">This Month</p><p className="text-lg font-semibold text-zinc-200">$3.42</p></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full w-[14%] rounded-full bg-zinc-400" /></div><div className="mt-4 grid grid-cols-3 gap-3"><CostMetric label="Speech-to-Text" value="$1.18" /><CostMetric label="Translation" value="$1.76" /><CostMetric label="Quality Review" value="$0.48" /></div></div></div><div className="mt-4 flex flex-wrap gap-2">{["Speech-to-Text usage", "Translation input tokens", "Translation output tokens", "Quality review usage"].map((item) => <span key={item} className="rounded-md border border-white/[0.07] px-2.5 py-1.5 text-[9px] text-zinc-500">{item}</span>)}</div></section>
-
-                <section className="sticky bottom-3 z-10 rounded-2xl border border-white/10 bg-[#111114]/95 p-4 shadow-2xl backdrop-blur-sm" aria-label="Save settings"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><p className="text-[10px] text-zinc-500">Settings are currently UI-only and are not persisted.</p><div className="flex gap-2"><button type="button" className="rounded-lg border border-white/10 px-3 py-2 text-[10px] text-zinc-400 hover:bg-white/[0.05]">Reset Changes</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-[10px] font-medium text-black hover:bg-zinc-200"><Save size={13} /> Save Settings</button></div></div></section>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-  );
+  return <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-7xl space-y-7"><header className="flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">Application</p><h1 className="text-2xl font-semibold tracking-tight">Settings</h1><p className="mt-2 text-sm leading-6 text-zinc-400">Configure Movie Translator preferences and processing defaults.</p></div><span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-[#111115] px-3 py-2 text-xs text-zinc-400"><LockKeyhole size={13} aria-hidden="true" />Environment managed</span></header><SettingsWorkspace panels={panels} /></div></main>;
 }
 
-function SectionHeading({ id, title, subtitle, icon }: { id: string; title: string; subtitle: string; icon: React.ReactNode }) {
-  return <div className="flex items-start gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-400">{icon}</span><div><h2 id={id} className="text-sm font-semibold">{title}</h2><p className="mt-1 text-[10px] leading-5 text-zinc-500">{subtitle}</p></div></div>;
+function Card({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return <section className={`${cardClass} p-5`}><h3 className="text-sm font-semibold text-zinc-100">{title}</h3><p className="mb-5 mt-1 text-xs leading-5 text-zinc-500">{description}</p>{children}</section>;
 }
-
-function SettingsInput({ label, value }: { label: string; value: string }) {
-  return <label className="block"><span className="mb-1.5 block text-[10px] font-medium text-zinc-500">{label}</span><input readOnly value={value} className="w-full rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-xs text-zinc-300 outline-none" /></label>;
+function Row({ label, value, detail }: { label: string; value: ReactNode; detail?: string }) {
+  return <div className="grid min-w-0 gap-2 border-b border-white/5 py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] sm:gap-6"><dt className="text-sm text-zinc-400">{label}</dt><dd className="min-w-0 break-words text-sm text-zinc-200">{value}{detail && <p className="mt-1 text-xs leading-5 text-zinc-500">{detail}</p>}</dd></div>;
 }
-
-function SettingsSelect({ label, value, options }: { label: string; value: string; options: string[] }) {
-  return <label className="block"><span className="mb-1.5 block text-[10px] font-medium text-zinc-500">{label}</span><select defaultValue={value} className="w-full rounded-lg border border-white/[0.08] bg-[#111114] px-3 py-2.5 text-xs text-zinc-300 outline-none focus:border-white/20">{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+function Model({ children }: { children: string }) {
+  return <span className="break-all font-mono text-xs">{children}</span>;
 }
-
-function ProviderCard({ title, provider, purpose, maskedKey }: { title: string; provider: string; purpose: string; maskedKey?: string }) {
-  return <article className="rounded-xl border border-white/[0.08] bg-black/10 p-4"><div className="flex items-start justify-between gap-2"><div><h3 className="text-xs font-medium">{title}</h3><p className="mt-1 text-[10px] text-zinc-500">{provider}</p></div><span className="rounded-md border border-white/10 px-2 py-1 text-[9px] text-zinc-500">Not Configured</span></div><p className="mt-3 min-h-8 text-[10px] leading-5 text-zinc-500">{purpose}</p>{maskedKey && <label className="mt-3 block"><span className="mb-1 block text-[9px] text-zinc-600">API Key · placeholder</span><input type="password" placeholder={maskedKey} className="w-full rounded-md border border-white/[0.07] bg-black/20 px-2.5 py-2 text-[10px] text-zinc-400 outline-none placeholder:text-zinc-600" /></label>}<label className="mt-3 block"><span className="mb-1 block text-[9px] text-zinc-600">Model</span><select defaultValue="" className="w-full rounded-md border border-white/[0.07] bg-[#111114] px-2.5 py-2 text-[10px] text-zinc-500"><option value="" disabled>Select model</option><option>Model selection unavailable</option></select></label><button type="button" className="mt-3 w-full rounded-lg border border-white/10 px-3 py-2 text-[10px] text-zinc-400 hover:bg-white/[0.04]">Test Connection</button></article>;
+function Note({ children }: { children: ReactNode }) {
+  return <div className="flex min-w-0 gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-4"><CircleAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-zinc-500" /><p className="text-xs leading-6 text-zinc-400">{children}</p></div>;
 }
-
-function StrategyStep({ label, provider }: { label: string; provider: string }) {
-  return <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-white/[0.015] px-3 py-2.5"><span className="text-[10px] text-zinc-500">{label}</span><><span className="text-zinc-700">→</span><span className="text-[10px] text-zinc-300">{provider}</span></></div>;
+function Rule({ children }: { children: ReactNode }) {
+  return <li className="flex gap-2.5"><Check size={15} aria-hidden="true" className="mt-1 shrink-0 text-violet-400" /><span>{children}</span></li>;
 }
-
-function ToggleSetting({ label, enabled = false }: { label: string; enabled?: boolean }) {
-  return <label className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.07] bg-black/10 px-3 py-2.5"><span className="text-[10px] text-zinc-400">{label}</span><input type="checkbox" defaultChecked={enabled} className="h-3.5 w-3.5 accent-zinc-200" /></label>;
-}
-
-function DetailValue({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-[9px] text-zinc-600">{label}</p><p className="mt-1 text-xs text-zinc-300">{value}</p></div>;
-}
-
-function StorageItem({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] p-3"><p className="text-[9px] text-zinc-600">{label}</p><p className="mt-1 text-xs text-zinc-300">{value}</p></div>;
-}
-
-function CostMetric({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-[9px] leading-4 text-zinc-600">{label}</p><p className="mt-1 text-xs text-zinc-300">{value}</p></div>;
+function Capability() {
+  return <p className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300"><Check size={12} aria-hidden="true" />Supported</p>;
 }
