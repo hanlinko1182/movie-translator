@@ -1,4 +1,5 @@
 "use client";
+import { withMovieSelection } from "@/lib/source-video/selection";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -33,7 +34,9 @@ export default function AppSidebar() {
 
 function SidebarNavigation() {
   const pathname = usePathname();
-  const reviewView = useSearchParams().get("view") === "review";
+  const query = useSearchParams();
+  const reviewView = query.get("view") === "review";
+  const movieId = query.get("movieId");
   const segments = pathname.split("/").filter(Boolean);
   const projectId =
     segments[0] === "projects" && segments.length >= 2 && segments[1] !== "new"
@@ -62,7 +65,7 @@ function SidebarNavigation() {
             {workspaceLinks.map((item) => (
               <SidebarLink
                 key={item.label}
-                href={`${projectBase}${item.suffix}`}
+                href={withMovieSelection(`${projectBase}${item.suffix}`, movieId)}
                 label={item.label}
                 active={item.label === "Review" ? pathname === `${projectBase}/translation` && reviewView : pathname === `${projectBase}${item.suffix}` && (item.label !== "Translation" || !reviewView)}
               />
@@ -72,7 +75,7 @@ function SidebarNavigation() {
             {advancedLinks.map((item) => (
               <SidebarLink
                 key={item.segment}
-                href={`${projectBase}/${item.segment}`}
+                href={item.segment === "scenes" ? withMovieSelection(`${projectBase}/${item.segment}`, movieId) : `${projectBase}/${item.segment}`}
                 label={item.label}
                 active={pathname === `${projectBase}/${item.segment}`}
               />

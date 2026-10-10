@@ -1,11 +1,15 @@
 "use client";
+import { withMovieSelection } from "@/lib/source-video/selection";
 
-import { controlClass, mediaFallbackClass } from "@/components/ui/styles";
+import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
+
+
+import { controlClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Film, Flag, Pencil, Search } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Flag, Pencil, Search } from "lucide-react";
 import type { ReviewRow, ReviewStatus, TranslationReview } from "@/lib/translation-qc/types";
 import { formatTimestamp } from "@/lib/format-timestamp";
 import { cardClass, linkClass } from "@/app/projects/[id]/overview-components";
@@ -16,8 +20,9 @@ import { activeIssues, buttonClass, primaryClass, provenance, requestError, SELE
 type Filter = "ALL" | "NEEDS_REVIEW" | "UNREVIEWED" | "APPROVED" | "QC" | "MANUAL" | "REFINED";
 const filterItems: [Filter, string][] = [["ALL", "All"], ["NEEDS_REVIEW", "Needs Review"], ["UNREVIEWED", "Unreviewed"], ["APPROVED", "Approved"], ["QC", "QC Issues"], ["MANUAL", "Manual Edits"], ["REFINED", "Refined"]];
 
-export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTargetMovie }: { initialSnapshot: WorkspaceSnapshot | null; projectPath: string; exportTargetMovie: { id: string; title: string } | null }) {
+export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTargetMovie, projectId }: { initialSnapshot: WorkspaceSnapshot | null; projectPath: string; projectId: string; exportTargetMovie: { id: string; title: string } | null }) {
   const router = useRouter();
+  const player = useRef<SourceVideoHandle>(null);
   const initialRows = initialSnapshot?.review?.rows ?? [];
   const initialFilter: Filter = initialRows.some((row) => row.reviewStatus === "NEEDS_REVIEW") ? "NEEDS_REVIEW" : initialRows.some((row) => row.reviewStatus === "UNREVIEWED") ? "UNREVIEWED" : "ALL";
   const [review, setReview] = useState<TranslationReview | null>(initialSnapshot?.review ?? null);
@@ -44,7 +49,7 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
   const movie = snapshot?.movie;
   const exportMatchesMovie = !!movie && exportTargetMovie?.id === movie.id;
   const movieQuery = movie ? `?movieId=${encodeURIComponent(movie.id)}` : "";
-  const exportHref = `${projectPath}/export`;
+  const exportHref = `${projectPath}/export${movieQuery}`;
   const nextReviewRow = rows.find((row) => row.reviewStatus === "NEEDS_REVIEW") ?? rows.find((row) => row.reviewStatus === "UNREVIEWED") ?? null;
   const nextNeedsReview = rows.find((row) => row.reviewStatus === "NEEDS_REVIEW" && row.sequence > (activeSequence ?? -1)) ?? rows.find((row) => row.reviewStatus === "NEEDS_REVIEW") ?? null;
 
@@ -57,6 +62,8 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
 
   function selectRow(sequence: number) {
     setActiveSequence(sequence);
+    const segment = snapshot?.source?.rows.find((row) => row.sequence === sequence);
+    if (segment) player.current?.seekTo(segment.startMs);
     if (window.matchMedia("(max-width: 1279px)").matches) document.getElementById("review-inspector")?.scrollIntoView({ behavior: "smooth", block: "start" });
     document.getElementById("review-inspector-heading")?.focus({ preventScroll: true });
   }
@@ -114,7 +121,7 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
   }
 
   const primary = !snapshot || !hasTranscript || !translated
-    ? { label: !hasTranscript ? "Open Transcription" : "Open Translation", href: !hasTranscript ? `${projectPath}/subtitles` : `${projectPath}/translation${movieQuery}` as string }
+    ? { label: !hasTranscript ? "Open Transcription" : "Open Translation", href: !hasTranscript ? withMovieSelection(`${projectPath}/subtitles`, movie?.id) : `${projectPath}/translation${movieQuery}` as string }
     : snapshot.reviewUnavailable || !review
       ? { label: "Refresh Review", href: null }
       : !rows.length
@@ -137,10 +144,10 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
       </div>
     </header>
 
-    {!snapshot ? <section className={`${cardClass} p-5`}><h2 className="text-sm font-semibold">No movie uploaded</h2><p className="mt-2 text-sm text-zinc-400">Transcription is required before review.</p><Link href={`${projectPath}/subtitles`} className={`${linkClass} mt-4`}>Open Transcription<ArrowRight size={13} aria-hidden="true" /></Link></section> : <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
+    {!snapshot ? <section className={`${cardClass} p-5`}><h2 className="text-sm font-semibold">No movie uploaded</h2><p className="mt-2 text-sm text-zinc-400">Transcription is required before review.</p><Link href={withMovieSelection(`${projectPath}/subtitles`, movie?.id)} className={`${linkClass} mt-4`}>Open Transcription<ArrowRight size={13} aria-hidden="true" /></Link></section> : <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
       <div className="min-w-0 space-y-3">
         <section aria-label="Source media" className={`${cardClass} overflow-hidden`}>
-          <div className={`${mediaFallbackClass} w-full bg-[#0b0e14]`}><Film size={28} className="text-zinc-500" aria-hidden="true" /><p className="text-sm text-zinc-300">Preview playback unavailable</p><p className="max-w-sm text-xs leading-5 text-zinc-500">Review saved subtitle dialogue and timestamps below.</p></div>
+          <SourceVideoPreview ref={player} projectId={projectId} movie={snapshot.movie} timing={activeRow} />
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-3"><div className="min-w-0"><h2 className="break-words text-sm font-medium text-zinc-300">{snapshot.movie.title}</h2><p className="mt-1 break-all text-[11px] text-zinc-500">{snapshot.movie.filename ?? "No source filename"} · {durationLabel(snapshot.movie.durationSeconds)}</p></div>{translated && <Link href={`${projectPath}/translation${movieQuery}`} className={linkClass}>Open in Translation<Pencil size={12} aria-hidden="true" /></Link>}</div>
         </section>
 
@@ -165,7 +172,7 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
               const issues = activeIssues(row);
               return <tr key={row.id} aria-selected={activeSequence === row.sequence} className={`grid min-w-0 grid-cols-2 gap-2 border-t border-white/[0.06] p-3 text-xs sm:table-row sm:p-0 ${activeSequence === row.sequence ? "bg-violet-500/10 outline -outline-offset-1 outline-violet-500" : "hover:bg-white/[0.02]"}`}>
                 <td className="flex items-center gap-2 sm:table-cell sm:px-2 sm:py-3 sm:align-top"><span className="tabular-nums text-zinc-400">{row.sequence + 1}</span><input type="checkbox" aria-label={`Select segment ${row.sequence + 1}`} checked={selected.includes(row.sequence)} disabled={busy || (!selected.includes(row.sequence) && selected.length >= SELECTION_LIMIT)} onChange={(event) => toggle(row.sequence, event.target.checked)} className="h-3.5 w-3.5 accent-violet-500 focus-visible:outline-2 focus-visible:outline-violet-300" /></td>
-                <td className="text-right font-mono text-[11px] leading-5 text-zinc-400 sm:px-2 sm:py-3 sm:text-left sm:align-top"><span>{formatTimestamp(row.startMs)}</span><span className="sm:block"> → {formatTimestamp(row.endMs)}</span></td>
+                <td className="text-right font-mono text-[11px] leading-5 text-zinc-400 sm:px-2 sm:py-3 sm:text-left sm:align-top"><button type="button" className="rounded text-left leading-5 hover:text-violet-300 focus-visible:outline-2 focus-visible:outline-violet-300" aria-label={`Seek to segment ${row.sequence + 1}`} onClick={() => selectRow(row.sequence)}><span>{formatTimestamp(row.startMs)}</span><span className="sm:block"> → {formatTimestamp(row.endMs)}</span></button></td>
                 <td className="col-span-2 min-w-0 sm:px-2 sm:py-3 sm:align-top"><span className="mb-1 block text-[11px] text-zinc-500 sm:hidden">Chinese source</span><p lang={review?.sourceLanguage} className="line-clamp-2 whitespace-pre-wrap break-words leading-6 text-zinc-300 [overflow-wrap:anywhere]">{row.sourceText}</p></td>
                 <td className="col-span-2 min-w-0 sm:px-2 sm:py-3 sm:align-top"><span className="mb-1 block text-[11px] text-zinc-500 sm:hidden">Myanmar translation</span><p lang="my" className="line-clamp-2 whitespace-pre-wrap break-words leading-7 text-zinc-200 [overflow-wrap:anywhere]">{row.text}</p><p className={`mt-1 text-[11px] ${row.origin === "REFINED" ? "text-violet-300" : "text-zinc-500"}`}>{provenance(row)}</p></td>
                 <td className="min-w-0 sm:px-2 sm:py-3 sm:align-top"><span className="mb-1 block text-[11px] text-zinc-500 sm:hidden">Review status</span><ReviewBadge status={row.reviewStatus} /></td>
@@ -174,7 +181,7 @@ export default function ReviewWorkspace({ initialSnapshot, projectPath, exportTa
               </tr>;
             })}</tbody>
           </table>}
-        </section> : <section className={`${cardClass} p-5 sm:p-6`}><h2 className="text-sm font-semibold">{!hasTranscript ? "Transcription is required before review." : "Generate the Myanmar translation before review."}</h2><p className="mt-2 text-sm leading-6 text-zinc-400">{!hasTranscript ? "Prepare timed Chinese dialogue before you review translated subtitle segments." : "Review uses persisted translation and human review states. It does not start translation or AI jobs."}</p><Link href={!hasTranscript ? `${projectPath}/subtitles` : `${projectPath}/translation${movieQuery}`} className={`${linkClass} mt-4`}>{!hasTranscript ? "Open Transcription" : "Open Translation"}<ArrowRight size={13} aria-hidden="true" /></Link></section>}
+        </section> : <section className={`${cardClass} p-5 sm:p-6`}><h2 className="text-sm font-semibold">{!hasTranscript ? "Transcription is required before review." : "Generate the Myanmar translation before review."}</h2><p className="mt-2 text-sm leading-6 text-zinc-400">{!hasTranscript ? "Prepare timed Chinese dialogue before you review translated subtitle segments." : "Review uses persisted translation and human review states. It does not start translation or AI jobs."}</p><Link href={!hasTranscript ? withMovieSelection(`${projectPath}/subtitles`, movie?.id) : `${projectPath}/translation${movieQuery}`} className={`${linkClass} mt-4`}>{!hasTranscript ? "Open Transcription" : "Open Translation"}<ArrowRight size={13} aria-hidden="true" /></Link></section>}
       </div>
 
       <aside className="min-w-0 space-y-3">

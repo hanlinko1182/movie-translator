@@ -1,3 +1,4 @@
+import { withMovieSelection } from "@/lib/source-video/selection";
 import type { Prisma } from "@/generated/prisma/client";
 import { normalizeExportSegments } from "@/lib/subtitle-export/segments";
 
@@ -63,7 +64,7 @@ function jobStage(state: JobState, fallback: StageState): StageState {
 export function buildOverview(project: OverviewProject, facts: OverviewFacts) {
   const movie = project.movies[0];
   const base = `/projects/${encodeURIComponent(project.slug)}`;
-  const links = { transcript: `${base}/subtitles`, translation: `${base}/translation`, review: `${base}/translation?view=review#review`, recap: `${base}/recap`, export: `${base}/export`, scenes: `${base}/scenes`, characters: `${base}/characters` };
+  const links = { transcript: withMovieSelection(`${base}/subtitles`, movie?.id), translation: withMovieSelection(`${base}/translation`, movie?.id), review: withMovieSelection(`${base}/translation?view=review#review`, movie?.id), recap: withMovieSelection(`${base}/recap`, movie?.id), export: withMovieSelection(`${base}/export`, movie?.id), scenes: withMovieSelection(`${base}/scenes`, movie?.id), characters: `${base}/characters` };
   const transcriptCount = movie?.transcript?._count.segments ?? 0;
   const translation = movie?.translation;
   const rows = translation?.segments ?? [];

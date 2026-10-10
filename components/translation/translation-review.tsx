@@ -1,11 +1,14 @@
 "use client";
 
-import { controlClass, mediaFallbackClass } from "@/components/ui/styles";
+import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
+
+
+import { controlClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ChevronLeft, ChevronRight, Film, Languages, LoaderCircle, Pencil, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Languages, LoaderCircle, Pencil, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { cardClass, linkClass, StatusBadge } from "@/app/projects/[id]/overview-components";
 import { durationLabel } from "@/app/projects/[id]/overview-model";
 import { formatTimestamp } from "@/lib/format-timestamp";
@@ -27,8 +30,9 @@ function jobStatus(value: { state?: unknown; attemptsMade?: unknown } | null): T
   return { state: value.state, attemptsMade: typeof value.attemptsMade === "number" ? value.attemptsMade : null };
 }
 
-export default function TranslationReviewPanel({ initialSnapshot, projectPath, projectSlug }: { initialSnapshot: WorkspaceSnapshot; projectPath: string; projectSlug: string }) {
+export default function TranslationReviewPanel({ initialSnapshot, projectPath, projectSlug, projectId }: { initialSnapshot: WorkspaceSnapshot; projectPath: string; projectSlug: string; projectId: string }) {
   const router = useRouter();
+  const player = useRef<SourceVideoHandle>(null);
   const [previousSnapshot, setPreviousSnapshot] = useState(initialSnapshot);
   const [review, setReview] = useState(initialSnapshot.review);
   const [job, setJob] = useState(initialSnapshot.job);
@@ -178,6 +182,9 @@ export default function TranslationReviewPanel({ initialSnapshot, projectPath, p
   }
   function selectEditor(sequence: number) {
     setActiveSequence(sequence);
+    const segment = sources.find((row) => row.sequence === sequence);
+    if (segment) player.current?.seekTo(segment.startMs);
+    if (!rowBySequence.has(sequence)) return;
     if (window.matchMedia("(max-width: 1279px)").matches) document.getElementById("segment-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
     document.getElementById("editor-heading")?.focus({ preventScroll: true });
   }
@@ -215,7 +222,7 @@ export default function TranslationReviewPanel({ initialSnapshot, projectPath, p
           <p className="mt-2 text-[11px] text-zinc-500">{review || !initialSnapshot.translation ? `${view.approved} approved` : "Approval unavailable"} · {view.issues === null ? "QC unavailable" : `${view.issues} unresolved QC`}</p>
         </section>
         {review && <button type="button" className={buttonClass} disabled={busy || dirty || !rows.some((row) => row.origin !== "MANUAL")} onClick={() => prepareRefinement()}><Sparkles size={15} aria-hidden="true" />Refine with AI</button>}
-        {view.action === "transcript" ? <Link href={`${projectPath}/subtitles`} className={primaryClass}>{view.label}<ArrowRight size={16} aria-hidden="true" /></Link> : <button type="button" className={primaryClass} disabled={mutating || (view.action === "start" && !translationAcknowledged)} onClick={view.action === "start" ? () => void startTranslation() : view.action === "review" ? continueReview : () => void refresh()}>{mutating && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}{view.label}<ArrowRight size={16} aria-hidden="true" /></button>}
+        {view.action === "transcript" ? <Link href={`${projectPath}/subtitles?movieId=${encodeURIComponent(movie.id)}`} className={primaryClass}>{view.label}<ArrowRight size={16} aria-hidden="true" /></Link> : <button type="button" className={primaryClass} disabled={mutating || (view.action === "start" && !translationAcknowledged)} onClick={view.action === "start" ? () => void startTranslation() : view.action === "review" ? continueReview : () => void refresh()}>{mutating && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}{view.label}<ArrowRight size={16} aria-hidden="true" /></button>}
       </div>
     </header>
     <p className="sr-only">{view.message}</p>
@@ -227,12 +234,12 @@ export default function TranslationReviewPanel({ initialSnapshot, projectPath, p
     <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
       <div className="min-w-0 space-y-3">
         <section aria-label="Source media" className={`${cardClass} overflow-hidden`}>
-          <div className={`${mediaFallbackClass} w-full bg-[#0b0e14]`}><span className="rounded-xl border border-white/10 bg-white/[0.02] p-4"><Film size={28} className="text-zinc-500" aria-hidden="true" /></span><p className="text-sm text-zinc-300">Preview playback unavailable</p><p className="max-w-sm text-xs leading-5 text-zinc-500">Use the saved dialogue and timestamp strip below to review this movie.</p></div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-3"><div className="min-w-0 flex-1"><h2 className="break-words text-sm font-medium text-zinc-300">{movie.title}</h2><p className="mt-1 break-all text-[11px] text-zinc-500">{movie.filename ?? "No source filename"} · {durationLabel(movie.durationSeconds)}</p></div><Link href={`${projectPath}/subtitles`} className={linkClass}>Source transcript<ArrowRight size={13} aria-hidden="true" /></Link></div>
+          <SourceVideoPreview ref={player} projectId={projectId} movie={movie} timing={sources.find((source) => source.sequence === activeSequence)} />
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-3"><div className="min-w-0 flex-1"><h2 className="break-words text-sm font-medium text-zinc-300">{movie.title}</h2><p className="mt-1 break-all text-[11px] text-zinc-500">{movie.filename ?? "No source filename"} · {durationLabel(movie.durationSeconds)}</p></div><Link href={`${projectPath}/subtitles?movieId=${encodeURIComponent(movie.id)}`} className={linkClass}>Source transcript<ArrowRight size={13} aria-hidden="true" /></Link></div>
         </section>
         {!!sources.length && <section aria-label="Transcript timing strip" className={`${cardClass} p-3`}>
           <div className="mb-2 flex flex-wrap justify-between gap-2 text-[11px] text-zinc-500"><span>Transcript timing · select a saved segment</span><span>{activeRow ? `Selected #${activeRow.sequence + 1} · ${formatTimestamp(activeRow.startMs)} → ${formatTimestamp(activeRow.endMs)}` : "Read-only source timings"}</span></div>
-          <div className="relative h-7 rounded-md bg-white/[0.04]">{sources.map((source) => <button key={source.sequence} type="button" aria-label={`Timing segment ${source.sequence + 1}: ${formatTimestamp(source.startMs)} to ${formatTimestamp(source.endMs)}`} aria-pressed={activeSequence === source.sequence} disabled={!rowBySequence.has(source.sequence)} onClick={() => selectEditor(source.sequence)} className={`absolute inset-y-1 rounded-sm border border-[#111115] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-violet-200 disabled:cursor-default ${activeSequence === source.sequence ? "bg-violet-500 ring-1 ring-violet-300" : "bg-violet-400/25 hover:bg-violet-400/40"}`} style={{ left: `${source.startMs / timingEnd * 100}%`, width: `${(source.endMs - source.startMs) / timingEnd * 100}%` }} />)}</div>
+          <div className="relative h-7 rounded-md bg-white/[0.04]">{sources.map((source) => <button key={source.sequence} type="button" aria-label={`Timing segment ${source.sequence + 1}: ${formatTimestamp(source.startMs)} to ${formatTimestamp(source.endMs)}`} aria-pressed={activeSequence === source.sequence} onClick={() => selectEditor(source.sequence)} className={`absolute inset-y-1 rounded-sm border border-[#111115] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-violet-200 disabled:cursor-default ${activeSequence === source.sequence ? "bg-violet-500 ring-1 ring-violet-300" : "bg-violet-400/25 hover:bg-violet-400/40"}`} style={{ left: `${source.startMs / timingEnd * 100}%`, width: `${(source.endMs - source.startMs) / timingEnd * 100}%` }} />)}</div>
           <div className="mt-2 flex justify-between font-mono text-[11px] text-zinc-500"><span>{formatTimestamp(0)}</span><span>{formatTimestamp(timingEnd)}</span></div>
         </section>}
         <section id="review" aria-labelledby="segments-heading" className={`${cardClass} scroll-mt-6 overflow-hidden`}>
@@ -251,7 +258,7 @@ export default function TranslationReviewPanel({ initialSnapshot, projectPath, p
               const rowDirty = !!draft && draft.text !== target?.text; const issues = row ? activeIssues(row) : [];
               return <tr key={source.sequence} aria-selected={activeSequence === source.sequence} className={`grid min-w-0 grid-cols-2 gap-2 border-t border-white/[0.06] p-3 text-xs sm:table-row sm:p-0 ${activeSequence === source.sequence ? "bg-violet-500/10 outline -outline-offset-1 outline-violet-500" : "hover:bg-white/[0.02]"}`}>
                 <td className="flex items-center gap-2 sm:table-cell sm:px-2 sm:py-3 sm:align-top"><span className="tabular-nums text-zinc-400">{source.sequence + 1}</span>{row && <input type="checkbox" aria-label={`Select sequence ${row.sequence}`} checked={selected.includes(row.sequence)} disabled={busy || (!selected.includes(row.sequence) && selected.length >= SELECTION_LIMIT)} onChange={(event) => toggle(row.sequence, event.target.checked)} className="h-3.5 w-3.5 accent-violet-500 focus-visible:outline-2 focus-visible:outline-violet-300" />}</td>
-                <td className="text-right font-mono text-[11px] leading-5 text-zinc-400 sm:px-2 sm:py-3 sm:text-left sm:align-top"><span>{formatTimestamp(source.startMs)}</span><span className="sm:block"> → {formatTimestamp(source.endMs)}</span></td>
+                <td className="text-right font-mono text-[11px] leading-5 text-zinc-400 sm:px-2 sm:py-3 sm:text-left sm:align-top"><button type="button" className="rounded text-left leading-5 hover:text-violet-300 focus-visible:outline-2 focus-visible:outline-violet-300" aria-label={`Seek to segment ${source.sequence + 1}`} onClick={() => selectEditor(source.sequence)}><span>{formatTimestamp(source.startMs)}</span><span className="sm:block"> → {formatTimestamp(source.endMs)}</span></button></td>
                 <td className="col-span-2 min-w-0 sm:px-2 sm:py-3 sm:align-top"><span className="mb-1 block text-[11px] text-zinc-500 sm:hidden">Chinese source</span><p lang={movie.sourceLanguage} className="line-clamp-2 whitespace-pre-wrap break-words leading-6 text-zinc-300 [overflow-wrap:anywhere]">{row?.sourceText ?? source.text}</p></td>
                 <td className="col-span-2 min-w-0 sm:px-2 sm:py-3 sm:align-top"><span className="mb-1 block text-[11px] text-zinc-500 sm:hidden">Myanmar translation</span><p lang="my" className={`line-clamp-2 whitespace-pre-wrap break-words leading-7 [overflow-wrap:anywhere] ${target ? "text-zinc-200" : "text-zinc-500"}`}>{draft?.text ?? target?.text ?? "No saved translation."}</p>{rowDirty && <span className="text-[11px] text-amber-200">Unsaved draft</span>}</td>
                 <td className="min-w-0 sm:px-2 sm:py-3 sm:align-top">{row && <><ReviewBadge status={row.reviewStatus} /><p className={`mt-1 text-[11px] ${row.origin === "REFINED" ? "text-violet-300" : "text-zinc-500"}`}>{provenance(row)}</p>{!!issues.length && <p className="mt-1 text-[11px] text-amber-200">{issues.length} QC findings</p>}</>}</td>

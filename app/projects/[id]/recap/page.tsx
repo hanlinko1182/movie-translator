@@ -1,3 +1,4 @@
+import { withMovieSelection } from "@/lib/source-video/selection";
 import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
 import { pageClass, contentClass } from "@/components/ui/styles";
 import { notFound } from "next/navigation";
@@ -9,21 +10,24 @@ import { readMovieCharacters } from "@/lib/character-analysis/read-analysis";
 import { getRecapJob } from "@/lib/queue/recap-queue";
 import RecapControls from "./RecapControls";
 
-export default async function RecapPage({ params }: PageProps<"/projects/[id]/recap">) {
+export default async function RecapPage({ params, searchParams }: PageProps<"/projects/[id]/recap">) {
   const { id: slug } = await params;
+  const query = await searchParams;
+  if (query.movieId !== undefined && (typeof query.movieId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,127}$/i.test(query.movieId))) notFound();
   let project;
   try {
     project = await prisma.project.findUnique({
       where: { slug },
       select: {
-        name: true,
+        id: true, name: true,
         movies: {
+          where: query.movieId ? { id: query.movieId } : undefined,
           take: 1,
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           select: {
             id: true,
             title: true,
-            filename: true,
+            filename: true, storageKey: true,
             durationSeconds: true,
             transcript: { select: { id: true, _count: { select: { segments: true } } } },
             scenes: { orderBy: { sequence: "asc" }, select: { sequence: true, startMs: true, endMs: true, detectionMethod: true, boundaryScore: true } },
@@ -38,11 +42,12 @@ export default async function RecapPage({ params }: PageProps<"/projects/[id]/re
   }
   if (!project) notFound();
 
+  if (query.movieId && !project.movies.length) notFound();
   const movie = project.movies[0] ?? null;
   const base = `/projects/${encodeURIComponent(slug)}`;
-  const transcriptionHref = `${base}/subtitles`;
-  const scenesHref = `${base}/scenes`;
-  const exportHref = `${base}/export`;
+  const transcriptionHref = `${base}/subtitles${movie ? `?movieId=${encodeURIComponent(movie.id)}` : ""}`;
+  const scenesHref = `${base}/scenes${movie ? `?movieId=${encodeURIComponent(movie.id)}` : ""}`;
+  const exportHref = `${base}/export${movie ? `?movieId=${encodeURIComponent(movie.id)}` : ""}`;
   let initial = { recap: null } as Awaited<ReturnType<typeof readMovieRecap>>;
   let sourceContext: "CURRENT" | "ABSENT" | "STALE" | null = null;
   let sourceReason: string | null = null;
@@ -86,8 +91,10 @@ export default async function RecapPage({ params }: PageProps<"/projects/[id]/re
   return <main className={pageClass}>
     <div className={contentClass}>
       <RecapControls
+        key={movie?.id ?? "empty"}
+        projectId={project.id}
         projectName={project.name}
-        movie={movie ? { id: movie.id, title: movie.title, filename: movie.filename, durationSeconds: movie.durationSeconds } : null}
+        movie={movie ? { id: movie.id, title: movie.title, filename: movie.filename, durationSeconds: movie.durationSeconds, sourceRecorded: !!movie.storageKey } : null}
         initial={initial}
         initialJob={initialJob}
         scenes={movie?.scenes ?? []}
@@ -100,7 +107,7 @@ export default async function RecapPage({ params }: PageProps<"/projects/[id]/re
         transcriptionHref={transcriptionHref}
         scenesHref={scenesHref}
         exportHref={exportHref}
-        projectHref={base}
+        projectHref={withMovieSelection(base, movie?.id)}
       />
     </div>
   </main>;

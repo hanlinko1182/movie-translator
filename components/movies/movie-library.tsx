@@ -1,4 +1,5 @@
 "use client";
+import { withMovieSelection } from "@/lib/source-video/selection";
 
 import { controlClass } from "@/components/ui/styles";
 
@@ -82,7 +83,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
               <h3 id={`movie-title-${movie.id}`} className="break-words text-sm font-semibold">{movie.title}</h3>
               {movie.originalTitle && <p lang={movie.sourceLanguage} className="mt-1 break-words text-xs text-zinc-400">{movie.originalTitle}</p>}
               <p className="mt-2 break-all text-xs leading-5 text-zinc-500">{movie.filename ?? "Filename not recorded"}</p>
-              <Link href={movie.projectHref} className={`${linkClass} mt-3 w-fit max-w-full break-all leading-5`}>Project · {movie.projectName}</Link>
+              <Link href={withMovieSelection(movie.projectHref, movie.id)} className={`${linkClass} mt-3 w-fit max-w-full break-all leading-5`}>Project · {movie.projectName}</Link>
               <p className="mt-2 text-xs leading-5 text-zinc-400">{movie.languageLabel} · {movie.fileSizeLabel}</p>
               <p className="mt-1 text-[11px] leading-5 text-zinc-500">{movie.uploadRecorded ? "Source upload recorded" : "Metadata only · no upload recorded"}</p>
               <div className="mt-3 flex flex-wrap gap-2"><OutputBadge label="Transcript" count={movie.transcriptCount} /><OutputBadge label="Translation" count={movie.translationCount} /></div>
@@ -95,7 +96,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
         <div className="mb-4 flex items-center justify-between gap-3"><h2 id="details-heading" className="text-sm font-semibold">Selected movie</h2><MovieStatusBadge status={selected.status} /></div>
         <h3 aria-live="polite" className="break-words text-lg font-semibold tracking-tight">{selected.title}</h3>
         <p className="mt-2 break-all text-xs leading-5 text-zinc-400">{selected.filename ?? "Filename not recorded"}</p>
-        <Link href={selected.projectHref} className={`${linkClass} mt-3 max-w-full break-all leading-5`}>{selected.projectName}<ArrowUpRight size={13} className="shrink-0" aria-hidden="true" /></Link>
+        <Link href={withMovieSelection(selected.projectHref, selected.id)} className={`${linkClass} mt-3 max-w-full break-all leading-5`}>{selected.projectName}<ArrowUpRight size={13} className="shrink-0" aria-hidden="true" /></Link>
         <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-white/[0.06] pt-5 text-xs">
           <Metadata label="Source language" value={selected.languageLabel} />
           <Metadata label="Duration" value={selected.durationLabel} />
@@ -107,7 +108,7 @@ export default function MovieLibrary({ movies }: { movies: LibraryMovie[] }) {
         </dl>
         <section aria-labelledby="availability-heading" className="mt-5 border-t border-white/[0.06] pt-5"><h3 id="availability-heading" className="text-xs font-semibold">Saved output availability</h3><ul className="mt-3 space-y-3 text-xs text-zinc-400"><li>Transcript · {outputLabel(selected.transcriptCount)}</li><li>Translation · {outputLabel(selected.translationCount)}</li><li>Scenes · {selected.scenes} saved</li><li>Recap · {selected.recapSaved ? "Script saved · check freshness in Recap" : "Not generated"}</li></ul><p className="mt-3 text-[11px] leading-5 text-zinc-500">Saved translation does not imply human approval or export readiness.</p></section>
         <section aria-labelledby="workspaces-heading" className="mt-5 border-t border-white/[0.06] pt-5"><h3 id="workspaces-heading" className="text-xs font-semibold">Related workspaces</h3>
-          {!selected.isNewestMovie && <p className="mt-2 text-[11px] leading-5 text-amber-200">Translation and Review open this movie. Other project workspaces open the project’s newest movie.</p>}
+          {!selected.isNewestMovie && <p className="mt-2 text-[11px] leading-5 text-amber-200">Project workspace links open this selected movie.</p>}
           <nav aria-label="Selected movie workspaces" className="mt-3 grid grid-cols-2 gap-2">{workspaceLinks(selected).map((link) => <Link key={link.label} href={link.href} className={`${linkClass} flex-wrap rounded-lg border border-white/[0.07] p-3`}><span>{link.label}{link.newest && !selected.isNewestMovie && <span className="mt-1 block text-[11px] font-normal text-zinc-500">Newest movie</span>}</span><ArrowUpRight size={12} className="shrink-0" aria-hidden="true" /></Link>)}</nav>
         </section>
         <button type="button" onClick={() => {libraryRef.current?.focus({preventScroll:true});libraryRef.current?.scrollIntoView({behavior:"smooth",block:"start"});}} className={`${linkClass} mt-5 xl:hidden`}><ArrowLeft size={14} aria-hidden="true" />Back to library</button>
@@ -129,11 +130,11 @@ function Metadata({ label, value }: { label: string; value: string }) { return <
 function workspaceLinks(movie: LibraryMovie) {
   const translation = `${movie.projectHref}/translation?movieId=${encodeURIComponent(movie.id)}`;
   return [
-    { label: "Overview", href: movie.projectHref, newest: true },
-    { label: "Transcription", href: `${movie.projectHref}/subtitles`, newest: true },
+    { label: "Overview", href: withMovieSelection(movie.projectHref, movie.id), newest: false },
+    { label: "Transcription", href: withMovieSelection(`${movie.projectHref}/subtitles`, movie.id), newest: false },
     { label: "Translation", href: translation, newest: false },
     { label: "Review", href: `${translation}&view=review#review`, newest: false },
-    { label: "Recap", href: `${movie.projectHref}/recap`, newest: true },
-    { label: "Export", href: `${movie.projectHref}/export`, newest: true },
+    { label: "Recap", href: withMovieSelection(`${movie.projectHref}/recap`, movie.id), newest: false },
+    { label: "Export", href: withMovieSelection(`${movie.projectHref}/export`, movie.id), newest: false },
   ];
 }

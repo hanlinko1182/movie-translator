@@ -1,11 +1,15 @@
 "use client";
+import { withMovieSelection } from "@/lib/source-video/selection";
 
-import { mediaFallbackClass, primaryButtonClass } from "@/components/ui/styles";
+import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
+
+
+import { primaryButtonClass } from "@/components/ui/styles";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, AudioLines, FileText, Film, LoaderCircle, RefreshCw } from "lucide-react";
+import { ArrowRight, AudioLines, FileText, LoaderCircle, RefreshCw } from "lucide-react";
 import { formatTimestamp } from "@/lib/format-timestamp";
 import { cardClass, StatusBadge } from "../overview-components";
 import { languageName, durationLabel } from "../overview-model";
@@ -14,8 +18,9 @@ import { deriveTranscription, isRunningJob, pollingTarget, POLL_INTERVAL_MS, typ
 
 const primaryButton = primaryButtonClass + " w-full";
 
-export default function TranscriptionWorkspace({ initialSnapshot, projectPath }: { initialSnapshot: TranscriptionSnapshot; projectPath: string }) {
+export default function TranscriptionWorkspace({ initialSnapshot, projectPath, projectId }: { initialSnapshot: TranscriptionSnapshot; projectPath: string; projectId: string }) {
   const router = useRouter();
+  const player = useRef<SourceVideoHandle>(null);
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [previousSnapshot, setPreviousSnapshot] = useState(initialSnapshot);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -106,7 +111,7 @@ export default function TranscriptionWorkspace({ initialSnapshot, projectPath }:
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-violet-300">Next step</p>
           {view.action === "transcribe" && <div className="mb-4 space-y-3"><p className="text-xs text-zinc-400">AI Action · OpenRouter</p><label className="flex items-start gap-2 text-xs leading-5 text-zinc-300"><input type="checkbox" checked={acknowledged} disabled={submitting} onChange={(event) => setAcknowledged(event.target.checked)} className="mt-1 accent-violet-500 focus-visible:outline-2 focus-visible:outline-violet-300" />I understand transcription may make paid AI requests.</label></div>}
           {view.action === "prepare" && <p className="mb-3 text-xs text-zinc-400">Local processing · FFmpeg media worker</p>}
-          {view.action === "translate" || view.action === "overview" ? <Link href={view.action === "translate" ? translationPath : projectPath} className={primaryButton}>{view.actionLabel}<ArrowRight size={16} aria-hidden="true" /></Link> :
+          {view.action === "translate" || view.action === "overview" ? <Link href={view.action === "translate" ? translationPath : withMovieSelection(projectPath, movie.id)} className={primaryButton}>{view.actionLabel}<ArrowRight size={16} aria-hidden="true" /></Link> :
             <button type="button" onClick={view.action === "refresh" ? refresh : () => void start()} disabled={submitting || (view.action === "transcribe" && !acknowledged)} className={primaryButton}>
               {submitting ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : view.action === "refresh" ? <RefreshCw size={16} aria-hidden="true" /> : <ArrowRight size={16} aria-hidden="true" />}{submitting ? "Submitting…" : view.actionLabel}
             </button>}
@@ -120,20 +125,16 @@ export default function TranscriptionWorkspace({ initialSnapshot, projectPath }:
 
     <div className="order-2 min-w-0 space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
       <section aria-labelledby="source-heading" className={`${cardClass} overflow-hidden`}>
-        <div className={`${mediaFallbackClass} w-full border-b border-white/10 bg-[#0b0b0e]`}>
-          <span className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Film size={30} className="text-zinc-500" aria-hidden="true" /></span>
-          <p className="text-sm text-zinc-300">Video preview unavailable</p>
-          <p className="max-w-sm text-xs leading-5 text-zinc-500">Video preview is not available in the current local media pipeline.</p>
-        </div>
+        <SourceVideoPreview ref={player} projectId={projectId} movie={movie} timing={selected} className="border-b border-white/10" />
         <div className="p-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 id="source-heading" className="min-w-0 break-words text-sm font-semibold">{movie.title}</h2><span className="text-xs text-zinc-500">{durationLabel(movie.durationSeconds)}</span></div><p className="mt-2 break-all text-xs text-zinc-400">{movie.filename ?? "No source filename"}</p><p className="mt-2 text-xs text-zinc-500">Audio · {view.audioLabel}</p></div>
         <div className="border-t border-white/10 p-5">
           <div className="flex flex-wrap justify-between gap-2 text-xs"><h3 className="font-medium text-zinc-300">Transcript position</h3><p className="text-zinc-500">{selected ? `Segment #${selected.sequence + 1} · ${formatTimestamp(selected.startMs)} → ${formatTimestamp(selected.endMs)}` : "No segment selected"}</p></div>
           <div className="relative mt-4 h-2 rounded-full bg-white/[0.07]" aria-hidden="true">{selected && extent > 0 && <span className="absolute h-full min-w-1 rounded-full bg-violet-500" style={{ left: `${selectedPosition}%`, width: `${selectedWidth}%` }} />}</div>
           {extent > 0 && <div className="mt-2 flex justify-between font-mono text-[11px] text-zinc-500"><span>{formatTimestamp(0)}</span><span>{formatTimestamp(extent)}</span></div>}
-          <p className="mt-3 text-xs leading-5 text-zinc-500">{transcript?.segments.length ? "Select a row to highlight its timestamp range. Playback and seeking are unavailable." : "Timed dialogue will appear after transcription. No waveform data is available."}</p>
+          <p className="mt-3 text-xs leading-5 text-zinc-500">{transcript?.segments.length ? "Select a row to seek the source video to its saved start time." : "Timed dialogue will appear after transcription. No waveform data is available."}</p>
         </div>
       </section>
-      {transcript ? <TranscriptSegments segments={transcript.segments} transcriptText={transcript.text} sourceLanguage={movie.sourceLanguage} selectedSequence={selectedSequence} onSelect={setSelectedSequence} /> :
+      {transcript ? <TranscriptSegments segments={transcript.segments} transcriptText={transcript.text} sourceLanguage={movie.sourceLanguage} selectedSequence={selectedSequence} onSelect={(sequence) => { setSelectedSequence(sequence); const segment = transcript.segments.find((row) => row.sequence === sequence); if (segment) player.current?.seekTo(segment.startMs); }} /> :
         <section aria-labelledby="transcript-empty-heading" className={`${cardClass} p-6 sm:p-8`}>
           {view.tone === "Processing" ? <LoaderCircle size={24} className="animate-spin text-violet-400" aria-hidden="true" /> : <FileText size={24} className="text-zinc-500" aria-hidden="true" />}
           <h2 id="transcript-empty-heading" className="mt-4 text-base font-semibold">{view.tone === "Processing" ? view.status : view.tone === "Failed" ? "Transcription could not be completed" : "No source transcript yet"}</h2>

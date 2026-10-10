@@ -1,3 +1,4 @@
+import { withMovieSelection } from "@/lib/source-video/selection";
 import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
 import { pageClass, contentClass } from "@/components/ui/styles";
 import Link from "next/link";
@@ -12,16 +13,19 @@ import { RefreshOverviewButton } from "../overview-action";
 import TranscriptionWorkspace from "./transcription-workspace";
 import type { TranscriptionSnapshot } from "./transcription-model";
 
-export default async function SourceTranscriptPage({ params }: PageProps<"/projects/[id]/subtitles">) {
+export default async function SourceTranscriptPage({ params, searchParams }: PageProps<"/projects/[id]/subtitles">) {
   const { id: slug } = await params;
   const projectPath = `/projects/${encodeURIComponent(slug)}`;
+  const query = await searchParams;
+  if (query.movieId !== undefined && (typeof query.movieId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,127}$/i.test(query.movieId))) notFound();
   let project;
   try {
     project = await prisma.project.findUnique({
       where: { slug },
       select: {
-        name: true,
+        id: true, name: true,
         movies: {
+          where: query.movieId ? { id: query.movieId } : undefined,
           orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,
           select: {
             id: true, title: true, filename: true, storageKey: true,
@@ -39,6 +43,7 @@ export default async function SourceTranscriptPage({ params }: PageProps<"/proje
     return <WorkspaceUnavailable title="Transcription is unavailable" description="We couldn’t load this project right now. Please try again shortly." href={projectPath} />;
   }
   if (!project) notFound();
+  if (query.movieId && !project.movies.length) notFound();
   const movie = project.movies[0];
   let snapshot: TranscriptionSnapshot | null = null;
   if (movie) {
@@ -68,18 +73,18 @@ export default async function SourceTranscriptPage({ params }: PageProps<"/proje
       <header>
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500">
           <Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" />
-          <Link href={projectPath} className={`${linkClass} min-w-0 break-words`}>{project.name}</Link><ChevronRight size={13} aria-hidden="true" /><span className="text-zinc-300">Transcription</span>
+          <Link href={withMovieSelection(projectPath, movie?.id)} className={`${linkClass} min-w-0 break-words`}>{project.name}</Link><ChevronRight size={13} aria-hidden="true" /><span className="text-zinc-300">Transcription</span>
         </nav>
         <div className="mt-5 flex flex-wrap items-start justify-between gap-4">
           <div><h1 className="text-2xl font-semibold tracking-tight">Transcription</h1><p className="mt-2 text-sm text-zinc-400">Generate and inspect the Chinese source transcript.</p></div>
           <RefreshOverviewButton label="Refresh" />
         </div>
       </header>
-      {snapshot ? <TranscriptionWorkspace key={snapshot.movie.id} initialSnapshot={snapshot} projectPath={projectPath} /> :
+      {snapshot ? <TranscriptionWorkspace projectId={project.id} key={snapshot.movie.id} initialSnapshot={snapshot} projectPath={projectPath} /> :
         <section aria-labelledby="empty-title" className={`${cardClass} p-6 sm:p-8`}>
           <FileText size={24} className="text-zinc-500" aria-hidden="true" /><h2 id="empty-title" className="mt-4 text-lg font-medium">No movie uploaded</h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">Upload a source movie before preparing audio or generating a transcript.</p>
-          <Link href={projectPath} className={`${linkClass} mt-5`}>Project overview</Link>
+          <Link href={withMovieSelection(projectPath, movie?.id)} className={`${linkClass} mt-5`}>Project overview</Link>
         </section>}
     </div>
   </main>;

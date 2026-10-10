@@ -1,6 +1,7 @@
-import { badgeClass, badgeTones, cardClass, linkClass, mediaFallbackClass } from "@/components/ui/styles";
+import SourceVideoPreview from "@/components/media/source-video-preview";
+import { badgeClass, badgeTones, cardClass, linkClass } from "@/components/ui/styles";
 import Link from "next/link";
-import { Check, Circle, CircleAlert, ArrowUpRight, Upload, AudioLines, Languages, ShieldCheck, Sparkles, Download, Film, Clock3, LoaderCircle } from "lucide-react";
+import { Check, Circle, CircleAlert, ArrowUpRight, Upload, AudioLines, Languages, ShieldCheck, Sparkles, Download, Clock3, LoaderCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { dateLabel, durationLabel, languageName, type WorkflowStage, type StageState, type buildOverview } from "./overview-model";
 import OverviewActionButton from "./overview-action";
@@ -44,10 +45,10 @@ export function NextActionCard({ overview }: { overview: Overview }) {
     <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-center"><div className="max-w-xl"><p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-violet-300">Next step</p><h2 id="next-heading" className="text-lg font-semibold tracking-tight">{overview.next.title}</h2><p className="mt-2 text-sm leading-6 text-zinc-400">{overview.next.description}</p></div><div className="shrink-0 xl:max-w-xs"><OverviewActionButton key={`${overview.next.action.href ?? overview.next.action.endpoint}`} action={overview.next.action} /></div></div>
   </section>;
 }
-export function MediaPreviewCard({ overview, sourceLanguage }: { overview: Overview; sourceLanguage: string }) {
+export function MediaPreviewCard({ overview, sourceLanguage, projectId }: { overview: Overview; sourceLanguage: string; projectId: string }) {
   const movie = overview.movie;
   return <section aria-labelledby="media-heading" className={`${cardClass} overflow-hidden`}>
-    <div className={`${mediaFallbackClass} border-b border-white/10 bg-[#0b0b0e]`}><span className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><Film size={28} className="text-zinc-500" aria-hidden="true" /></span><p className="text-sm text-zinc-400">Preview unavailable</p><p className="max-w-xs text-xs leading-5 text-zinc-500">{movie?.storageKey ? "Source media is stored privately. In-app playback is not available yet." : "Upload a source movie to begin processing."}</p></div>
+    <SourceVideoPreview key={movie?.id ?? "empty"} projectId={projectId} movie={movie ? { id: movie.id, title: movie.title, sourceRecorded: !!movie.storageKey } : null} className="border-b border-white/10" />
     <div className="p-5"><h2 id="media-heading" className="text-sm font-semibold">Source media</h2><p className="mt-2 break-all text-sm text-zinc-300">{movie?.filename ?? "No source filename"}</p><dl className="mt-4 grid grid-cols-2 gap-4 text-xs"><div><dt className="text-zinc-500">Duration</dt><dd className="mt-1 text-zinc-300">{durationLabel(movie?.durationSeconds)}</dd></div><div><dt className="text-zinc-500">Language</dt><dd className="mt-1 text-zinc-300">{languageName(sourceLanguage)}</dd></div><div className="col-span-2"><dt className="text-zinc-500">Media state</dt><dd className="mt-1 text-zinc-300">{movie ? movie.status === "UPLOADED" ? movie.storageKey ? "Upload recorded" : "Metadata only · no uploaded file" : movie.status.charAt(0) + movie.status.slice(1).toLowerCase() : "No movie"}{movie?.storageKey && overview.facts.sourceAvailable === false ? " · source file unavailable" : ""}</dd></div></dl></div>
   </section>;
 }

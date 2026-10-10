@@ -51,10 +51,21 @@ export class LocalStorageProvider implements StorageProvider {
   }
   async exists(key: string) { try { await this.localPath(key); return true; } catch (error) { if (error instanceof StorageError && error.code === "STORAGE_FILE_MISSING") return false; throw error; } }
   async stat(key: string) { const file = await lstat(await this.localPath(key)); return { size: file.size }; }
-  async open(key: string) {
+  // Keep the checked descriptor open so range metadata and bytes refer to the
+  // same file even if a source is replaced after this request starts.
+  async openFile(key: string) {
+    await this.check();
+    return this.openDescriptor(key);
+  }
+  private async openDescriptor(key: string) {
     const file = await open(await this.localPath(key), constants.O_RDONLY | constants.O_NOFOLLOW);
-    if (!(await file.stat()).isFile()) { await file.close(); throw new StorageError("INVALID_STORAGE_KEY"); }
-    return file.createReadStream();
+    try {
+      if (!(await file.stat()).isFile()) throw new StorageError("INVALID_STORAGE_KEY");
+      return file;
+    } catch (error) { await file.close(); throw error; }
+  }
+  async open(key: string) {
+    return (await this.openDescriptor(key)).createReadStream();
   }
   async resolveInput(key: string) { return { path: await this.localPath(key), cleanup: async () => {} }; }
   async put(key: string, input: Readable, options: { replace?: boolean } = {}) {

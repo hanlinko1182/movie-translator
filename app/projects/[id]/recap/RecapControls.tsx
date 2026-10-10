@@ -1,17 +1,22 @@
 "use client";
+import { withMovieSelection } from "@/lib/source-video/selection";
+
+import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
+
 
 import { badgeClass, badgeTones, cardClass, focusClass, primaryButtonClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronRight, Clapperboard, Film, LoaderCircle, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ChevronRight, Clapperboard, LoaderCircle, RefreshCw } from "lucide-react";
 import type { RecapRead } from "@/lib/recap/read-recap";
 import type { RecapJobStatus } from "@/lib/queue/recap-queue";
 
 type Scene = { sequence: number; startMs: number; endMs: number; detectionMethod: string; boundaryScore: number | null };
 type Props = {
+  projectId: string;
   projectName: string;
-  movie: { id: string; title: string; filename: string | null; durationSeconds: number | null } | null;
+  movie: { id: string; sourceRecorded: boolean; title: string; filename: string | null; durationSeconds: number | null } | null;
   initial: RecapRead;
   initialJob: RecapJobStatus;
   scenes: Scene[];
@@ -64,9 +69,9 @@ function Confidence({ value }: { value: string }) {
   return <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-medium tracking-wide ${confidenceStyle(value)}`}>{value} support</span>;
 }
 
-function EvidenceAnchor({ row, compact = false }: { row: Evidence; compact?: boolean }) {
+function EvidenceAnchor({ row, compact = false, onSeek }: { row: Evidence; compact?: boolean; onSeek: (timing: { startMs: number; endMs: number }) => void }) {
   return <details className="min-w-0 rounded-lg border border-white/[0.07] bg-black/10 p-3">
-    <summary className={`cursor-pointer break-words text-xs leading-5 text-zinc-300 ${focus}`}>
+    <summary onClick={() => onSeek(row.segment)} className={`cursor-pointer break-words text-xs leading-5 text-zinc-300 ${focus}`}>
       Scene {row.sceneSequence + 1} · Segment {row.segment.sequence + 1} · {timestamp(row.segment.startMs)} · Evidence note
     </summary>
     <div className="mt-3 space-y-2 border-l border-zinc-700 pl-3 text-xs leading-5 text-zinc-400">
@@ -89,6 +94,9 @@ export default function RecapControls(props: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const player = useRef<SourceVideoHandle>(null);
+  const [selectedTiming, setSelectedTiming] = useState<{ startMs: number; endMs: number } | null>(null);
+  function seekSource(timing: { startMs: number; endMs: number }) { setSelectedTiming(timing); player.current?.seekTo(timing.startMs); }
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(props.initial.recap?.sections[0]?.id ?? null);
   const [activeTab, setActiveTab] = useState<"script" | "characters" | "relationships" | "evidence" | "scenes">("script");
   const movieId = props.movie?.id ?? null;
@@ -192,7 +200,7 @@ export default function RecapControls(props: Props) {
       <div className="min-w-0">
         <nav aria-label="Breadcrumb" className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
           <Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" />
-          <Link href={props.projectHref} className={`${linkClass} min-w-0 break-words`}>{props.projectName}</Link><ChevronRight size={13} aria-hidden="true" />
+          <Link href={withMovieSelection(props.projectHref, props.movie?.id)} className={`${linkClass} min-w-0 break-words`}>{props.projectName}</Link><ChevronRight size={13} aria-hidden="true" />
           <span aria-current="page" className="text-zinc-300">Recap</span>
         </nav>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Recap</h1>
@@ -230,11 +238,7 @@ export default function RecapControls(props: Props) {
           <div className="relative flex min-h-[230px] min-w-0 flex-col justify-between overflow-hidden rounded-lg border border-white/[0.07] bg-[#0b111a] p-5 sm:min-h-64">
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-950/20 via-transparent to-slate-800/20" />
             <div className="relative flex items-start justify-between gap-3"><StatusChip>{props.movie ? "Movie source" : "No movie"}</StatusChip><StatusChip>{duration(props.movie?.durationSeconds ?? null)}</StatusChip></div>
-            <div className="relative flex flex-1 flex-col items-center justify-center py-5 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400"><Film size={22} aria-hidden="true" /></div>
-              <p className="text-sm font-medium text-zinc-200">Preview unavailable</p>
-              <p className="mt-1 max-w-sm text-xs leading-5 text-zinc-500">This workspace has no playable video preview. Scene ranges and transcript evidence are shown below.</p>
-            </div>
+            <SourceVideoPreview ref={player} projectId={props.projectId} movie={props.movie} timing={selectedTiming} className="relative my-3 w-full rounded-lg" />
             <div className="relative min-w-0 border-t border-white/[0.08] pt-3">
               <h2 id="recap-source-heading" className="break-words text-sm font-semibold text-zinc-100">{props.movie?.title ?? "No movie uploaded"}</h2>
               <p className="mt-1 break-all text-xs text-zinc-500">{props.movie?.filename ?? "Upload a movie from Project Overview to begin."}</p>
@@ -276,11 +280,11 @@ export default function RecapControls(props: Props) {
             {!recap && <EmptyContext text={!readyTranscript ? "Transcription is required before generating a recap." : !readyScenes ? "Scene detection is required to build the recap." : props.sourceReason || "Generate a Myanmar recap from the current transcript and scene evidence."} />}
             {recap && !recap.sections.length && <EmptyContext text="No recap sections were saved for this result." />}
             {recap?.sections.map((section) => <article key={section.id} className={`min-w-0 overflow-hidden rounded-lg border transition ${selectedSection?.id === section.id ? "border-violet-400/55 bg-violet-500/[0.09] shadow-[inset_0_0_0_1px_rgba(139,92,246,0.1)]" : "border-white/[0.07] bg-white/[0.02]"}`}>
-              <button type="button" aria-current={selectedSection?.id === section.id ? "true" : undefined} aria-label={`Show recap section ${section.sequence + 1}: ${section.heading}`} onClick={() => setSelectedSectionId(section.id)} className={`flex w-full min-w-0 items-start gap-3 p-3 text-left ${focus}`}>
+              <button type="button" aria-current={selectedSection?.id === section.id ? "true" : undefined} aria-label={`Show recap section ${section.sequence + 1}: ${section.heading}`} onClick={() => { setSelectedSectionId(section.id); const scene = props.scenes.find((item) => item.sequence === section.sceneStartSequence); if (scene) seekSource(scene); }} className={`flex w-full min-w-0 items-start gap-3 p-3 text-left ${focus}`}>
                 <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${selectedSection?.id === section.id ? "bg-violet-500 text-white" : "bg-white/[0.07] text-zinc-300"}`}>{section.sequence + 1}</span>
                 <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500"><span>{sceneRange(section.sceneStartSequence, section.sceneEndSequence, props.scenes)}</span><span>Scenes {section.sceneStartSequence + 1}–{section.sceneEndSequence + 1}</span></span><span lang="my" className="mt-1 block break-words text-sm font-medium leading-7 text-zinc-100">{section.heading}</span><span className="mt-2 flex flex-wrap items-center gap-2"><Confidence value={section.confidence} /><span className="text-[11px] text-zinc-500">{section.evidence.length} evidence anchors</span></span></span>
               </button>
-              {selectedSection?.id === section.id && <div className="border-t border-violet-300/15 px-4 pb-4 pt-3"><p lang="my" className="whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{section.summary}</p><div className="mt-4 border-t border-white/[0.07] pt-3"><h3 className="text-xs font-medium text-zinc-300">Supporting evidence</h3>{section.evidence.length ? <div className="mt-2 space-y-2">{section.evidence.map((row) => <EvidenceAnchor key={row.id} row={row} compact />)}</div> : <p className="mt-2 text-xs text-zinc-500">No evidence anchors saved for this section.</p>}</div></div>}
+              {selectedSection?.id === section.id && <div className="border-t border-violet-300/15 px-4 pb-4 pt-3"><p lang="my" className="whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{section.summary}</p><div className="mt-4 border-t border-white/[0.07] pt-3"><h3 className="text-xs font-medium text-zinc-300">Supporting evidence</h3>{section.evidence.length ? <div className="mt-2 space-y-2">{section.evidence.map((row) => <EvidenceAnchor onSeek={seekSource} key={row.id} row={row} compact />)}</div> : <p className="mt-2 text-xs text-zinc-500">No evidence anchors saved for this section.</p>}</div></div>}
             </article>)}
             {recap && <p className="text-[11px] leading-5 text-zinc-500">Confidence labels describe support strength, not accuracy or truth probability. Review claims against the linked Chinese source.</p>}
           </div>}
@@ -288,19 +292,19 @@ export default function RecapControls(props: Props) {
           {activeTab === "characters" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
             <div><h2 className="text-base font-semibold text-zinc-100">Characters</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Recap insights from persisted analysis · advisory, not verified identity.</p><p className="mt-2 text-xs text-zinc-500">Character analysis: <span className={props.characterState === "STALE" ? "text-amber-200" : props.characterState === "CURRENT" ? "text-emerald-200" : "text-zinc-300"}>{characterStateLabel(props.characterState)}</span></p></div>
             {!recap?.characterInsights.length && <EmptyContext text={recap ? "No supported character-specific insights were saved." : "Character insights appear after a recap is generated."} />}
-            {recap?.characterInsights.map((insight) => <article key={insight.id} className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="break-words text-sm font-medium text-zinc-200">{insight.displayName}</h3>{insight.uncertain && <StatusChip tone="amber">Uncertain identity</StatusChip>}</div><p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500"><span>Inferred observation</span><Confidence value={insight.confidence} /><span>{insight.evidence.length} anchors</span></p><p lang="my" className="mt-2 break-words text-xs leading-6 text-zinc-300">{insight.observation}</p>{insight.evidence[0] && <div className="mt-3"><EvidenceAnchor row={insight.evidence[0]} compact /></div>}</article>)}
+            {recap?.characterInsights.map((insight) => <article key={insight.id} className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="break-words text-sm font-medium text-zinc-200">{insight.displayName}</h3>{insight.uncertain && <StatusChip tone="amber">Uncertain identity</StatusChip>}</div><p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500"><span>Inferred observation</span><Confidence value={insight.confidence} /><span>{insight.evidence.length} anchors</span></p><p lang="my" className="mt-2 break-words text-xs leading-6 text-zinc-300">{insight.observation}</p>{insight.evidence[0] && <div className="mt-3"><EvidenceAnchor onSeek={seekSource} row={insight.evidence[0]} compact /></div>}</article>)}
           </div>}
 
           {activeTab === "relationships" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
             <div><h2 className="text-base font-semibold text-zinc-100">Relationships</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Suggested relationship interpretations from saved recap evidence.</p></div>
             {!recap?.relationshipInsights.length && <EmptyContext text={recap ? "No supported relationship interpretations were saved." : "Relationship context appears after a recap is generated."} />}
-            {recap?.relationshipInsights.map((insight) => <article key={insight.id} className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"><h3 className="break-words text-sm font-medium text-zinc-200">{insight.nameA} <span className="text-zinc-500">↔</span> {insight.nameB}</h3>{(insight.uncertainA || insight.uncertainB) && <p className="mt-1 text-[11px] text-amber-200">One or more parties have uncertain identity.</p>}<p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500"><span>Suggested dynamic</span><Confidence value={insight.confidence} /><span>{insight.evidence.length} anchors</span></p><p lang="my" className="mt-2 break-words text-xs leading-6 text-zinc-300">{insight.observation}</p>{insight.evidence[0] && <div className="mt-3"><EvidenceAnchor row={insight.evidence[0]} compact /></div>}</article>)}
+            {recap?.relationshipInsights.map((insight) => <article key={insight.id} className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"><h3 className="break-words text-sm font-medium text-zinc-200">{insight.nameA} <span className="text-zinc-500">↔</span> {insight.nameB}</h3>{(insight.uncertainA || insight.uncertainB) && <p className="mt-1 text-[11px] text-amber-200">One or more parties have uncertain identity.</p>}<p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500"><span>Suggested dynamic</span><Confidence value={insight.confidence} /><span>{insight.evidence.length} anchors</span></p><p lang="my" className="mt-2 break-words text-xs leading-6 text-zinc-300">{insight.observation}</p>{insight.evidence[0] && <div className="mt-3"><EvidenceAnchor onSeek={seekSource} row={insight.evidence[0]} compact /></div>}</article>)}
           </div>}
 
           {activeTab === "evidence" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">
             <div><h2 className="text-base font-semibold text-zinc-100">Evidence</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Real scene and transcript anchors linked to saved recap claims.</p></div>
             {!evidenceRows.length && <EmptyContext text={recap ? "No evidence anchors were saved." : "Evidence anchors appear after a recap is generated."} />}
-            {evidenceRows.map((row) => <article key={`${row.type}-${row.id}`} className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><StatusChip>{row.type}</StatusChip><span className="max-w-full break-words text-[11px] text-zinc-500">Supports {row.linkedTo}</span></div><EvidenceAnchor row={row} compact /></article>)}
+            {evidenceRows.map((row) => <article key={`${row.type}-${row.id}`} className="min-w-0 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><StatusChip>{row.type}</StatusChip><span className="max-w-full break-words text-[11px] text-zinc-500">Supports {row.linkedTo}</span></div><EvidenceAnchor onSeek={seekSource} row={row} compact /></article>)}
           </div>}
 
           {activeTab === "scenes" && <div className="max-h-[760px] space-y-3 overflow-y-auto pr-1">

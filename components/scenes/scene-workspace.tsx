@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Film, ScanLine, RefreshCw, LoaderCircle, Clock3 } from "lucide-react";
 import { badgeClass, badgeTones, cardClass, focusClass, linkClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
@@ -9,7 +11,8 @@ import type { SceneJobStatus, SceneRow } from "@/lib/scenes/types";
 type TranscriptRow = { sequence: number; startMs: number; endMs: number; text: string };
 const methodLabel = "Visual / transcript heuristic";
 
-export default function SceneWorkspace({ movieId, initialScenes, canDetect, durationSeconds, transcriptSegments, overviewPath }: { movieId: string; initialScenes: SceneRow[]; canDetect: boolean; durationSeconds: number | null; transcriptSegments: TranscriptRow[]; overviewPath: string }) {
+export default function SceneWorkspace({ projectId, movieId, initialScenes, canDetect, durationSeconds, transcriptSegments, overviewPath }: { projectId: string; movieId: string; initialScenes: SceneRow[]; canDetect: boolean; durationSeconds: number | null; transcriptSegments: TranscriptRow[]; overviewPath: string }) {
+  const player = useRef<SourceVideoHandle>(null);
   const [scenes, setScenes] = useState(initialScenes);
   const [selectedSequence, setSelectedSequence] = useState(initialScenes[0]?.sequence ?? 0);
   const [job, setJob] = useState<SceneJobStatus | null>(null);
@@ -103,14 +106,14 @@ export default function SceneWorkspace({ movieId, initialScenes, canDetect, dura
       <section className={`${cardClass} p-4 sm:p-5`} aria-labelledby="scene-timeline-title">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 id="scene-timeline-title" className="text-sm font-semibold">Scene timeline</h2><span className="text-xs text-zinc-500">Select an interval to inspect</span></div>
         <div className="relative mt-4 h-12 rounded-lg bg-black/20" aria-label="Proportional scene intervals">
-          {scenes.map((scene) => <button key={scene.sequence} type="button" onClick={() => setSelectedSequence(scene.sequence)} aria-pressed={selected?.sequence === scene.sequence} aria-label={`Select scene ${scene.sequence + 1}, ${formatTimestamp(scene.startMs)} to ${formatTimestamp(scene.endMs)}`} style={{ left: `${scene.startMs / timelineEnd * 100}%`, width: `${scene.durationMs / timelineEnd * 100}%` }} className={`absolute inset-y-0 overflow-hidden rounded-md border text-xs font-medium ${focusClass} ${selected?.sequence === scene.sequence ? "z-10 border-violet-400 bg-violet-500/25 text-violet-200" : "border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/10"}`}><span aria-hidden="true">{scene.sequence + 1}</span></button>)}
+          {scenes.map((scene) => <button key={scene.sequence} type="button" onClick={() => { setSelectedSequence(scene.sequence); player.current?.seekTo(scene.startMs); }} aria-pressed={selected?.sequence === scene.sequence} aria-label={`Select scene ${scene.sequence + 1}, ${formatTimestamp(scene.startMs)} to ${formatTimestamp(scene.endMs)}`} style={{ left: `${scene.startMs / timelineEnd * 100}%`, width: `${scene.durationMs / timelineEnd * 100}%` }} className={`absolute inset-y-0 overflow-hidden rounded-md border text-xs font-medium ${focusClass} ${selected?.sequence === scene.sequence ? "z-10 border-violet-400 bg-violet-500/25 text-violet-200" : "border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/10"}`}><span aria-hidden="true">{scene.sequence + 1}</span></button>)}
         </div>
         <div className="mt-2 flex justify-between font-mono text-[11px] text-zinc-500"><span>{formatTimestamp(0)}</span><span>{formatTimestamp(timelineEnd)}</span></div>
       </section>
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <section className={`${cardClass} overflow-hidden`} aria-labelledby="scene-list-title">
           <h2 id="scene-list-title" className="border-b border-white/10 p-4 text-sm font-semibold">Scene intervals <span className="ml-2 font-normal text-zinc-500">{scenes.length}</span></h2>
-          <div className="divide-y divide-white/[0.07]">{scenes.map((scene) => <button key={scene.sequence} type="button" aria-pressed={selected?.sequence === scene.sequence} onClick={() => setSelectedSequence(scene.sequence)} className={`block w-full p-4 text-left transition ${focusClass} ${selected?.sequence === scene.sequence ? "bg-violet-500/10 ring-1 ring-inset ring-violet-400/40" : "hover:bg-white/[0.03]"}`}>
+          <div className="divide-y divide-white/[0.07]">{scenes.map((scene) => <button key={scene.sequence} type="button" aria-pressed={selected?.sequence === scene.sequence} onClick={() => { setSelectedSequence(scene.sequence); player.current?.seekTo(scene.startMs); }} className={`block w-full p-4 text-left transition ${focusClass} ${selected?.sequence === scene.sequence ? "bg-violet-500/10 ring-1 ring-inset ring-violet-400/40" : "hover:bg-white/[0.03]"}`}>
             <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">Scene {scene.sequence + 1}</span><span className="flex items-center gap-1.5 font-mono text-xs text-zinc-400"><Clock3 size={12} aria-hidden="true" />{formatTimestamp(scene.durationMs)}</span></div>
             <p className="mt-2 font-mono text-xs leading-6 text-zinc-300">{formatTimestamp(scene.startMs)} → {formatTimestamp(scene.endMs)}</p>
             <p className="mt-1 text-[11px] leading-5 text-zinc-500">{methodLabel} · {scene.boundaryScore === null ? "Timing boundary" : `Raw boundary score ${scene.boundaryScore.toFixed(3)}`}</p>
@@ -119,11 +122,11 @@ export default function SceneWorkspace({ movieId, initialScenes, canDetect, dura
         {selected && <section className={`${cardClass} p-4 sm:p-5`} aria-labelledby="scene-inspector-title">
           <p className="text-[11px] uppercase tracking-widest text-violet-300">Selected interval</p><h2 id="scene-inspector-title" className="mt-2 text-lg font-semibold">Scene {selected.sequence + 1}</h2>
           <dl className="mt-4 grid grid-cols-2 gap-4 text-xs"><div><dt className="text-zinc-500">Start → End</dt><dd className="mt-2 font-mono leading-6">{formatTimestamp(selected.startMs)} → {formatTimestamp(selected.endMs)}</dd></div><div><dt className="text-zinc-500">Duration</dt><dd className="mt-2 font-mono leading-6">{formatTimestamp(selected.durationMs)}</dd></div></dl>
-          <div className="mt-4 rounded-lg border border-dashed border-white/10 p-4 text-xs leading-6 text-zinc-500">No scene preview is available. This inspector shows saved timing and overlapping source transcript text.</div>
+          <SourceVideoPreview ref={player} projectId={projectId} movie={{ id: movieId, title: "Selected scene source", sourceRecorded: canDetect }} timing={selected} className="mt-4 rounded-lg border border-white/10" />
           <h3 className="mt-5 text-sm font-medium">Related transcript segments <span className="text-zinc-500">({related.length})</span></h3>
           <p className="mt-2 text-xs leading-5 text-zinc-500">Read-only source. A segment can overlap multiple intervals.</p>
           {!related.length && <p className="mt-4 text-sm leading-6 text-zinc-400">No saved transcript segments overlap this interval.</p>}
-          <div className="mt-4 space-y-3">{related.map((segment) => <article key={segment.sequence} className="rounded-lg border border-white/10 bg-black/10 p-3"><p className="font-mono text-[11px] leading-5 text-zinc-500">Segment {segment.sequence + 1} · {formatTimestamp(segment.startMs)} → {formatTimestamp(segment.endMs)}</p><p lang="zh" className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{segment.text}</p></article>)}</div>
+          <div className="mt-4 space-y-3">{related.map((segment) => <article key={segment.sequence} className="rounded-lg border border-white/10 bg-black/10 p-3"><button type="button" onClick={() => player.current?.seekTo(segment.startMs)} className={`${linkClass} font-mono text-[11px] leading-5`}>Segment {segment.sequence + 1} · {formatTimestamp(segment.startMs)} → {formatTimestamp(segment.endMs)}</button><p lang="zh" className="mt-2 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-300">{segment.text}</p></article>)}</div>
         </section>}
       </div>
     </>}

@@ -4,7 +4,7 @@ import type { ReviewRow, TranslationReview } from "@/lib/translation-qc/types";
 export type SourceRow = { sequence: number; startMs: number; endMs: number; text: string };
 export type TranslationJob = { state: string; attemptsMade: number | null } | null;
 export type WorkspaceSnapshot = {
-  movie: { id: string; title: string; filename: string | null; durationSeconds: number | null; sourceLanguage: string };
+  movie: { id: string; sourceRecorded: boolean; title: string; filename: string | null; durationSeconds: number | null; sourceLanguage: string };
   source: { id: string; rows: SourceRow[] } | null;
   translation: { sourceTranscriptId: string; provider: string; model: string; savedAt: string; rows: SourceRow[] } | null;
   review: TranslationReview | null;
