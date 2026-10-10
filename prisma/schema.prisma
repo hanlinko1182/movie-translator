@@ -594,6 +594,7 @@ model RenderJob {
   updatedAt         DateTime     @updatedAt
   movie             Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
   output            RenderOutput?
+  dispatch          RenderDispatch?
 
   @@unique([movieId, recipeHash])
   @@index([movieId, createdAt])
@@ -616,4 +617,23 @@ model RenderOutput {
   verifiedAt      DateTime
   createdAt       DateTime  @default(now())
   renderJob       RenderJob @relation(fields: [renderJobId], references: [id], onDelete: Cascade)
+}
+
+// Durable dispatch/attempt metadata, separate from the Phase 21.2A snapshot.
+model RenderDispatch {
+  renderJobId        String    @id
+  generation         Int       @default(0)
+  nextDispatchAt     DateTime  @default(now())
+  dispatchedAt       DateTime?
+  dispatchToken      String?
+  dispatchLeaseUntil DateTime?
+  dispatchFailures   Int       @default(0)
+  activeToken        String?
+  activeLeaseUntil   DateTime?
+  heartbeatAt        DateTime?
+  deferredAt         DateTime?
+  renderJob          RenderJob @relation(fields: [renderJobId], references: [id], onDelete: Cascade)
+
+  @@index([nextDispatchAt])
+  @@index([activeLeaseUntil])
 }

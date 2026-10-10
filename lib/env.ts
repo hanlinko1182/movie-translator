@@ -2,7 +2,7 @@ import "server-only";
 import { resolve, isAbsolute, relative } from "node:path";
 
 export type Environment = Record<string, string | undefined>;
-export type RuntimeRole = "web" | "media" | "transcription" | "translation" | "refinement" | "scene" | "character" | "recap";
+export type RuntimeRole = "web" | "media" | "transcription" | "translation" | "refinement" | "scene" | "character" | "recap" | "render";
 export class ConfigurationError extends Error {
   constructor(readonly field: string) { super(`Invalid or missing configuration: ${field}`); this.name = "ConfigurationError"; }
 }
@@ -62,6 +62,7 @@ export const roleRequirements: Record<RuntimeRole, { storage?: boolean; binaries
   transcription: { storage: true, binaries: true, model: "TRANSCRIPTION_MODEL" }, // audio chunking uses FFmpeg
   translation: { model: "TRANSLATION_MODEL" }, refinement: { model: "TRANSLATION_REFINEMENT_MODEL" },
   scene: { storage: true, binaries: true }, character: { model: "CHARACTER_ANALYSIS_MODEL" }, recap: { model: "RECAP_MODEL" },
+  render: {}, // Phase 21.2B defers execution; no media binary or paid provider is used.
 };
 export function validateRuntime(role: RuntimeRole, env: Environment = process.env) {
   databaseUrl(env); redisUrl(env);

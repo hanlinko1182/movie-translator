@@ -6,7 +6,7 @@ import { parseRenderRequest, RenderError } from "./contracts";
 import { buildRenderSnapshot } from "./snapshot";
 import { fingerprintSourceMedia } from "./source-media";
 
-// Internal explicit-write foundation only: no route, queue or encoder calls it.
+// Snapshot and dispatch intent commit together; Redis is contacted by the caller afterward.
 export async function createRenderJobSnapshot(value: unknown) {
   const input = parseRenderRequest(value);
   const captured = await prisma.$transaction(async (transaction) => {
@@ -29,11 +29,15 @@ export async function createRenderJobSnapshot(value: unknown) {
     if (current.projectId !== input.projectId) throw new RenderError("PROJECT_MOVIE_MISMATCH");
     if (current.storageKey !== captured.storageKey) throw new RenderError("SOURCE_MEDIA_CHANGED");
     // Empty update reuses the FIRST immutable snapshot, regardless of job state.
-    // Retrying/cancellation/dispatch belongs to the later queue subtask.
-    return transaction.renderJob.upsert({
+    // Submitting a retained terminal or deferred job never restarts it.
+    const job = await transaction.renderJob.upsert({
       where: { movieId_recipeHash: { movieId: input.movieId, recipeHash: prepared.recipeHash } }, update: {},
       create: { movieId: input.movieId, recipeHash: prepared.recipeHash, mode: input.mode, scope: input.scope,
         profileId: input.profileId, snapshot: prepared.snapshot },
     });
+    if (job.state === "QUEUED" || job.state === "ACTIVE") {
+      await transaction.renderDispatch.upsert({ where: { renderJobId: job.id }, update: {}, create: { renderJobId: job.id, generation: job.generation } });
+    }
+    return job;
   });
 }

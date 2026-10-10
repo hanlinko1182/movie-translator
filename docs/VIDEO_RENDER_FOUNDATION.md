@@ -1,7 +1,8 @@
 # Phase 21.2A — Video render foundation
 
-This is a trusted-local backend foundation. It does not expose a render API,
-dispatch jobs, run a render worker, encode video, serve downloads or change UI.
+Phase 21.2A introduced a trusted-local backend foundation without a render API,
+queue, worker, encoding, downloads or UI changes. Phase 21.2B adds explicit APIs
+and a deferred worker lifecycle, documented in [VIDEO_RENDER_LIFECYCLE.md](VIDEO_RENDER_LIFECYCLE.md).
 It makes no multi-user/public security claim. Existing subtitle downloads are
 unchanged; they now share the same pure selection helper with snapshots.
 
@@ -36,11 +37,11 @@ a future worker/reconciliation responsibility.
 
 ## Immutable snapshots
 
-`createRenderJobSnapshot` is an internal explicit-write service, unused by pages
-or routes. It captures a coherent Repeatable Read translation/transcript view,
+`createRenderJobSnapshot` is an explicit-write service used by the render POST API,
+never by GET or page rendering. It captures a coherent Repeatable Read translation/transcript view,
 then releases the transaction before probing and streaming source bytes. A short
 Movie-locked transaction rechecks project/source-key binding and upserts the
-QUEUED record. No queue exists yet. Translation, transcript, human review, QC and
+QUEUED record and companion dispatch intent; Redis publication follows commit. Translation, transcript, human review, QC and
 Translation Memory are read only throughout this process.
 
 Snapshots contain:
@@ -116,12 +117,12 @@ records, reads an existing movie source without modifying it, and deletes only
 its temporary identities. It verifies original project/movie records and domain
 record counts after cleanup. No provider, encoding, queue or API calls are made.
 
-## Exact next step
+## Lifecycle follow-up
 
-Implement the dedicated render queue and worker lifecycle using persisted job ID
+Phase 21.2B implements the dedicated render queue and deferred worker lifecycle using persisted job ID
 and generation, explicit POST submission, guarded state/attempt ownership,
-durable dispatch reconciliation, bounded CPU concurrency, cancellation/timeout
-handling and private staging/cleanup. The worker must consume the stored ASS bytes
+durable dispatch reconciliation and concurrency limits. Actual encoding, cancellation/timeout
+handling and private staging/cleanup remain Phase 21.2C work. The future encoder must consume the stored ASS bytes
 and verify their checksum plus the frozen source identity before encoding.
 Keep the approved UI untouched until a separate UI task is authorized. Secure
 scoped downloads and output publication require separately implemented disk/path

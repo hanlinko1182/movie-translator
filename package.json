@@ -15,7 +15,8 @@
     "worker:translation-refinement": "node --conditions=react-server --import tsx workers/start.ts refinement",
     "worker:scenes": "node --conditions=react-server --import tsx workers/start.ts scene",
     "worker:characters": "node --conditions=react-server --import tsx workers/start.ts character",
-    "worker:recap": "node --conditions=react-server --import tsx workers/start.ts recap"
+    "worker:recap": "node --conditions=react-server --import tsx workers/start.ts recap",
+    "worker:render": "node --conditions=react-server --import tsx workers/start.ts render"
   },
   "dependencies": {
     "@openrouter/sdk": "^1.4.21",

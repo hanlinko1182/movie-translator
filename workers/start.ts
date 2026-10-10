@@ -6,6 +6,7 @@ const loaders = {
   media: () => import("./media-worker"), transcription: () => import("./transcription-worker"),
   translation: () => import("./translation-worker"), refinement: () => import("./translation-refinement-worker"),
   scene: () => import("./scene-detection-worker"), character: () => import("./character-analysis-worker"), recap: () => import("./recap-worker"),
+  render: () => import("./render-worker"),
 };
 async function start() {
   const role = process.argv[2];
