@@ -145,6 +145,7 @@ model Movie {
   relationshipEvidence CharacterRelationshipEvidence[]
   recap              Recap?
   recapEvidence      RecapEvidence[]
+  renderJobs         RenderJob[]
 
   @@index([projectId])
 }
@@ -542,4 +543,77 @@ model RecapEvidence {
   @@index([relationshipInsightId])
   @@index([sceneId])
   @@index([transcriptSegmentId])
+}
+
+enum RenderMode {
+  BURN_IN
+}
+
+enum RenderScope {
+  ALL_CURRENT
+  APPROVED_ONLY
+}
+
+enum RenderState {
+  QUEUED
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum RenderFailureCode {
+  SOURCE_MEDIA_MISSING
+  SOURCE_MEDIA_INVALID
+  SOURCE_MEDIA_CHANGED
+  STORAGE_UNAVAILABLE
+  SUBTITLE_SNAPSHOT_INVALID
+  RENDER_FAILED
+  RENDER_TIMEOUT
+  OUTPUT_INVALID
+}
+
+model RenderJob {
+  id                String       @id @default(uuid())
+  movieId           String
+  recipeHash        String       @db.VarChar(64)
+  snapshot          Json
+  mode              RenderMode
+  scope             RenderScope
+  profileId         String
+  state             RenderState  @default(QUEUED)
+  generation        Int          @default(0)
+  attempts          Int          @default(0)
+  cancelRequestedAt DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+  cancelledAt       DateTime?
+  errorCode         RenderFailureCode?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  movie             Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  output            RenderOutput?
+
+  @@unique([movieId, recipeHash])
+  @@index([movieId, createdAt])
+  @@index([state, createdAt])
+}
+
+model RenderOutput {
+  id              String    @id @default(uuid())
+  renderJobId     String    @unique
+  storageKey      String    @unique
+  filename        String
+  mimeType        String    @default("video/mp4")
+  sha256          String    @db.VarChar(64)
+  sizeBytes       BigInt
+  durationMs      Int
+  width           Int
+  height          Int
+  videoCodec      String
+  audioCodec      String?
+  verifiedAt      DateTime
+  createdAt       DateTime  @default(now())
+  renderJob       RenderJob @relation(fields: [renderJobId], references: [id], onDelete: Cascade)
 }

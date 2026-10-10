@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { subtitleFilename } from "./filename";
 import { normalizeExportSegments } from "./segments";
+import { selectSubtitleRows } from "./selection";
 import { SubtitleExportError, type SubtitleExportMode, type SubtitleReviewSummary } from "./types";
 
 export function summarizeSubtitleReview(rows: readonly { reviewStatus: string }[]): SubtitleReviewSummary {
@@ -25,8 +26,7 @@ export async function getExportableSubtitle({ movieId, mode }: { movieId: string
   if (!movie) throw new SubtitleExportError("MOVIE_NOT_FOUND");
   if (!movie.translation) throw new SubtitleExportError("TRANSLATION_NOT_FOUND");
   const rows = movie.translation.segments;
-  const selected = mode === "APPROVED_ONLY" ? rows.filter((row) => row.reviewStatus === "APPROVED") : rows;
-  if (!selected.length) throw new SubtitleExportError(mode === "APPROVED_ONLY" ? "NO_APPROVED_SUBTITLES" : "EMPTY_SUBTITLE_EXPORT");
+  const selected = selectSubtitleRows(rows, mode);
   return {
     movieId: movie.id, movieTitle: movie.title, translationId: movie.translation.id, revision: movie.translation.revision, mode,
     filenames: { srt: subtitleFilename(movie.filename, movie.title, "srt"), ass: subtitleFilename(movie.filename, movie.title, "ass") },
