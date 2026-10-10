@@ -22,6 +22,8 @@
 # Local development movie uploads
 /storage/movies/
 /storage/audio/
+/storage/renders/
+/storage/render-attempts/
 
 # misc
 .DS_Store

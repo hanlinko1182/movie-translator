@@ -1,7 +1,7 @@
 import "server-only";
 import { constants, createWriteStream } from "node:fs";
 import { access, chmod, lstat, mkdir, mkdtemp, realpath, link, rename, rm, unlink, open } from "node:fs/promises";
-import { dirname, join, resolve, parse } from "node:path";
+import { dirname, join, resolve, parse, relative } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import type { StorageProvider } from "./provider";
@@ -14,7 +14,7 @@ export class LocalStorageProvider implements StorageProvider {
   readonly root: string;
   constructor(root: string) { this.root = resolve(root); }
   path(key: string) {
-    if (!/^(?:movies\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:mp4|mkv|mov|webm)|audio\/[a-z0-9][a-z0-9_-]{0,127}\.wav)$/i.test(key)) throw new StorageError("INVALID_STORAGE_KEY");
+    if (!/^(?:movies\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:mp4|mkv|mov|webm)|renders\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.mp4|audio\/[a-z0-9][a-z0-9_-]{0,127}\.wav)$/i.test(key)) throw new StorageError("INVALID_STORAGE_KEY");
     return resolve(this.root, key);
   }
   private async directories(path: string) {
@@ -72,4 +72,19 @@ export class LocalStorageProvider implements StorageProvider {
     } finally { await rm(temporary, { recursive: true, force: true }); }
   }
   async delete(key: string) { try { await unlink(await this.localPath(key)); } catch (error) { if (!(error instanceof StorageError && error.code === "STORAGE_FILE_MISSING") && !missing(error)) throw error; } }
+  // Render-only publication from an already verified same-volume scratch file.
+  // The caller holds its job row lock and rechecks the live owner immediately
+  // before this exclusive link. No large copy occurs inside that transaction.
+  async publishRenderFile(key: string, source: string, beforePublish: () => Promise<boolean>) {
+    if (!key.startsWith("renders/") || !/^render-attempts\/attempt-[a-zA-Z0-9]{6}\/output\.mp4$/.test(relative(this.root, source))) throw new StorageError("INVALID_STORAGE_KEY");
+    const destination = this.path(key); await this.check();
+    await this.directories(dirname(source)); await this.directories(dirname(destination));
+    if (await realpath(source) !== source || !(await lstat(source)).isFile() || (await lstat(source)).isSymbolicLink()) throw new StorageError("INVALID_STORAGE_KEY");
+    const file = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try { await file.chmod(0o600); await file.sync(); } finally { await file.close(); }
+    if (!await beforePublish()) throw new StorageError("STORAGE_UNAVAILABLE");
+    await link(source, destination); // atomic/exclusive; output keys are never replaced
+    const directory = await open(dirname(destination), "r");
+    try { await directory.sync(); } finally { await directory.close(); }
+  }
 }

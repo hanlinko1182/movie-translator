@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { createRenderTransport, type RenderTransport } from "@/lib/queue/render-queue";
-import { claimRenderDispatch, finishRenderDispatch, recoverStaleRenderAttempt } from "./lifecycle";
+import { claimRenderDispatch, finishRenderDispatch, operateRenderJob, recoverStaleRenderAttempt } from "./lifecycle";
 
 export async function dispatchRenderJob(id: string, transport: RenderTransport) {
   const claim = await claimRenderDispatch(id);
@@ -29,12 +29,18 @@ export async function reconcileRenderDispatch(options: { limit?: number; renderI
   const limit = options.limit ?? 20;
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error("INVALID_RECONCILE_LIMIT");
   const ids = options.renderIds ? { in: options.renderIds.slice(0, 50) } : undefined;
+  const cancellations = await prisma.renderJob.findMany({ where: { id: ids, state: "QUEUED", cancelRequestedAt: { not: null } },
+    select: { id: true, movieId: true, movie: { select: { projectId: true } } }, take: limit });
+  for (const job of cancellations) {
+    // A concurrent state change can win this bounded cancellation scan.
+    await operateRenderJob(job.movie.projectId, job.movieId, job.id, "cancel").catch(() => log("warn", "render_cancel_pending", { jobId: job.id }));
+  }
   const expired = await prisma.renderDispatch.findMany({ where: {
     renderJobId: ids, renderJob: { state: "ACTIVE" }, OR: [{ activeLeaseUntil: null }, { activeLeaseUntil: { lte: new Date() } }],
   }, select: { renderJobId: true }, orderBy: { activeLeaseUntil: "asc" }, take: limit });
   for (const item of expired) await recoverStaleRenderAttempt(item.renderJobId);
   const pending = await prisma.renderDispatch.findMany({ where: {
-    renderJobId: ids, renderJob: { state: "QUEUED" }, deferredAt: null, nextDispatchAt: { lte: new Date() },
+    renderJobId: ids, renderJob: { state: "QUEUED", cancelRequestedAt: null }, deferredAt: null, nextDispatchAt: { lte: new Date() },
     OR: [{ dispatchLeaseUntil: null }, { dispatchLeaseUntil: { lte: new Date() } }],
   }, select: { renderJobId: true }, orderBy: { nextDispatchAt: "asc" }, take: limit });
   if (!pending.length) return;

@@ -2,7 +2,10 @@
 
 Phase 21.2A introduced a trusted-local backend foundation without a render API,
 queue, worker, encoding, downloads or UI changes. Phase 21.2B adds explicit APIs
-and a deferred worker lifecycle, documented in [VIDEO_RENDER_LIFECYCLE.md](VIDEO_RENDER_LIFECYCLE.md).
+and a deferred worker lifecycle. Phase 21.2C adds local CPU burn-in, verified
+private publication/download and explicit cancellation/retry, documented in
+[VIDEO_RENDER_LIFECYCLE.md](VIDEO_RENDER_LIFECYCLE.md). Earlier references below
+to future execution describe the historical Phase 21.2A boundary.
 It makes no multi-user/public security claim. Existing subtitle downloads are
 unchanged; they now share the same pure selection helper with snapshots.
 
@@ -14,7 +17,8 @@ database `movieId`, `mode: BURN_IN`, `scope: ALL_CURRENT | APPROVED_ONLY`, and
 No path, codec, filter, FFmpeg arguments, font or arbitrary settings are accepted.
 The fixed versioned profile reserves CPU libx264/H.264, yuv420p, medium/CRF 20,
 AAC 192k when audio exists, MP4 faststart and existing ASS serialization.
-Actual Myanmar font availability requires a future worker preflight.
+Myanmar font availability, coverage and complex shaping are now enforced by the
+worker preflight using installed Noto Sans Myanmar and child-local fontconfig.
 
 `RenderJob` belongs to Movie; project scope is checked through that relationship
 and recorded in its immutable snapshot. Unique `(movieId, recipeHash)` prevents

@@ -7,7 +7,7 @@ export const RENDER_LEASE_MS = 60_000;
 export const DISPATCH_LEASE_MS = 15_000;
 export const RECONCILE_INTERVAL_MS = 10_000;
 export type RenderJobReference = Readonly<{ renderJobId: string; generation: number }>;
-export type RenderTransportReceipt = { disposition: "DEFERRED" | "IGNORED" };
+export type RenderTransportReceipt = { disposition: "DEFERRED" | "IGNORED" | "PROCESSED" };
 
 export function parseRenderReference(value: unknown): RenderJobReference {
   if (!value || typeof value !== "object" || Array.isArray(value) || Reflect.ownKeys(value).length !== 2 ||

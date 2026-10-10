@@ -198,8 +198,16 @@ test("live PostgreSQL/Redis render lifecycle", { skip: process.env.RUN_RENDER_QU
       assert.equal(saved.state, "QUEUED"); assert.deepEqual(saved.snapshot, job.snapshot);
       assert.equal(await prisma.renderOutput.count({ where: { renderJob: { movieId: movie.id } } }), 0);
     });
-    await t.test("actual BullMQ worker defers once, global/local concurrency is one, shutdown drains", async () => {
+    await t.test("actual BullMQ worker leaves legacy deferred jobs paused; concurrency is one and shutdown drains", async () => {
       assert.equal(await queue.getGlobalConcurrency(), 1);
+      // This regression fixture references existing media and MUST NOT encode it.
+      // Model legacy Phase B deferral explicitly before starting the real worker.
+      const pending = await prisma.renderJob.findMany({ where: { movieId: movie.id, state: "QUEUED", dispatch: { deferredAt: null } } });
+      for (const job of pending) {
+        const reference = { renderJobId: job.id, generation: job.generation };
+        const owner = await claimRenderAttempt(reference);
+        if (owner.disposition === "CLAIMED") await deferRenderAttempt(reference, owner.token);
+      }
       worker = createRenderWorker(prefix);
       worker.on("error", () => {});
       await worker.waitUntilReady();

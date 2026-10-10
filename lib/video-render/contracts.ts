@@ -30,6 +30,7 @@ export type RenderState = typeof RENDER_STATES[number];
 export const RENDER_FAILURE_CODES = [
   "SOURCE_MEDIA_MISSING", "SOURCE_MEDIA_INVALID", "SOURCE_MEDIA_CHANGED", "STORAGE_UNAVAILABLE",
   "SUBTITLE_SNAPSHOT_INVALID", "RENDER_FAILED", "RENDER_TIMEOUT", "OUTPUT_INVALID",
+  "SOURCE_PROFILE_UNSUPPORTED", "MYANMAR_FONT_UNAVAILABLE", "RENDER_RESOURCE_LIMIT",
 ] as const;
 export type RenderFailureCode = typeof RENDER_FAILURE_CODES[number];
 
@@ -52,6 +53,14 @@ const errors = {
   RENDER_FAILED: [500, "Video rendering failed"],
   RENDER_TIMEOUT: [500, "Video rendering timed out"],
   OUTPUT_INVALID: [500, "Rendered output could not be verified"],
+  SOURCE_PROFILE_UNSUPPORTED: [422, "Source video properties are outside the supported SDR render profile"],
+  MYANMAR_FONT_UNAVAILABLE: [503, "Verified Myanmar font and complex shaping support are required"],
+  RENDER_RESOURCE_LIMIT: [503, "Local rendering resources are unavailable or exhausted"],
+  RENDER_NOT_FOUND: [404, "Render job not found"],
+  RENDER_NOT_COMPLETED: [409, "Verified render output is not available"],
+  RENDER_OUTPUT_MISSING: [410, "Rendered file is missing or corrupt"],
+  RENDER_OPERATION_CONFLICT: [409, "This render operation is not available in the current state"],
+  INVALID_RENDER_OPERATION: [400, "Provide an empty JSON object for cancellation or retry"],
 } as const;
 export type RenderErrorCode = keyof typeof errors;
 export class RenderError extends Error {

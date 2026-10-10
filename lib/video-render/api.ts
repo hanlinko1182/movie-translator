@@ -13,7 +13,7 @@ import { publishRenderSubmission } from "./dispatch";
 
 const select = {
   id: true, movieId: true, mode: true, scope: true, profileId: true, state: true, generation: true, attempts: true,
-  errorCode: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, failedAt: true, cancelledAt: true,
+  errorCode: true, phase: true, progressPercent: true, cancelRequestedAt: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, failedAt: true, cancelledAt: true,
   dispatch: { select: { deferredAt: true } },
 } satisfies Prisma.RenderJobSelect;
 type SelectedJob = Prisma.RenderJobGetPayload<{ select: typeof select }>;
@@ -21,7 +21,7 @@ function metadata(job: SelectedJob) {
   const { dispatch, scope, ...safe } = job;
   return { ...safe, exportMode: scope,
     execution: dispatch?.deferredAt ? "DEFERRED" : job.state === "QUEUED" ? "AWAITING_WORKER" : job.state,
-    executionAvailable: false,
+    executionAvailable: true,
     ...(dispatch?.deferredAt ? { deferredAt: dispatch.deferredAt, reason: "RENDER_EXECUTION_UNAVAILABLE" } : {}),
   };
 }

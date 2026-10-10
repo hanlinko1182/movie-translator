@@ -571,6 +571,9 @@ enum RenderFailureCode {
   RENDER_FAILED
   RENDER_TIMEOUT
   OUTPUT_INVALID
+  SOURCE_PROFILE_UNSUPPORTED
+  MYANMAR_FONT_UNAVAILABLE
+  RENDER_RESOURCE_LIMIT
 }
 
 model RenderJob {
@@ -590,6 +593,8 @@ model RenderJob {
   failedAt          DateTime?
   cancelledAt       DateTime?
   errorCode         RenderFailureCode?
+  phase             String?
+  progressPercent   Int?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   movie             Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
@@ -632,6 +637,7 @@ model RenderDispatch {
   activeLeaseUntil   DateTime?
   heartbeatAt        DateTime?
   deferredAt         DateTime?
+  publication        Json?
   renderJob          RenderJob @relation(fields: [renderJobId], references: [id], onDelete: Cascade)
 
   @@index([nextDispatchAt])

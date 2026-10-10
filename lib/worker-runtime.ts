@@ -4,12 +4,13 @@ import { disconnectPrisma } from "./prisma";
 import { log } from "./logger";
 import { numericConfig } from "./env";
 
-export async function workerLifecycle<Data, Result, Name extends string>(worker: Worker<Data, Result, Name>, role: string, afterDrain: () => Promise<void> = async () => {}) {
+export async function workerLifecycle<Data, Result, Name extends string>(worker: Worker<Data, Result, Name>, role: string, afterDrain: () => Promise<void> = async () => {}, beforeDrain: () => void = () => {}) {
   let closing = false;
   async function close(fatal: boolean) {
     if (fatal) process.exitCode = 1;
     if (closing) return;
     closing = true;
+    beforeDrain();
     log("info", "worker_draining", { worker: role });
     const timeout = numericConfig("WORKER_SHUTDOWN_TIMEOUT_MS", 120000, 1000, 21600000);
     const deadline = setTimeout(() => {

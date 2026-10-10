@@ -17,6 +17,6 @@ test("Redis payload contains only the job reference and generation; IDs are dete
   assert.ok(!renderQueueJobId(reference).includes(":"));
   for (const input of [null, [], { ...reference, path: "/private" }, { ...reference, text: "subtitle" }, { ...reference, generation: -1 }, { ...reference, generation: "0" }, { ...reference, generation: 1.1 }, { ...reference, renderJobId: "../secret" }]) assert.throws(() => parseRenderReference(input), RenderError);
 });
-test("deferred render runtime does not require AI credentials or media binaries", () => {
+test("render runtime requires no AI credentials", () => {
   assert.doesNotThrow(() => validateRuntime("render", { DATABASE_URL: "postgresql://localhost/test", REDIS_URL: "redis://localhost:6379" }));
 });

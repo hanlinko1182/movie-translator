@@ -62,7 +62,7 @@ export const roleRequirements: Record<RuntimeRole, { storage?: boolean; binaries
   transcription: { storage: true, binaries: true, model: "TRANSCRIPTION_MODEL" }, // audio chunking uses FFmpeg
   translation: { model: "TRANSLATION_MODEL" }, refinement: { model: "TRANSLATION_REFINEMENT_MODEL" },
   scene: { storage: true, binaries: true }, character: { model: "CHARACTER_ANALYSIS_MODEL" }, recap: { model: "RECAP_MODEL" },
-  render: {}, // Phase 21.2B defers execution; no media binary or paid provider is used.
+  render: { storage: true, binaries: true }, // Local CPU encoding; no paid provider.
 };
 export function validateRuntime(role: RuntimeRole, env: Environment = process.env) {
   databaseUrl(env); redisUrl(env);
