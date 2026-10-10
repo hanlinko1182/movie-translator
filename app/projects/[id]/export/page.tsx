@@ -1,6 +1,9 @@
+import { withMovieSelection } from "@/lib/source-video/selection";
 import WorkspaceUnavailable from "@/components/ui/workspace-unavailable";
 import { pageClass, contentClass } from "@/components/ui/styles";
 import { notFound } from "next/navigation";
+import { localStorage } from "@/lib/storage";
+import { StorageError } from "@/lib/storage/local";
 import { prisma } from "@/lib/prisma";
 import { subtitleFilename } from "@/lib/subtitle-export/filename";
 import { summarizeSubtitleReview } from "@/lib/subtitle-export/service";
@@ -14,21 +17,24 @@ const previewSelect = {
   reviewStatus: true,
 } as const;
 
-export default async function ExportPage({ params }: PageProps<"/projects/[id]/export">) {
+export default async function ExportPage({ params, searchParams }: PageProps<"/projects/[id]/export">) {
   const { id: slug } = await params;
+  const query = await searchParams;
+  if (query.movieId !== undefined && (typeof query.movieId !== "string" || !/^[a-z0-9][a-z0-9_-]{0,127}$/i.test(query.movieId))) notFound();
   let project;
   try {
     project = await prisma.project.findUnique({
       where: { slug },
       select: {
-        name: true,
+        id: true, name: true, _count: { select: { movies: true } },
         movies: {
+          where: query.movieId ? { id: query.movieId } : undefined,
           take: 1,
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           select: {
             id: true,
             title: true,
-            filename: true,
+            filename: true, storageKey: true,
             durationSeconds: true,
             sourceLanguage: true,
             status: true,
@@ -55,7 +61,15 @@ export default async function ExportPage({ params }: PageProps<"/projects/[id]/e
   }
   if (!project) notFound();
 
+  if (query.movieId && !project.movies.length) notFound();
   const movie = project.movies[0] ?? null;
+  let sourceAvailable: boolean | null = false;
+  if (movie?.storageKey) {
+    try {
+      const file = await localStorage.openFile(movie.storageKey);
+      try { sourceAvailable = (await file.stat()).size > 0; } finally { await file.close(); }
+    } catch (error) { sourceAvailable = error instanceof StorageError && error.code === "STORAGE_FILE_MISSING" ? false : null; }
+  }
   const translation = movie?.translation ?? null;
   const summary = summarizeSubtitleReview(translation?.segments ?? []);
   const projectPath = `/projects/${encodeURIComponent(slug)}`;
@@ -88,7 +102,7 @@ export default async function ExportPage({ params }: PageProps<"/projects/[id]/e
   const movieProps = movie ? {
     id: movie.id,
     title: movie.title,
-    filename: movie.filename,
+    filename: movie.filename, sourceRecorded: !!movie.storageKey,
     durationSeconds: movie.durationSeconds,
     sourceLanguage: movie.sourceLanguage,
     status: movie.status,
@@ -106,8 +120,12 @@ export default async function ExportPage({ params }: PageProps<"/projects/[id]/e
   return <main className={pageClass}>
     <div className={contentClass}>
       <SubtitleExportControls
+        key={movie?.id ?? "empty"}
+        projectId={project.id}
         projectName={project.name}
-        projectHref={projectPath}
+        sourceAvailable={sourceAvailable}
+        renderSelectionConfirmed={!!query.movieId || project._count.movies === 1}
+        projectHref={withMovieSelection(projectPath, movie?.id)}
         reviewHref={reviewPath}
         movie={movieProps}
         translation={translationProps}

@@ -1,10 +1,18 @@
 "use client";
+import RenderHistory, { RenderDownload } from "./render-history";
+import { useRenderJobs } from "./use-render-jobs";
+import { renderPrerequisite, type RenderItem } from "./render-model";
+import { BURN_IN_PROFILE } from "@/lib/video-render/contracts";
+import { withMovieSelection } from "@/lib/source-video/selection";
 
-import { mediaFallbackClass, badgeClass, badgeTones, cardClass, focusClass, primaryButtonClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
+import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
+
+
+import { badgeClass, badgeTones, cardClass, focusClass, primaryButtonClass, secondaryButtonClass, linkClass } from "@/components/ui/styles";
 
 import Link from "next/link";
-import { useState } from "react";
-import { AlertTriangle, ArrowRight, BadgeCheck, ChevronRight, Circle, Clock3, Download, FileText, Film, Info, LoaderCircle } from "lucide-react";
+import { useRef, useState } from "react";
+import { AlertTriangle, ArrowRight, ChevronRight, Download, FileText, Film, Info, LoaderCircle } from "lucide-react";
 import type { SubtitleExportMode, SubtitleFormat, SubtitleReviewSummary } from "@/lib/subtitle-export/types";
 
 type PreviewSegment = {
@@ -16,10 +24,13 @@ type PreviewSegment = {
   sourceText: string | null;
 };
 type Props = {
+  projectId: string;
   projectName: string;
+  renderSelectionConfirmed: boolean;
+  sourceAvailable: boolean | null;
   projectHref: string;
   reviewHref: string;
-  movie: { id: string; title: string; filename: string | null; durationSeconds: number | null; sourceLanguage: string; status: string; createdAt: string } | null;
+  movie: { id: string; sourceRecorded: boolean; title: string; filename: string | null; durationSeconds: number | null; sourceLanguage: string; status: string; createdAt: string } | null;
   translation: { provider: string; model: string; revision: number; updatedAt: string; sourceLanguage: string; targetLanguage: string } | null;
   summary: SubtitleReviewSummary;
   filenames: Record<SubtitleFormat, string>;
@@ -62,8 +73,13 @@ function StatusPill({ children, tone = "neutral" }: { children: React.ReactNode;
   return <span className={`${badgeClass} ${styles}`}>{children}</span>;
 }
 
-export default function SubtitleExportControls({ projectName, projectHref, reviewHref, movie, translation, summary, filenames, previews }: Props) {
+export default function SubtitleExportControls({ projectId, projectName, renderSelectionConfirmed, sourceAvailable, projectHref, reviewHref, movie, translation, summary, filenames, previews }: Props) {
+  const player = useRef<SourceVideoHandle>(null);
   const [format, setFormat] = useState<SubtitleFormat>("srt");
+  const [video, setVideo] = useState(false);
+  const [cpuConfirmed, setCpuConfirmed] = useState(false);
+  const renders = useRenderJobs(projectId, movie?.id);
+  const completed = renders.items.find((job) => job.state === "COMPLETED");
   const [mode, setMode] = useState<SubtitleExportMode>("ALL_CURRENT");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -75,6 +91,15 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
   const activePreview = mode === "APPROVED_ONLY" ? previews.approved : previews.all;
   const translationAvailable = !!movie && !!translation && summary.total > 0;
 
+  const renderBlocked = renderPrerequisite(!!movie, renderSelectionConfirmed, sourceAvailable, !!translation, count);
+  function operateRender(job: RenderItem, operation: "retry" | "cancel") {
+    if (operation === "retry" && (!renderSelectionConfirmed || !cpuConfirmed)) {
+      setVideo(true);
+      setMessage(!renderSelectionConfirmed ? "Confirm the displayed movie in Export Settings before Retry or Resume." : "Confirm the local CPU resource notice in Export Settings, then select Retry or Resume again.");
+      return;
+    }
+    void renders.act({ job, operation });
+  }
   async function download(requestedFormat: SubtitleFormat = format) {
     if (!movie || !translation) return;
     setBusy(true);
@@ -109,33 +134,26 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
       <div className="min-w-0">
         <nav aria-label="Breadcrumb" className="mb-3 flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500">
           <Link href="/projects" className={linkClass}>Projects</Link><ChevronRight size={13} aria-hidden="true" />
-          <Link href={projectHref} className={`${linkClass} min-w-0 break-words`}>{projectName}</Link><ChevronRight size={13} aria-hidden="true" />
+          <Link href={withMovieSelection(projectHref, movie?.id)} className={`${linkClass} min-w-0 break-words`}>{projectName}</Link><ChevronRight size={13} aria-hidden="true" />
           <span aria-current="page" className="text-zinc-300">Export</span>
         </nav>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Export</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-400">Download current Myanmar subtitles for this project.</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">Export saved Myanmar subtitles or a locally rendered burn-in video.</p>
       </div>
-      <button type="button" onClick={() => void download()} disabled={busy || !canDownload} className={primaryButtonClass}>
+      {video ? <button type="button" aria-describedby="render-prerequisites" disabled={!!renderBlocked || !cpuConfirmed || !!renders.busy || renders.loading || !!renders.error} onClick={() => { if (!renderBlocked && cpuConfirmed) void renders.act({ scope: mode }); }} className={primaryButtonClass}>
+        {renders.busy === "submit" ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Film size={15} aria-hidden="true" />}{renders.busy === "submit" ? "Submitting…" : "Start Render"}
+      </button> : <button type="button" onClick={() => void download()} disabled={busy || !canDownload} className={primaryButtonClass}>
         {busy ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
         {busy ? "Preparing…" : `Download ${format.toUpperCase()}`}
-      </button>
+      </button>}
     </header>
 
     <div className="grid min-w-0 items-start gap-4 xl:grid-cols-12">
       <section className={`${panelClass} overflow-hidden xl:col-span-5`} aria-labelledby="export-source-heading">
-        <div className={`${mediaFallbackClass} relative overflow-hidden border-b border-white/[0.07] bg-[#0b111a]`}>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-950/20 via-transparent to-slate-800/20" />
-          <span className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400"><Film size={22} aria-hidden="true" /></span>
-          <p className="relative text-sm font-medium text-zinc-200">Preview unavailable</p>
-          <p className="relative mt-1 max-w-sm text-xs leading-5 text-zinc-500">Source video playback and video rendering are not available in this workspace. Subtitle files are exported separately.</p>
-          <StatusPill tone={translationAvailable ? "green" : "neutral"}>
-            {translationAvailable ? <BadgeCheck size={12} aria-hidden="true" /> : <Circle size={9} aria-hidden="true" />}
-            {translationAvailable ? "Subtitle files available" : !movie ? "No movie uploaded" : !translation ? "Translation required" : "No subtitle rows"}
-          </StatusPill>
-        </div>
+        <SourceVideoPreview ref={player} projectId={projectId} movie={movie} timing={activePreview} className="border-b border-white/[0.07]" />
         <div className="p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Current project movie</p><h2 id="export-source-heading" className="mt-1 break-words text-base font-semibold text-zinc-100">{movie?.title ?? "No movie uploaded"}</h2></div>
+            <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Selected project movie</p><h2 id="export-source-heading" className="mt-1 break-words text-base font-semibold text-zinc-100">{movie?.title ?? "No movie uploaded"}</h2></div>
             {movie && <StatusPill>{movie.status.toLowerCase().replaceAll("_", " ")}</StatusPill>}
           </div>
           <p className="mt-2 break-all text-xs text-zinc-500">{movie?.filename ?? "Upload a movie from Project Overview to begin."}</p>
@@ -148,29 +166,25 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-3`} aria-labelledby="export-type-heading">
-        <div className="mb-4"><h2 id="export-type-heading" className="text-sm font-semibold text-zinc-100">Export Type</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Choose a subtitle file format.</p></div>
+        <div className="mb-4"><h2 id="export-type-heading" className="text-sm font-semibold text-zinc-100">Export Type</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Choose subtitles or a burn-in video.</p></div>
         <div className="grid gap-3">
           {formatOptions.map((option) => {
             const Icon = option.icon;
-            const selected = format === option.id;
-            return <button key={option.id} type="button" aria-pressed={selected} onClick={() => { setFormat(option.id); setError(""); setMessage(""); }} className={`min-w-0 rounded-lg border p-3 text-left transition ${focusClass} ${selected ? "border-violet-400/70 bg-violet-500/[0.12] shadow-[0_0_0_1px_rgba(139,92,246,0.12)]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"}`}>
+            const selected = !video && format === option.id;
+            return <button key={option.id} type="button" aria-pressed={selected} onClick={() => { setVideo(false); setFormat(option.id); setError(""); setMessage(""); }} className={`min-w-0 rounded-lg border p-3 text-left transition ${focusClass} ${selected ? "border-violet-400/70 bg-violet-500/[0.12] shadow-[0_0_0_1px_rgba(139,92,246,0.12)]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"}`}>
               <div className="flex items-start justify-between gap-2"><Icon size={19} className={selected ? "text-violet-300" : "text-zinc-400"} aria-hidden="true" /><span className={`rounded-md px-2 py-0.5 font-mono text-[11px] ${selected ? "bg-violet-400/15 text-violet-200" : "bg-white/[0.05] text-zinc-400"}`}>{option.extension}</span></div>
               <p className="mt-3 break-words text-xs font-semibold leading-5 text-zinc-100">{option.label}</p>
               <p className="mt-1 text-[11px] leading-4 text-zinc-500">{option.detail}</p>
             </button>;
           })}
+          <button type="button" aria-pressed={video} onClick={() => setVideo(true)} className={`min-w-0 rounded-lg border p-3 text-left transition ${focusClass} ${video ? "border-violet-400/70 bg-violet-500/[0.12]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"}`}>
+            <Film size={19} className={video ? "text-violet-300" : "text-zinc-400"} aria-hidden="true" /><p className="mt-3 text-xs font-semibold text-zinc-100">Burn-in Video</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">.mp4 · H.264 / AAC · local CPU</p>
+          </button>
         </div>
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-4`} aria-labelledby="export-queue-heading">
-        <div className="flex items-start justify-between gap-3"><div><h2 id="export-queue-heading" className="text-sm font-semibold text-zinc-100">Export Queue</h2><p className="mt-1 text-xs text-zinc-500">Current project · on-demand files</p></div><StatusPill>Not implemented</StatusPill></div>
-        <div className="mt-4 rounded-lg border border-dashed border-white/10 bg-black/10 p-4">
-          <div className="flex items-center gap-2 text-zinc-300"><Clock3 size={15} aria-hidden="true" /><p className="text-xs font-medium">Queue tracking is not implemented</p></div>
-          <p className="mt-2 text-xs leading-5 text-zinc-500">SRT and ASS files are generated on request. Video-render jobs and their status are not available.</p>
-        </div>
-        <div className="mt-3 space-y-2">
-          {["Translated Video", "Recap Video"].map((label) => <div key={label} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"><div className="flex min-w-0 items-center gap-2"><Film size={14} className="shrink-0 text-zinc-500" aria-hidden="true" /><span className="break-words text-xs text-zinc-300">{label}</span></div><span className="min-w-0 text-[11px] leading-5 text-zinc-500">Not generated · Not implemented yet</span></div>)}
-        </div>
+        <RenderHistory {...renders} hasMovie={!!movie} operate={operateRender} />
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-8`} aria-labelledby="export-settings-heading">
@@ -190,6 +204,13 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
             </div>
           </fieldset>
         </div>
+        {video && <div id="render-prerequisites" className="mt-4 space-y-3 rounded-lg border border-white/[0.08] bg-black/10 p-3">
+          <p className="break-words text-xs leading-5 text-zinc-300">BURN_IN · <span className="break-all font-mono">{BURN_IN_PROFILE.id}</span></p>
+          <p className="text-xs leading-5 text-zinc-400">CPU rendering may take time and use local processor, memory and disk resources. It captures saved subtitles once; retry/resume uses that frozen snapshot. No AI requests are made.</p>
+          <label className="flex items-start gap-2 text-xs leading-5 text-zinc-200"><input type="checkbox" checked={cpuConfirmed} onChange={(event) => setCpuConfirmed(event.target.checked)} className={`mt-1 shrink-0 accent-violet-500 ${focusClass}`} />I understand the local resource cost of Start Render, Retry and Resume.</label>
+          {renderBlocked && <p role="status" className="text-xs leading-5 text-amber-200">{renderBlocked}</p>}
+          {!renderSelectionConfirmed && movie && <Link href={withMovieSelection(`${projectHref.split("?")[0]}/export`, movie.id)} className={linkClass}>Use {movie.title}</Link>}
+        </div>}
         {hasNonApproved && <p role="status" className="mt-4 flex items-start gap-2 rounded-lg border border-amber-300/15 bg-amber-300/[0.045] p-3 text-xs leading-5 text-amber-100/80"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />{mode === "APPROVED_ONLY" ? "Approved Only omits unreviewed and needs-review rows while preserving their original time gaps." : "All Current includes rows that have not been approved by a human."}</p>}
         {mode === "APPROVED_ONLY" && !summary.approved && <p className="mt-3 text-xs leading-5 text-zinc-400">No approved subtitles yet. Approve rows in Translation before downloading this scope.</p>}
         {!summary.total && <p className="mt-3 text-xs leading-5 text-zinc-400">No current translated segments are available to export.</p>}
@@ -212,16 +233,16 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
           </li>)}
           {["Translated Video", "Recap Video"].map((label) => <li key={label} className="flex min-w-0 items-center gap-3 py-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-black/10 text-zinc-500"><Film size={17} aria-hidden="true" /></span>
-            <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">{label}</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">Not generated · Not implemented yet</p></div>
-            <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[11px] text-zinc-500">Unavailable</span>
+            <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">{label}</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">{label === "Translated Video" ? completed ? "Historical snapshot · current match not verified" : "Not generated · choose Burn-in Video" : "Not generated · Not implemented yet"}</p></div>
+            {label === "Translated Video" && completed ? <RenderDownload base={renders.base} job={completed} /> : <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[11px] text-zinc-500">Unavailable</span>}
           </li>)}
         </ul>
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-8`} aria-labelledby="subtitle-preview-heading">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="subtitle-preview-heading" className="text-sm font-semibold text-zinc-100">Preview &amp; Check</h2><p className="mt-1 text-xs leading-5 text-zinc-500">A saved subtitle sample and its original timing. No video playback is available.</p></div><StatusPill>{format.toUpperCase()} · {mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}</StatusPill></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="subtitle-preview-heading" className="text-sm font-semibold text-zinc-100">Preview &amp; Check</h2><p className="mt-1 text-xs leading-5 text-zinc-500">A saved subtitle sample and its original timing. Source playback does not include the translated subtitle overlay.</p></div><StatusPill>{video ? "MP4" : format.toUpperCase()} · {mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}</StatusPill></div>
         {activePreview ? <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
-          <div className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] text-zinc-500">Segment {activePreview.sequence + 1} · {formatTime(activePreview.startMs)} → {formatTime(activePreview.endMs)}</p><StatusPill tone={activePreview.reviewStatus === "APPROVED" ? "green" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "amber" : "neutral"}>{activePreview.reviewStatus === "APPROVED" ? "Approved" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "Needs review" : "Unreviewed"}</StatusPill></div>
+          <div className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => player.current?.seekTo(activePreview.startMs)} className={`${linkClass} text-[11px]`}>Segment {activePreview.sequence + 1} · {formatTime(activePreview.startMs)} → {formatTime(activePreview.endMs)}</button><StatusPill tone={activePreview.reviewStatus === "APPROVED" ? "green" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "amber" : "neutral"}>{activePreview.reviewStatus === "APPROVED" ? "Approved" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "Needs review" : "Unreviewed"}</StatusPill></div>
             {activePreview.sourceText ? <p lang="zh" className="mt-3 break-words text-sm leading-6 text-zinc-200">{activePreview.sourceText}</p> : <p className="mt-3 text-xs text-zinc-500">Chinese source text unavailable.</p>}
             <p lang="my" className="mt-2 break-words text-sm leading-7 text-zinc-200">{activePreview.text}</p>
           </div>
@@ -236,11 +257,11 @@ export default function SubtitleExportControls({ projectName, projectHref, revie
           <li className="flex gap-2"><span className="text-violet-300">•</span><span>All Current includes every saved translation segment.</span></li>
           <li className="flex gap-2"><span className="text-violet-300">•</span><span>Approved Only includes human-approved rows and preserves original timing gaps.</span></li>
           <li className="flex gap-2"><span className="text-violet-300">•</span><span>SRT and ASS downloads use the current saved Myanmar text.</span></li>
-          <li className="flex gap-2"><span className="text-violet-300">•</span><span>Video rendering, burn-in, blur processing, and recap video generation are not implemented.</span></li>
+          <li className="flex gap-2"><span className="text-violet-300">•</span><span>Burn-in uses local CPU resources and a frozen subtitle snapshot. Recap video, soft subtitles and blur/cover remain unavailable.</span></li>
         </ul>
       </section>
     </div>
 
-    <div aria-live="polite" className="min-h-5">{message && <p role="status" className="break-words text-sm text-emerald-200">{message}</p>}{error && <p role="alert" className="break-words text-sm text-amber-200">{error}</p>}</div>
+    <div aria-live="polite" className="min-h-5">{message && <p role="status" className="break-words text-sm text-emerald-200">{message}</p>}{error && <p role="alert" className="break-words text-sm text-amber-200">{error}</p>}{renders.actionError && <p role="alert" className="break-words text-sm text-amber-200">{renders.actionError}</p>}</div>
   </div>;
 }
