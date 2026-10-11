@@ -548,6 +548,70 @@ Read [production-runbook.md](production-runbook.md), especially its release gate
 
 Set `.env` `STORAGE_DRIVER=local` and an absolute `LOCAL_STORAGE_ROOT`. For a single-host checkout, find the path with `pwd` and use `<absolute-repository-path>/storage`; production shared storage must persist across releases and be accessible to all relevant processes. Do not leave the relative development value.
 
+### Storage configuration when switching from development
+
+`pnpm start` runs with `NODE_ENV=production`. A development value of
+`LOCAL_STORAGE_ROOT=storage` fails with
+`Invalid or missing configuration: LOCAL_STORAGE_ROOT` before storage is opened,
+even when the directory exists and is accessible. This is the intentional
+absolute-path requirement, not a request to create a new directory or relax
+validation. A successful build does not validate the live storage volume.
+
+From the repository root, use `realpath storage` to identify the existing
+directory. Set **only** the storage root value in the private runtime configuration
+to that absolute path, retaining `STORAGE_DRIVER=local`. For example (replace the
+example with the existing directory on your host):
+
+```dotenv
+STORAGE_DRIVER=local
+LOCAL_STORAGE_ROOT="/absolute/existing-checkout/storage"
+```
+
+An absolute root also works in development. Keep web and storage-using workers
+on the same physical directory. Movie, audio and render keys are relative to
+the root; changing it to an empty directory makes existing files unavailable.
+Do not move media, change database keys, reset storage, or create a replacement
+volume as a startup fix. On this trusted local checkout the correction changes
+the configured path spelling only; deployment across releases still needs a
+persistent shared volume.
+
+Existing storage locations remain unchanged:
+
+| Data | Existing location |
+| --- | --- |
+| Uploaded source movies | `movies/<generated-uuid>.<allowed-extension>` below the root |
+| Extracted audio | `audio/<movie-id>.wav`; extraction/chunking scratch directories also live under `audio/` |
+| Verified exported videos | `renders/<generated-uuid>.mp4` below the root |
+| Render scratch and subtitles | `render-attempts/attempt-*/`, including staged source, SRT/ASS and `output.mp4`; the CPU lock also lives under `render-attempts/` |
+| SRT/ASS downloads | Serialized from persisted translation data into the response, not a separate permanent subtitle directory |
+| Immutable subtitle snapshots / recap | PostgreSQL records; no separate recap media artifact is created |
+
+For production, Next.js resolves a variable from the process environment first,
+then `.env.production.local`, `.env.local`, `.env.production`, and `.env`. A stale
+export or higher-priority file can override a corrected `.env`. Development uses
+the corresponding `.env.development*` files. Start from the repository root (or
+pass the intended application directory to Next.js). Workers currently use
+`dotenv/config`, which reads `.env` from their working directory and preserves
+exported values; it does not automatically apply Next.js's file precedence.
+Do not put a storage correction only in a Next-specific override and leave
+workers using a different root. Restart affected processes after configuration
+changes; do not print the complete environment or credentials when diagnosing.
+
+The root must remain private, outside `public`, `.next` and `node_modules`, and
+must not be `/`. Existing symlink, traversal, regular-file and permission checks
+remain enabled. Startup initializes root/movie/audio directories and enforces
+0700 directory permissions; readiness only checks access. Neither existence nor
+ownership is checked by the pure configuration parser. If absolute configuration
+passes but readiness fails, inspect the actual volume/ownership/access under the
+runtime user; do not disable those checks.
+
+Offline regression checks (synthetic environments and temporary storage only):
+
+```bash
+node --conditions=react-server --import tsx tests/storage/config.test.ts
+node --conditions=react-server --import tsx tests/source-video/stream.test.ts
+```
+
 Apply migrations, build, then start the production web server:
 
 ```bash
