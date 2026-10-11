@@ -1,5 +1,6 @@
 import type { Confidence, RelationshipType } from "@/lib/character-analysis/types";
 import type { QcCategory, ReviewStatus } from "@/lib/translation-qc/types";
+import type { RecapOutput } from "@/lib/recap/types";
 
 export const STORYLINE = {
   sourceVersion: "story-source-v1", scriptVersion: "story-script-v1",
@@ -52,6 +53,35 @@ export type StorySourcePayload = Identity & {
   scenes: SceneInterval[];
   characterContext: "CURRENT"; characters: StoryCharacter[]; relationships: StoryRelationship[];
   translationContextPolicy: typeof STORYLINE.translationPolicy; translation: TranslationContext | null;
+  preparation?: StoryPreparationContext;
+};
+// Optional for M1-A fixtures; authoritative M1-B candidates always include this section.
+export type StoryVideoMetadata = {
+  format: string; videoIndex: number; videoCodec: string; width: number; height: number;
+  timeBase: string; frameRate: string; hasAudio: boolean;
+};
+export type StoryCapturedObservation = {
+  id: string; ownerKind: "CHARACTER" | "RELATIONSHIP"; ownerId: string; anchor: SourceAnchor;
+  sceneId: string; transcriptSegmentId: string; kind: string;
+  evidenceText: string; inference: string; confidence: Confidence;
+  relationshipType: RelationshipType | null; relationshipSummary: string | null;
+  createdAt: string; updatedAt: string | null;
+};
+export type StoryLegacyRecap = {
+  id: string; sourceHash: string; sourceTranscriptId: string; characterAnalysisRunId: string;
+  provider: string; model: string; language: "my"; createdAt: string; updatedAt: string;
+  childIds: { sections: string[]; characterInsights: string[]; relationshipInsights: string[]; evidence: string[] };
+  output: RecapOutput;
+};
+export type StoryPreparationContext = {
+  policyVersion: "story-source-preparation-v1"; dependencyHash: string; sourceBindingHash: string;
+  translationQcState: "TRANSLATION_MISSING" | "UNSCANNED" | "SCAN_RECORDED";
+  video: StoryVideoMetadata;
+  characterAnalysis: { id: string; sourceHash: string; provider: string; model: string; createdAt: string; updatedAt: string };
+  aliases: { characterId: string; values: string[] }[];
+  observations: StoryCapturedObservation[];
+  legacyRecapState: "ABSENT" | "EXCLUDED_STALE" | "EXCLUDED_INVALID" | "CURRENT_ADVISORY";
+  legacyRecap: StoryLegacyRecap | null;
 };
 export type AdmissionReason = "MISSING" | "SOURCE_TRANSCRIPT_CHANGED" | "LANGUAGE_MISMATCH"
   | "TIMING_MISMATCH" | "EMPTY_TARGET" | "MANUAL_SOURCE_CHANGED" | "ORPHAN_SEQUENCE";

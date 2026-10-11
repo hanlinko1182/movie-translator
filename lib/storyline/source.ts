@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { CONFIDENCES, RELATIONSHIP_TYPES } from "@/lib/character-analysis/types";
 import { normalizeMemorySource, normalizeTerminologyLanguage } from "@/lib/translation-memory/normalize";
 import { contractHash, canonicalJson } from "./canonical";
+import { validatePreparationContext } from "./preparation-context";
 import { LIMITS, STORYLINE, type Identity, type SourceAnchor, type EvidenceAllowance, type StorySourcePayload,
   type StorySourceSnapshot, type TranslationContext, type TranslationRow, type TranslationAdmission, type QcMetadata } from "./contracts";
 import { array, date, enumeration, fail, freeze, hash, id, integer, interval, literal, nullable, record, text, unique } from "./validation";
@@ -111,7 +112,7 @@ function admission(row: TranslationRow, original: StorySourcePayload["transcript
 export function validateSourceSnapshot(value: unknown, expected: Identity): StorySourceSnapshot {
   canonicalJson(value, LIMITS.snapshotBytes);
   id(expected.projectId, "expected.projectId"); id(expected.movieId, "expected.movieId");
-  const row = record(value, ["schemaVersion", "id", "capturedAt", "projectId", "movieId", "sourceLanguage", "targetLanguage", "media", "transcript", "scenes", "characterContext", "characters", "relationships", "translationContextPolicy", "translation"], "source");
+  const row = record(value, ["schemaVersion", "id", "capturedAt", "projectId", "movieId", "sourceLanguage", "targetLanguage", "media", "transcript", "scenes", "characterContext", "characters", "relationships", "translationContextPolicy", "translation", ...(value && typeof value === "object" && Object.hasOwn(value, "preparation") ? ["preparation"] : [])], "source");
   const projectId = id(row.projectId, "source.projectId"), movieId = id(row.movieId, "source.movieId");
   scoped({ projectId, movieId }, expected, "source");
   const mediaRaw = record(row.media, ["sha256", "bytes", "durationMs"], "source.media");
@@ -168,10 +169,12 @@ export function validateSourceSnapshot(value: unknown, expected: Identity): Stor
   const source: StorySourcePayload = { schemaVersion: literal(row.schemaVersion, STORYLINE.sourceVersion, "source.schemaVersion"), id: id(row.id, "source.id"), capturedAt: date(row.capturedAt, "source.capturedAt"), projectId, movieId,
     sourceLanguage: enumeration(row.sourceLanguage, ["zh", "cmn"], "source.sourceLanguage"), targetLanguage: literal(row.targetLanguage, "my", "source.targetLanguage"), media, transcript, scenes,
     characterContext: literal(row.characterContext, "CURRENT", "source.characterContext"), characters, relationships, translationContextPolicy: literal(row.translationContextPolicy, STORYLINE.translationPolicy, "source.translationContextPolicy"), translation: parseTranslation(row.translation, movieId) };
-  if (source.sourceLanguage !== transcript.language) fail("SCOPE_MISMATCH", "source.transcript.language");
+  if (normalizeTerminologyLanguage(source.sourceLanguage) !== normalizeTerminologyLanguage(transcript.language)) fail("SCOPE_MISMATCH", "source.transcript.language");
+  if (Object.hasOwn(row, "preparation")) source.preparation = validatePreparationContext(row.preparation, source);
   const admissions = admit(source);
   const sourceContentHash = contractHash("story-source-content-v1", { projectId, movieId, media, transcript, scenes, characters, relationships,
-    targets: admissions.filter(row => row.status === "ADMITTED").map(row => ({ sequence: row.sequence, text: row.row.text, startMs: row.row.startMs, endMs: row.row.endMs })) });
+    targets: admissions.filter(row => row.status === "ADMITTED").map(row => ({ sequence: row.sequence, text: row.row.text, startMs: row.row.startMs, endMs: row.row.endMs })),
+    ...(source.preparation ? { video: source.preparation.video, observations: source.preparation.observations, aliases: source.preparation.aliases, legacyRecap: source.preparation.legacyRecap } : {}) });
   const { id: snapshotId, capturedAt, ...context } = source;
   void snapshotId; void capturedAt;
   return freeze({ payload: source, admissions, sourceContentHash, sourceContextHash: contractHash("story-source-context-v1", { context, admissions }) });
