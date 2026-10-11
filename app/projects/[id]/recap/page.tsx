@@ -9,6 +9,7 @@ import { RecapError } from "@/lib/recap/types";
 import { readMovieCharacters } from "@/lib/character-analysis/read-analysis";
 import { getRecapJob } from "@/lib/queue/recap-queue";
 import RecapControls from "./RecapControls";
+import RecapStudioShell from "@/components/storyline/recap-studio-shell";
 
 export default async function RecapPage({ params, searchParams }: PageProps<"/projects/[id]/recap">) {
   const { id: slug } = await params;
@@ -87,9 +88,22 @@ export default async function RecapPage({ params, searchParams }: PageProps<"/pr
   const hasTranscript = !!movie?.transcript;
   const hasTranscriptSegments = (movie?.transcript?._count.segments ?? 0) > 0;
   const model = process.env.RECAP_MODEL?.trim() || null;
+  const navigationQuery = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (Array.isArray(value)) value.forEach((item) => navigationQuery.append(key, item));
+    else if (value !== undefined) navigationQuery.set(key, value);
+  }
 
   return <main className={pageClass}>
     <div className={contentClass}>
+      <RecapStudioShell recapPath={`${base}/recap`} query={navigationQuery.toString()} context={{
+        projectId: project.id, projectName: project.name,
+        movie: movie ? { id: movie.id, title: movie.title, filename: movie.filename, sourceRecorded: !!movie.storageKey } : null,
+        transcriptState: !hasTranscript ? "MISSING" : hasTranscriptSegments ? "READY" : "EMPTY",
+        transcriptSegmentCount: movie?.transcript?._count.segments ?? 0,
+        sceneCount: movie?.scenes.length ?? 0, characterState,
+        projectHref: withMovieSelection(base, movie?.id),
+      }}>
       <RecapControls
         key={movie?.id ?? "empty"}
         projectId={project.id}
@@ -109,6 +123,7 @@ export default async function RecapPage({ params, searchParams }: PageProps<"/pr
         exportHref={exportHref}
         projectHref={withMovieSelection(base, movie?.id)}
       />
+      </RecapStudioShell>
     </div>
   </main>;
 }
