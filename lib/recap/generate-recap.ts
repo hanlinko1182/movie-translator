@@ -3,6 +3,8 @@ import { getRecapProvider } from "./index";
 import { loadRecapSource, recapSceneWindows, type RecapSource } from "./source";
 import { recapInput } from "./context";
 import { validateRecapOutput } from "./validate-output";
+import { invalidRecapResponse } from "./diagnostics";
+import { RECAP_LIMITS } from "./response-schema";
 import type { RecapProvider } from "./provider";
 import { RecapError, type RecapBatchResult, type RecapOutput, type RecapResult, type Usage } from "./types";
 
@@ -10,7 +12,7 @@ export function synthesisGroups(summaries: RecapOutput[]) {
   const groups: RecapOutput[][] = []; let group: RecapOutput[] = []; let size = 0;
   for (const summary of summaries) {
     const length = JSON.stringify(summary).length;
-    if (length > 10000) throw new RecapError("RECAP_INVALID_RESPONSE");
+    if (length > RECAP_LIMITS.output) invalidRecapResponse({ stage: "SYNTHESIS", rule: "OUTPUT_TOO_LONG", fieldPath: "summaries", expectedLimit: RECAP_LIMITS.output, actualLength: length });
     if (group.length && (group.length >= 4 || size + length > 20000)) { groups.push(group); group = []; size = 0; }
     group.push(summary); size += length;
   }
@@ -21,9 +23,16 @@ export async function generateRecapFromSource(source: RecapSource, provider: Rec
   const receipts: RecapBatchResult[] = [];
   async function call(input: ReturnType<typeof recapInput>) {
     const result = await provider.generate(input);
-    const output = validateRecapOutput(result.output, input);
-    if (!result.provider.trim() || !result.model.trim() || !Number.isSafeInteger(result.runtimeMs) || result.runtimeMs < 0 || receipts.length && (result.provider !== receipts[0].provider || result.model !== receipts[0].model)) throw new RecapError("RECAP_INVALID_RESPONSE");
-    if (result.usage && Object.entries(result.usage).some(([key, value]) => !["inputTokens", "outputTokens", "totalTokens", "costUsd"].includes(key) || !Number.isFinite(value) || value! < 0 || key !== "costUsd" && !Number.isSafeInteger(value))) throw new RecapError("RECAP_INVALID_RESPONSE");
+    const output = validateRecapOutput(result.output, input, "GENERATION");
+    for (const field of ["provider", "model"] as const) {
+      if (typeof result[field] !== "string" || !result[field].trim()) invalidRecapResponse({ stage: "GENERATION", rule: "INVALID_RESULT_METADATA", fieldPath: `result.${field}` });
+      if (receipts.length && result[field] !== receipts[0][field]) invalidRecapResponse({ stage: "GENERATION", rule: "PROVIDER_MODEL_MISMATCH", fieldPath: `result.${field}` });
+    }
+    if (!Number.isSafeInteger(result.runtimeMs) || result.runtimeMs < 0) invalidRecapResponse({ stage: "GENERATION", rule: "INVALID_RESULT_METADATA", fieldPath: "result.runtimeMs" });
+    if (result.usage) for (const [key, value] of Object.entries(result.usage)) {
+      const known = ["inputTokens", "outputTokens", "totalTokens", "costUsd"].includes(key);
+      if (!known || !Number.isFinite(value) || value! < 0 || key !== "costUsd" && !Number.isSafeInteger(value)) invalidRecapResponse({ stage: "GENERATION", rule: "INVALID_USAGE", fieldPath: known ? `result.usage.${key}` : "result.usage" });
+    }
     receipts.push({ ...result, output });
     return output;
   }
@@ -35,7 +44,7 @@ export async function generateRecapFromSource(source: RecapSource, provider: Rec
   while (summaries.length > 1) {
     const next: RecapOutput[] = [];
     for (const group of synthesisGroups(summaries)) next.push(group.length === 1 ? group[0] : await call(recapInput(source, [], group)));
-    if (next.length >= summaries.length) throw new RecapError("RECAP_INVALID_RESPONSE");
+    if (next.length >= summaries.length) invalidRecapResponse({ stage: "SYNTHESIS", rule: "SYNTHESIS_NOT_REDUCING", fieldPath: "summaries", actualCount: next.length });
     summaries = next;
   }
   if (!summaries.length) throw new RecapError("TRANSCRIPT_EMPTY");

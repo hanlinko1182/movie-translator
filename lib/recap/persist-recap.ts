@@ -4,13 +4,22 @@ import { Prisma } from "@/generated/prisma/client";
 import { hashValue } from "@/lib/character-analysis/normalize";
 import { loadRecapSource, type RecapSource } from "./source";
 import { validateRecapOutput } from "./validate-output";
+import { invalidRecapResponse } from "./diagnostics";
 import { RECAP_LANGUAGE, RecapError, type RecapInput, type RecapReceipt, type RecapReference, type RecapResult } from "./types";
 
 export function validatePersistedRecap(result: RecapResult, source: RecapSource) {
   const input: RecapInput = { stage: "SCENES", characterContext: source.characterContext, characters: source.characters, relationships: source.relationships, summaries: [], scenes: source.scenes.map((scene) => ({ ...scene, segments: source.segments.filter((segment) => segment.startMs < scene.endMs && (segment.endMs > scene.startMs || segment.startMs === segment.endMs && segment.startMs >= scene.startMs)) })) };
-  const output = validateRecapOutput(result.output, input);
-  if (!result.provider.trim() || !result.model.trim() || !Number.isSafeInteger(result.runtimeMs) || result.runtimeMs < 0 || result.runtimeMs > 2147483647 || !Number.isSafeInteger(result.modelCalls) || result.modelCalls < 1 || !["SINGLE_STAGE", "HIERARCHICAL"].includes(result.strategy)) throw new RecapError("RECAP_INVALID_RESPONSE");
-  if (result.usage && Object.entries(result.usage).some(([key, value]) => !["inputTokens", "outputTokens", "totalTokens", "costUsd"].includes(key) || !Number.isFinite(value) || value! < 0 || key !== "costUsd" && !Number.isSafeInteger(value))) throw new RecapError("RECAP_INVALID_RESPONSE");
+  const output = validateRecapOutput(result.output, input, "PERSISTENCE");
+  for (const field of ["provider", "model"] as const) {
+    if (typeof result[field] !== "string" || !result[field].trim()) invalidRecapResponse({ stage: "PERSISTENCE", rule: "INVALID_RESULT_METADATA", fieldPath: `result.${field}` });
+  }
+  if (!Number.isSafeInteger(result.runtimeMs) || result.runtimeMs < 0 || result.runtimeMs > 2147483647) invalidRecapResponse({ stage: "PERSISTENCE", rule: "INVALID_RESULT_METADATA", fieldPath: "result.runtimeMs", expectedLimit: 2147483647 });
+  if (!Number.isSafeInteger(result.modelCalls) || result.modelCalls < 1) invalidRecapResponse({ stage: "PERSISTENCE", rule: "INVALID_RESULT_METADATA", fieldPath: "result.modelCalls" });
+  if (!["SINGLE_STAGE", "HIERARCHICAL"].includes(result.strategy)) invalidRecapResponse({ stage: "PERSISTENCE", rule: "INVALID_RESULT_METADATA", fieldPath: "result.strategy" });
+  if (result.usage) for (const [key, value] of Object.entries(result.usage)) {
+    const known = ["inputTokens", "outputTokens", "totalTokens", "costUsd"].includes(key);
+    if (!known || !Number.isFinite(value) || value! < 0 || key !== "costUsd" && !Number.isSafeInteger(value)) invalidRecapResponse({ stage: "PERSISTENCE", rule: "INVALID_USAGE", fieldPath: known ? `result.usage.${key}` : "result.usage" });
+  }
   return output;
 }
 export async function persistRecap(result: RecapResult, expected: RecapSource, database: Pick<typeof prisma, "$transaction"> = prisma): Promise<RecapReceipt> {
