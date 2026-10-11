@@ -30,7 +30,7 @@ process.stdin.on("data", (chunk: string) => {
   const newline = pending.indexOf("\n");
   if (newline < 0) return;
   try {
-    const input = JSON.parse(pending.slice(0, newline)) as { args: string[]; cwd: string; timeoutMs: number; outputLimit: number; fontConfig: string };
+    const input = JSON.parse(pending.slice(0, newline)) as { args: string[]; cwd: string; timeoutMs: number; outputLimit: number; fontConfig?: string };
     if (!Array.isArray(input.args) || input.args.some((v) => typeof v !== "string") || !Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1 || input.timeoutMs > 86400000 || !Number.isSafeInteger(input.outputLimit) || input.outputLimit < 1 || input.outputLimit > 34359738368) throw new Error();
     starting = true;
     const lock = spawn("flock", ["-n", "-E", "75", "3"], { shell: false, stdio: ["ignore", "ignore", "ignore", 3], env: { PATH: process.env.PATH, NODE_ENV: "production" } });
@@ -41,7 +41,7 @@ process.stdin.on("data", (chunk: string) => {
       if (stopped) return;
       child = spawn("prlimit", ["--as=4294967296", `--fsize=${input.outputLimit}`, "--cpu=86400", "--", "ffmpeg", ...input.args], {
         shell: false, cwd: input.cwd, stdio: ["ignore", "pipe", "pipe", 3],
-        env: { PATH: process.env.PATH, LANG: "C.UTF-8", FONTCONFIG_FILE: input.fontConfig, NODE_ENV: "production" },
+        env: { PATH: process.env.PATH, LANG: "C.UTF-8", ...(input.fontConfig ? { FONTCONFIG_FILE: input.fontConfig } : {}), NODE_ENV: "production" },
       });
       child.stdout!.pipe(process.stdout); child.stderr!.pipe(process.stderr);
       deadline = setTimeout(stop, input.timeoutMs);

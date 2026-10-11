@@ -20,7 +20,7 @@ export async function createRenderJobSnapshot(value: unknown) {
     }
   }, { isolationLevel: "RepeatableRead", timeout: 30_000 });
   // Never hold a database transaction open while reading a long movie file.
-  const media = await fingerprintSourceMedia(captured.storageKey);
+  const media = await fingerprintSourceMedia(captured.storageKey, undefined, input.mode === "SOFT_SUBTITLE");
   const prepared = buildRenderSnapshot(input, captured.translation, media);
   return prisma.$transaction(async (transaction) => {
     await transaction.$queryRaw`SELECT id FROM "Movie" WHERE id = ${input.movieId} FOR UPDATE`;

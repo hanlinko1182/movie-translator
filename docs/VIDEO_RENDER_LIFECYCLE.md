@@ -1,3 +1,8 @@
+> Phase 21.3B adds a separate copy-only soft subtitle profile. See
+> [VIDEO_RENDER_SOFT_SUBTITLE.md](VIDEO_RENDER_SOFT_SUBTITLE.md) for its contracts,
+> v2 snapshots, migration, verification and deployment limits. Historical burn-in
+> and deferred-phase descriptions below remain specific to those phases.
+
 # Phase 21.2C — Local Myanmar burn-in execution
 
 This section supersedes the historical Phase 21.2B execution boundary below.

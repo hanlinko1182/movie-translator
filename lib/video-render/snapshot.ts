@@ -7,11 +7,12 @@ import { selectSubtitleRows } from "@/lib/subtitle-export/selection";
 import { summarizeSubtitleReview } from "@/lib/subtitle-export/service";
 import type { TranslationSnapshot } from "@/lib/translation-qc/service";
 import { sourceTextHash } from "@/lib/translation-memory/hash";
-import { BURN_IN_PROFILE, parseRenderRequest, RenderError, type RenderRequest } from "./contracts";
+import { BURN_IN_PROFILE, SOFT_SUBTITLE_PROFILE, parseRenderRequest, RenderError, type RenderRequest } from "./contracts";
+import { validateSoftCues, type SoftStreamPlan } from "./soft-subtitle";
 
 export type SourceMediaIdentity = Readonly<{
   storageKey: string; sha256: string; sizeBytes: number;
-  durationMs: number; width: number; height: number; hasAudio: boolean;
+  durationMs: number; width: number; height: number; hasAudio: boolean; streamPlan?: SoftStreamPlan;
 }>;
 
 export function sha256(bytes: string | Uint8Array): string {
@@ -67,21 +68,26 @@ export function buildRenderSnapshot(request: RenderRequest, movie: TranslationSn
       })),
     };
   });
+  const soft = input.mode === "SOFT_SUBTITLE";
+  if (soft) {
+    if (movie.translation.targetLanguage !== "my" || !media.streamPlan) throw new RenderError("SUBTITLE_PROFILE_UNSUPPORTED");
+    validateSoftCues(rows, media.streamPlan.video.durationMs);
+  }
   const encode = (text: string) => {
     const bytes = Buffer.from(text, "utf8");
     return { encoding: "utf8" as const, bytesBase64: bytes.toString("base64"), sha256: sha256(bytes), sizeBytes: bytes.length };
   };
   const subtitles = { srt: encode(formatSrt(normalized)), ass: encode(formatAss(normalized)) };
   const recipe = {
-    version: 1, projectId: input.projectId, movieId: input.movieId, mode: input.mode, scope: input.scope,
-    profile: { ...BURN_IN_PROFILE }, sourceMedia: { ...media },
+    version: soft ? 2 : 1, projectId: input.projectId, movieId: input.movieId, mode: input.mode, scope: input.scope,
+    profile: soft ? { ...SOFT_SUBTITLE_PROFILE } : { ...BURN_IN_PROFILE }, sourceMedia: { ...media },
     // Hash actual content, not just Translation.revision (Sol may leave it unchanged).
     selected: rows.map(({ sequence, startMs, endMs, sourceText, text }) => ({ sequence, startMs, endMs, sourceText, text })),
-    subtitleChecksums: { srt: subtitles.srt.sha256, ass: subtitles.ass.sha256 },
+    subtitleChecksums: { srt: subtitles.srt.sha256, ass: subtitles.ass.sha256, ...(soft ? { softTextTiming: sha256(JSON.stringify(rows.map((r) => [r.startMs, r.endMs, r.subtitleText]))) } : {}) },
   };
   const recipeHash = hashRenderRecipe(recipe);
   const snapshot = {
-    version: 1, capturedAt: capturedAt.toISOString(), recipe, recipeHash,
+    version: soft ? 2 : 1, capturedAt: capturedAt.toISOString(), recipe, recipeHash,
     translation: { id: movie.translation.id, revision: movie.translation.revision,
       sourceTranscriptId: movie.transcript.id, sourceLanguage: movie.translation.sourceLanguage,
       targetLanguage: movie.translation.targetLanguage, provider: movie.translation.provider, model: movie.translation.model,

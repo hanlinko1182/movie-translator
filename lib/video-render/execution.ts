@@ -6,7 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import { localStorage } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
-import { BURN_IN_PROFILE, RenderError } from "./contracts";
+import { BURN_IN_PROFILE, SOFT_SUBTITLE_PROFILE, RenderError } from "./contracts";
 import { canonicalJson, hashRenderRecipe, sha256, type PreparedRenderSnapshot } from "./snapshot";
 import { fingerprintSourceMedia } from "./source-media";
 import { assertDiskBudget, createAttemptDirectory, hashFile, MAX_SOURCE_BYTES, newOutputKey, validOutputKey } from "./files";
@@ -15,13 +15,17 @@ import { prepareMyanmarFont } from "./fonts";
 import { runSupervised } from "./runner";
 import { attemptControl, completeRenderAttempt, ownedAttempt, recordPublication, updateRenderProgress, type Publication } from "./lifecycle";
 import type { RenderJobReference } from "./job-contract";
+import { inspectSoftSource, softEncodingArguments, validateSoftCues, verifySoftOutput } from "./soft-subtitle";
+import { disableGeneratedSubtitle } from "./mp4-disposition";
+import { formatSrt } from "@/lib/subtitle-export/srt";
 import { localInputArgs } from "@/lib/media";
 
 export function validatedSnapshot(value: unknown, expected: { recipeHash: string; movieId: string }) {
   try {
     const snapshot = value as PreparedRenderSnapshot["snapshot"];
-    if (snapshot.version !== 1 || snapshot.recipeHash !== expected.recipeHash || hashRenderRecipe(snapshot.recipe) !== expected.recipeHash ||
-      snapshot.recipe.movieId !== expected.movieId || canonicalJson(snapshot.recipe.profile) !== canonicalJson(BURN_IN_PROFILE)) throw new Error();
+    const soft = snapshot.recipe.mode === "SOFT_SUBTITLE";
+    if (snapshot.version !== (soft ? 2 : 1) || snapshot.recipe.version !== snapshot.version || snapshot.recipeHash !== expected.recipeHash || hashRenderRecipe(snapshot.recipe) !== expected.recipeHash ||
+      snapshot.recipe.movieId !== expected.movieId || canonicalJson(snapshot.recipe.profile) !== canonicalJson(soft ? SOFT_SUBTITLE_PROFILE : BURN_IN_PROFILE)) throw new Error();
     const media = snapshot.recipe.sourceMedia;
     if (!Number.isSafeInteger(media.sizeBytes) || media.sizeBytes <= 0 || media.sizeBytes > MAX_SOURCE_BYTES) throw new Error();
     for (const kind of ["srt", "ass"] as const) {
@@ -30,6 +34,13 @@ export function validatedSnapshot(value: unknown, expected: { recipeHash: string
       const bytes = Buffer.from(entry.bytesBase64, "base64");
       if (bytes.toString("base64") !== entry.bytesBase64 || bytes.length !== entry.sizeBytes || sha256(bytes) !== entry.sha256 || entry.sha256 !== snapshot.recipe.subtitleChecksums[kind]) throw new Error();
       if (new TextDecoder("utf-8", { fatal: true }).decode(bytes).includes("\u0000")) throw new Error();
+    }
+    if (soft) {
+      const plan = media.streamPlan;
+      if (!plan || plan.version !== 1 || snapshot.translation.targetLanguage !== "my") throw new Error();
+      validateSoftCues(snapshot.rows, plan.video.durationMs);
+      if (canonicalJson(snapshot.rows.map(({ sequence, startMs, endMs, sourceText, text }) => ({ sequence, startMs, endMs, sourceText, text }))) !== canonicalJson(snapshot.recipe.selected) ||
+        formatSrt(snapshot.rows.map((r) => ({ ...r, text: r.subtitleText }))) !== Buffer.from(snapshot.subtitles.srt.bytesBase64, "base64").toString("utf8")) throw new Error();
     }
     return snapshot;
   } catch { throw new RenderError("SUBTITLE_SNAPSHOT_INVALID"); }
@@ -47,11 +58,12 @@ export async function executeRenderAttempt(reference: RenderJobReference, token:
   if (job.movie.projectId !== snapshot.recipe.projectId) throw new RenderError("PROJECT_MOVIE_MISMATCH");
   if (job.movie.storageKey !== snapshot.recipe.sourceMedia.storageKey) throw new RenderError("SOURCE_MEDIA_CHANGED");
   const signal = controller.signal;
+  const soft = snapshot.recipe.mode === "SOFT_SUBTITLE";
   const phase = async (value: "preparing" | "encoding" | "verifying" | "publishing") => {
     if (signal.aborted || !await updateRenderProgress(reference, token, value)) { controller.abort(); throw new RenderError("RENDER_FAILED"); }
   };
   await phase("preparing");
-  const media = await fingerprintSourceMedia(job.movie.storageKey);
+  const media = await fingerprintSourceMedia(job.movie.storageKey, undefined, soft, signal);
   if (canonicalJson(media) !== canonicalJson(snapshot.recipe.sourceMedia)) throw new RenderError("SOURCE_MEDIA_CHANGED");
   const directory = await createAttemptDirectory();
   let pendingProgress: Promise<unknown> = Promise.resolve();
@@ -66,14 +78,17 @@ export async function executeRenderAttempt(reference: RenderJobReference, token:
     } }), createWriteStream(sourcePath, { flags: "wx", mode: 0o600 }), { signal });
     const staged = await hashFile(sourcePath, MAX_SOURCE_BYTES);
     if (staged.sizeBytes !== media.sizeBytes || staged.sha256 !== media.sha256) throw new RenderError("SOURCE_MEDIA_CHANGED");
-    const source = supportedSource(await probeMedia(sourcePath));
+    const stagedPlan = soft ? await inspectSoftSource(sourcePath, signal) : undefined;
+    if (soft && canonicalJson(stagedPlan) !== canonicalJson(media.streamPlan)) throw new RenderError("SOURCE_MEDIA_CHANGED");
+    const source = soft ? media : supportedSource(await probeMedia(sourcePath));
+    const verify = (path: string) => stagedPlan ? verifySoftOutput(path, source, stagedPlan, snapshot.rows, signal) : verifyOutput(path, source);
     if (source.durationMs !== media.durationMs || source.width !== media.width || source.height !== media.height || source.hasAudio !== media.hasAudio) throw new RenderError("SOURCE_MEDIA_CHANGED");
 
     const previous = job.dispatch?.publication as unknown as Publication | null;
     if (previous && previous.recipeHash === job.recipeHash && validOutputKey(previous.storageKey)) {
       try {
         await phase("verifying");
-        const measured = await verifyOutput(await localStorage.localPath(previous.storageKey), source);
+        const measured = await verify(await localStorage.localPath(previous.storageKey));
         if (measured.sha256 !== previous.sha256 || measured.sizeBytes !== previous.sizeBytes) throw new RenderError("OUTPUT_INVALID");
         await phase("publishing");
         if (await completeRenderAttempt(reference, token, { ...measured, recipeHash: job.recipeHash, storageKey: previous.storageKey }, snapshot.recipe.projectId, media.storageKey)) return;
@@ -84,13 +99,14 @@ export async function executeRenderAttempt(reference: RenderJobReference, token:
         // key replaces its durable intent; orphan cleanup handles the old key.
       }
     }
-    const fontConfig = await prepareMyanmarFont(directory, snapshot.recipe.selected.map((s) => s.text).join("\n"), signal);
-    await writeFile(join(directory, "subtitles.ass"), Buffer.from(snapshot.subtitles.ass.bytesBase64, "base64"), { flag: "wx", mode: 0o600 });
+    const fontConfig = soft ? undefined : await prepareMyanmarFont(directory, snapshot.recipe.selected.map((s) => s.text).join("\n"), signal);
+    const subtitle = soft ? "srt" : "ass";
+    await writeFile(join(directory, `subtitles.${subtitle}`), Buffer.from(snapshot.subtitles[subtitle].bytesBase64, "base64"), { flag: "wx", mode: 0o600 });
     await phase("encoding");
     let last = 0; let writing = false;
     await runSupervised({ cwd: directory, fontConfig, signal, outputLimit, durationMs: source.durationMs,
       authorize: async () => { const control = await attemptControl(reference, token); return control.owned && !control.cancel; },
-      args: encodingArguments(sourceName, source.hasAudio, outputLimit), progress(percent) {
+      args: stagedPlan ? softEncodingArguments(sourceName, stagedPlan, outputLimit) : encodingArguments(sourceName, source.hasAudio, outputLimit), progress(percent) {
         if (writing || Date.now() - last < 2000 || signal.aborted) return;
         writing = true; last = Date.now();
         pendingProgress = updateRenderProgress(reference, token, "encoding", percent).then((owned) => { if (!owned) controller.abort(); }).catch(() => controller.abort()).finally(() => { writing = false; });
@@ -98,7 +114,8 @@ export async function executeRenderAttempt(reference: RenderJobReference, token:
     await pendingProgress;
     await phase("verifying");
     const outputPath = join(directory, "output.mp4");
-    const verified = await verifyOutput(outputPath, source);
+    if (soft) await disableGeneratedSubtitle(outputPath, signal);
+    const verified = await verify(outputPath);
     const publication: Publication = { ...verified, recipeHash: job.recipeHash, storageKey: newOutputKey() };
     await phase("publishing");
     if (!await recordPublication(reference, token, publication)) throw new RenderError("RENDER_FAILED");
@@ -113,7 +130,7 @@ export async function executeRenderAttempt(reference: RenderJobReference, token:
       });
     }, { timeout: 30_000 });
     const publishedPath = await localStorage.localPath(publication.storageKey);
-    const measured = await verifyOutput(publishedPath, source);
+    const measured = await verify(publishedPath);
     if (measured.sha256 !== publication.sha256 || measured.sizeBytes !== publication.sizeBytes) throw new RenderError("OUTPUT_INVALID");
     if (signal.aborted || !await completeRenderAttempt(reference, token, publication, snapshot.recipe.projectId, media.storageKey)) throw new RenderError("RENDER_FAILED");
   } finally { await pendingProgress; await rm(directory, { recursive: true, force: true }); }

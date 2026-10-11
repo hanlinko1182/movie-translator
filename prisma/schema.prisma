@@ -547,6 +547,7 @@ model RecapEvidence {
 
 enum RenderMode {
   BURN_IN
+  SOFT_SUBTITLE
 }
 
 enum RenderScope {
@@ -574,6 +575,7 @@ enum RenderFailureCode {
   SOURCE_PROFILE_UNSUPPORTED
   MYANMAR_FONT_UNAVAILABLE
   RENDER_RESOURCE_LIMIT
+  SUBTITLE_PROFILE_UNSUPPORTED
 }
 
 model RenderJob {
@@ -619,6 +621,7 @@ model RenderOutput {
   height          Int
   videoCodec      String
   audioCodec      String?
+  streamManifest  Json?
   verifiedAt      DateTime
   createdAt       DateTime  @default(now())
   renderJob       RenderJob @relation(fields: [renderJobId], references: [id], onDelete: Cascade)

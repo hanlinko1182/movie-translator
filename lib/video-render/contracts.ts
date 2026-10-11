@@ -17,27 +17,37 @@ export const BURN_IN_PROFILE = Object.freeze({
   fontPolicy: "system-myanmar-preflight-required-v1",
 } as const);
 
+export const SOFT_SUBTITLE_PROFILE = Object.freeze({
+  id: "myanmar-mp4-soft-copy-v1", version: 1, mode: "SOFT_SUBTITLE",
+  container: "mp4", videoCodec: "copy-h264-yuv420p", audioCodec: "copy-aac-lc",
+  maxAudioTracks: 8, subtitleCodec: "mov_text", subtitleDecoder: "text",
+  language: "mya", title: "Myanmar", default: false, forced: false,
+  fastStart: true, timestampPolicy: "copy-presentation-zero-v1",
+  subtitlePolicy: "lossless-raw-text-v1", dispositionPolicy: "disabled-tkhd-v1",
+} as const);
+
 export type RenderRequest = Readonly<{
   projectId: string; // Database identity, never the navigation slug.
   movieId: string;
-  mode: "BURN_IN";
   scope: SubtitleExportMode;
-  profileId: typeof BURN_IN_PROFILE.id;
-}>;
+} & (
+  { mode: "BURN_IN"; profileId: typeof BURN_IN_PROFILE.id } |
+  { mode: "SOFT_SUBTITLE"; profileId: typeof SOFT_SUBTITLE_PROFILE.id }
+)>;
 
 export const RENDER_STATES = ["QUEUED", "ACTIVE", "COMPLETED", "FAILED", "CANCELLED"] as const;
 export type RenderState = typeof RENDER_STATES[number];
 export const RENDER_FAILURE_CODES = [
   "SOURCE_MEDIA_MISSING", "SOURCE_MEDIA_INVALID", "SOURCE_MEDIA_CHANGED", "STORAGE_UNAVAILABLE",
   "SUBTITLE_SNAPSHOT_INVALID", "RENDER_FAILED", "RENDER_TIMEOUT", "OUTPUT_INVALID",
-  "SOURCE_PROFILE_UNSUPPORTED", "MYANMAR_FONT_UNAVAILABLE", "RENDER_RESOURCE_LIMIT",
+  "SOURCE_PROFILE_UNSUPPORTED", "MYANMAR_FONT_UNAVAILABLE", "RENDER_RESOURCE_LIMIT", "SUBTITLE_PROFILE_UNSUPPORTED",
 ] as const;
 export type RenderFailureCode = typeof RENDER_FAILURE_CODES[number];
 
 const errors = {
   INVALID_RENDER_REQUEST: [400, "Provide only projectId, movieId, mode, scope and profileId"],
   INVALID_RENDER_IDENTITY: [400, "Provide valid project and movie database IDs"],
-  UNSUPPORTED_RENDER_MODE: [400, "Only BURN_IN is supported"],
+  UNSUPPORTED_RENDER_MODE: [400, "Use BURN_IN or SOFT_SUBTITLE"],
   INVALID_RENDER_SCOPE: [400, "Use ALL_CURRENT or APPROVED_ONLY"],
   UNSUPPORTED_RENDER_PROFILE: [400, "Use the fixed CPU Myanmar MP4 profile"],
   INVALID_RENDER_STATE: [400, "Invalid render state"],
@@ -54,6 +64,7 @@ const errors = {
   RENDER_TIMEOUT: [500, "Video rendering timed out"],
   OUTPUT_INVALID: [500, "Rendered output could not be verified"],
   SOURCE_PROFILE_UNSUPPORTED: [422, "Source video properties are outside the supported SDR render profile"],
+  SUBTITLE_PROFILE_UNSUPPORTED: [422, "Subtitle cues cannot be represented losslessly by the soft subtitle profile"],
   MYANMAR_FONT_UNAVAILABLE: [503, "Verified Myanmar font and complex shaping support are required"],
   RENDER_RESOURCE_LIMIT: [503, "Local rendering resources are unavailable or exhausted"],
   RENDER_NOT_FOUND: [404, "Render job not found"],
@@ -83,10 +94,12 @@ export function parseRenderRequest(value: unknown): RenderRequest {
   for (const key of ["projectId", "movieId"]) {
     if (typeof input[key] !== "string" || !/^[a-z0-9][a-z0-9_-]{0,127}$/i.test(input[key])) throw new RenderError("INVALID_RENDER_IDENTITY");
   }
-  if (input.mode !== "BURN_IN") throw new RenderError("UNSUPPORTED_RENDER_MODE");
+  if (input.mode !== "BURN_IN" && input.mode !== "SOFT_SUBTITLE") throw new RenderError("UNSUPPORTED_RENDER_MODE");
   if (input.scope !== "ALL_CURRENT" && input.scope !== "APPROVED_ONLY") throw new RenderError("INVALID_RENDER_SCOPE");
-  if (input.profileId !== BURN_IN_PROFILE.id) throw new RenderError("UNSUPPORTED_RENDER_PROFILE");
-  return Object.freeze({ projectId: input.projectId as string, movieId: input.movieId as string, mode: input.mode, scope: input.scope, profileId: input.profileId });
+  if (input.profileId !== (input.mode === "BURN_IN" ? BURN_IN_PROFILE.id : SOFT_SUBTITLE_PROFILE.id)) throw new RenderError("UNSUPPORTED_RENDER_PROFILE");
+  const identity: { projectId: string; movieId: string; scope: SubtitleExportMode } = { projectId: input.projectId as string, movieId: input.movieId as string, scope: input.scope };
+  return Object.freeze(input.mode === "BURN_IN" ? { ...identity, mode: "BURN_IN", profileId: BURN_IN_PROFILE.id } :
+    { ...identity, mode: "SOFT_SUBTITLE", profileId: SOFT_SUBTITLE_PROFILE.id });
 }
 
 export function parseRenderState(value: unknown): RenderState {

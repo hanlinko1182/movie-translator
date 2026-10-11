@@ -6,13 +6,13 @@ import { RenderError } from "./contracts";
 import { hashFile } from "./files";
 
 const execute = promisify(execFile);
-type Stream = { codec_type?: string; codec_name?: string; width?: number; height?: number; pix_fmt?: string; sample_aspect_ratio?: string;
+export type Stream = { index?: number; profile?: string; time_base?: string; disposition?: Record<string, number>; codec_type?: string; codec_name?: string; width?: number; height?: number; pix_fmt?: string; sample_aspect_ratio?: string;
   avg_frame_rate?: string; field_order?: string; color_space?: string; color_transfer?: string; color_primaries?: string;
-  channels?: number; sample_rate?: string; start_time?: string; duration?: string; tags?: { rotate?: string }; side_data_list?: { rotation?: number }[] };
+  channels?: number; sample_rate?: string; start_time?: string; duration?: string; tags?: { rotate?: string; language?: string; handler_name?: string; DURATION?: string }; side_data_list?: { rotation?: number }[] };
 export type MediaProbe = { streams: Stream[]; format: { duration?: string; start_time?: string; format_name?: string } };
-export async function probeMedia(path: string): Promise<MediaProbe> {
+export async function probeMedia(path: string, signal?: AbortSignal): Promise<MediaProbe> {
   try {
-    const { stdout } = await execute("ffprobe", ["-v", "error", ...localInputArgs(path), "-show_streams", "-show_format", "-of", "json"], { shell: false, timeout: 30_000, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
+    const { stdout } = await execute("ffprobe", ["-v", "error", ...localInputArgs(path), "-show_streams", "-show_format", "-of", "json"], { signal, shell: false, timeout: 30_000, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
     const data = JSON.parse(stdout);
     if (!Array.isArray(data.streams) || !data.format) throw new Error();
     return data;
@@ -36,7 +36,7 @@ export function supportedSource(data: MediaProbe) {
     audio && (!Number.isInteger(audio.channels) || audio.channels! < 1 || audio.channels! > 2 || !Number.isFinite(Number(audio.sample_rate)) || Number(audio.sample_rate) < 8000 || Number(audio.sample_rate) > 192000 || !Number.isFinite(Number(audio.start_time ?? 0)) || Math.abs(Number(audio.start_time ?? 0)) > 0.1)) throw new RenderError("SOURCE_PROFILE_UNSUPPORTED");
   return { durationMs, width: video.width!, height: video.height!, hasAudio: !!audio };
 }
-export type VerifiedOutput = { sha256: string; sizeBytes: number; durationMs: number; width: number; height: number; videoCodec: "h264"; audioCodec: "aac" | null };
+export type VerifiedOutput = { sha256: string; sizeBytes: number; durationMs: number; width: number; height: number; videoCodec: "h264"; audioCodec: "aac" | null; streamManifest?: import("./soft-subtitle").VerifiedStreamManifest };
 export async function verifyOutput(path: string, source: { durationMs: number; width: number; height: number; hasAudio: boolean }): Promise<VerifiedOutput> {
   try {
     const measured = await hashFile(path);

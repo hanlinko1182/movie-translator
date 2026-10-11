@@ -11,9 +11,7 @@ import { RECONCILE_INTERVAL_MS, RENDER_JOB_NAME, RENDER_QUEUE_NAME, parseRenderR
 import { attemptControl, claimRenderAttempt, failRenderAttempt, heartbeatRenderAttempt } from "@/lib/video-render/lifecycle";
 import { reconcileRenderDispatch } from "@/lib/video-render/dispatch";
 import { executeRenderAttempt } from "@/lib/video-render/execution";
-import { cleanOldAttempts, createAttemptDirectory, MAX_RUNTIME_MS } from "@/lib/video-render/files";
-import { prepareMyanmarFont } from "@/lib/video-render/fonts";
-import { rm } from "node:fs/promises";
+import { cleanOldAttempts, MAX_RUNTIME_MS } from "@/lib/video-render/files";
 import { cleanupRenderStorage, cleanupTerminalPublication } from "@/lib/video-render/cleanup";
 
 const active = new Set<AbortController>();
@@ -67,9 +65,8 @@ export async function main() {
   // Check migration availability and establish the queue-wide limit BEFORE consuming.
   await prisma.renderDispatch.findFirst({ select: { renderJobId: true } });
   if (process.platform !== "linux") throw new RenderError("RENDER_RESOURCE_LIMIT");
-  const preflight = await createAttemptDirectory();
-  try { await prepareMyanmarFont(preflight, "မြန်မာစာ", new AbortController().signal); }
-  finally { await rm(preflight, { recursive: true, force: true }); }
+  // Font/shaping preflight is per BURN_IN attempt. Soft stream copy has no font dependency.
+  await prisma.renderOutput.findFirst({ select: { streamManifest: true } });
   await cleanOldAttempts();
   const queue = createRenderQueue();
   try { await queue.waitUntilReady(); await queue.setGlobalConcurrency(1); }

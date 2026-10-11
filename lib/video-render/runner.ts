@@ -12,7 +12,7 @@ export function progressPercent(line: string, durationMs: number) {
   if (!match || !Number.isFinite(durationMs) || durationMs <= 0) return null;
   return Math.min(99, Math.max(0, Math.floor(Number(match[1]) / 1000 / durationMs * 100)));
 }
-export async function runSupervised(options: { args: string[]; cwd: string; fontConfig: string; outputLimit: number; durationMs: number;
+export async function runSupervised(options: { args: string[]; cwd: string; fontConfig?: string; outputLimit: number; durationMs: number;
   signal: AbortSignal; timeoutMs?: number; progress?: (percent: number) => void; authorize?: () => Promise<boolean> }) {
   await renderDirectories();
   const lock = await open(join(localStorage.root, "render-attempts", "cpu.lock"), constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW, 0o600);
