@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronRight, Clapperboard, LoaderCircle, RefreshCw } from "lucide-react";
 import type { RecapRead } from "@/lib/recap/read-recap";
 import type { RecapJobStatus } from "@/lib/queue/recap-queue";
+import { recapRequest, recapSubmissionGate } from "@/lib/recap/client";
 
 type Scene = { sequence: number; startMs: number; endMs: number; detectionMethod: string; boundaryScore: number | null };
 type Props = {
@@ -56,12 +57,6 @@ function confidenceStyle(confidence: string) {
   if (confidence === "MEDIUM") return "border-amber-300/15 bg-amber-300/[0.06] text-amber-200";
   return "border-zinc-400/15 bg-zinc-400/[0.06] text-zinc-300";
 }
-async function request<T>(url: string, method = "GET"): Promise<T> {
-  const response = await fetch(url, { method, cache: "no-store" });
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error?.message ?? "Recap request failed");
-  return body.data;
-}
 type Evidence = NonNullable<RecapRead["recap"]>["sections"][number]["evidence"][number];
 type EvidenceLink = Evidence & { linkedTo: string; type: string };
 
@@ -90,16 +85,25 @@ function StatusChip({ children, tone = "neutral" }: { children: React.ReactNode;
 export default function RecapControls(props: Props) {
   const [data, setData] = useState(props.initial);
   const [job, setJob] = useState<RecapJobStatus>(props.initialJob);
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [acknowledgedFor, setAcknowledgedFor] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pollEpoch, setPollEpoch] = useState(0);
   const [error, setError] = useState("");
+  const gate = useRef(recapSubmissionGate());
+  const requests = useRef<AbortController | null>(null);
+  useEffect(() => {
+    requests.current = new AbortController();
+    return () => requests.current?.abort();
+  }, []);
   const player = useRef<SourceVideoHandle>(null);
   const [selectedTiming, setSelectedTiming] = useState<{ startMs: number; endMs: number } | null>(null);
   function seekSource(timing: { startMs: number; endMs: number }) { setSelectedTiming(timing); player.current?.seekTo(timing.startMs); }
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(props.initial.recap?.sections[0]?.id ?? null);
   const [activeTab, setActiveTab] = useState<"script" | "characters" | "relationships" | "evidence" | "scenes">("script");
   const movieId = props.movie?.id ?? null;
+  const acknowledgementKey = job?.state === "failed" ? `${job.jobId}/${job.failureToken}` : `${movieId}/generate`;
+  const acknowledged = acknowledgedFor === acknowledgementKey;
   const base = movieId ? `/api/movies/${encodeURIComponent(movieId)}/recap` : null;
   const recap = data.recap;
   const active = isActiveJob(job);
@@ -123,23 +127,32 @@ export default function RecapControls(props: Props) {
   useEffect(() => {
     if (!base || !shouldPollJob) return;
     let cancelled = false;
+    const controller = new AbortController();
+    let polls = 0;
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
-        const status = await request<RecapJobStatus>(`${base}/generate${currentJobId ? `?jobId=${encodeURIComponent(currentJobId)}` : ""}`);
+        const status = await recapRequest<RecapJobStatus>(`${base}/generate${currentJobId ? `?jobId=${encodeURIComponent(currentJobId)}` : ""}`, { signal: controller.signal });
         if (cancelled) return;
-        setJob(status);
         if (status?.state === "completed") {
-          const current = await request<RecapRead>(base!);
-          if (!cancelled) setData(current);
-        } else if (isActiveJob(status)) timer = setTimeout(poll, 2000);
+          const current = await recapRequest<RecapRead>(base!, { signal: controller.signal });
+          // Commit the completed state together with its saved data. Otherwise
+          // effect cleanup aborts this read as soon as shouldPollJob turns false.
+          if (!cancelled) { setData(current); setJob(status); }
+        } else {
+          setJob(status);
+          if (isActiveJob(status)) {
+            if (++polls < 150) timer = setTimeout(poll, 2000);
+            else setError("Automatic status checks paused. Use Refresh Status to check this job again.");
+          }
+        }
       } catch (pollError) {
         if (!cancelled) setError(pollError instanceof Error ? pollError.message : "Unable to refresh recap status");
       }
     }
     void poll();
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [base, currentJobId, shouldPollJob]);
+    return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
+  }, [base, currentJobId, shouldPollJob, pollEpoch]);
 
   const selectedSection = recap?.sections.find((section) => section.id === selectedSectionId) ?? recap?.sections[0] ?? null;
   const evidenceRows = useMemo<EvidenceLink[]>(() => {
@@ -156,10 +169,11 @@ export default function RecapControls(props: Props) {
     setRefreshing(true);
     setError("");
     try {
-      const status = await request<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(job.jobId)}`);
+      const status = await recapRequest<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(job.jobId)}`, { signal: requests.current?.signal });
       setJob(status);
+      setPollEpoch((value) => value + 1);
       if (status?.state === "completed") {
-        const current = await request<RecapRead>(base);
+        const current = await recapRequest<RecapRead>(base, { signal: requests.current?.signal });
         setData(current);
         setSelectedSectionId(current.recap?.sections[0]?.id ?? null);
       }
@@ -172,27 +186,41 @@ export default function RecapControls(props: Props) {
 
   async function generate() {
     if (!base || !acknowledged || !canGenerate || submitting || active) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      const queued = await request<{ jobId: string }>(`${base}/generate`, "POST");
-      const status = await request<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(queued.jobId)}`);
-      setJob(status);
-      setAcknowledged(false);
-      const current = await request<RecapRead>(base);
-      setData(current);
-      setSelectedSectionId(current.recap?.sections[0]?.id ?? null);
-    } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : "Unable to queue recap generation");
-    } finally {
-      setSubmitting(false);
-    }
+    const retry = job?.state === "failed";
+    if (retry && !job.failureToken) return;
+    await gate.current.run(acknowledged, async () => {
+      setSubmitting(true);
+      setError("");
+      try {
+        const queued = await recapRequest<{ jobId: string; state: NonNullable<RecapJobStatus>["state"] }>(`${base}/generate${retry ? "/retry" : ""}`, {
+          signal: requests.current?.signal, submit: true,
+          ...(retry ? { retry: { jobId: job.jobId, failureToken: job.failureToken!, acknowledged: true } } : {}),
+        });
+        // Begin polling from the submission receipt even if the next GET fails.
+        setJob({ ...queued, attemptsMade: 0 });
+        setAcknowledgedFor(null);
+        const status = await recapRequest<RecapJobStatus>(`${base}/generate?jobId=${encodeURIComponent(queued.jobId)}`, { signal: requests.current?.signal });
+        if (status) setJob(status);
+        if (status?.state === "completed") {
+          const current = await recapRequest<RecapRead>(base, { signal: requests.current?.signal });
+          setData(current);
+          setSelectedSectionId(current.recap?.sections[0]?.id ?? null);
+        }
+      } catch (generateError) {
+        setError(generateError instanceof Error ? generateError.message : "Unable to queue recap generation");
+      } finally {
+        setAcknowledgedFor(null);
+        setSubmitting(false);
+      }
+    });
   }
 
   const stale = !!recap?.stale;
   const stateLabel = !props.movie ? "Not available" : !readyTranscript ? "Transcript required" : !readyScenes ? "Scenes required" : active ? "Generating" : job?.state === "failed" ? "Failed" : stale ? "Stale" : recap ? "Completed" : !props.model ? "Not configured" : "Ready";
   const stateTone = stateLabel === "Generating" ? "violet" : stateLabel === "Failed" ? "red" : stateLabel === "Stale" ? "amber" : stateLabel === "Completed" || stateLabel === "Ready" ? "green" : "neutral";
-  const actionIsGenerate = readyTranscript && readyScenes && !!props.movie && (!recap || stale) && !active && job?.state !== "failed";
+  const retrying = job?.state === "failed";
+  const actionIsGenerate = readyTranscript && readyScenes && !!props.movie && (!recap || stale || retrying) && !active;
+  const retryUnsupported = retrying && !job.failureToken;
   const actionIsRefresh = !!job && (active || job.state === "failed");
 
   return <div className="space-y-5">
@@ -210,25 +238,28 @@ export default function RecapControls(props: Props) {
         <StatusChip tone={stateTone}>{active && <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />}{stateLabel}</StatusChip>
         {actionIsGenerate ? <>
           <label className="flex max-w-[300px] items-start gap-2 text-left text-xs leading-5 text-zinc-400 sm:justify-end">
-            <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} disabled={!canGenerate || submitting || active} className={`mt-1 shrink-0 accent-violet-400 ${focus}`} />
-            <span>AI Action · OpenRouter. I understand this may incur usage cost.</span>
+            <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledgedFor(event.target.checked ? acknowledgementKey : null)} disabled={!canGenerate || submitting || active || retryUnsupported} className={`mt-1 shrink-0 accent-violet-400 ${focus}`} />
+            <span>AI Action · OpenRouter. I understand {retrying ? "retrying" : "generation"} may consume paid API tokens.</span>
           </label>
-          <button type="button" onClick={() => void generate()} disabled={!acknowledged || !canGenerate || submitting || active} className={primaryButtonClass}>
-            {submitting ? <><LoaderCircle size={15} className="animate-spin" aria-hidden="true" />Queueing…</> : <><Clapperboard size={15} aria-hidden="true" />{stale ? "Regenerate Recap" : "Generate Recap"}</>}
+          <button type="button" onClick={() => void generate()} disabled={!acknowledged || !canGenerate || submitting || active || retryUnsupported} className={primaryButtonClass}>
+            {submitting ? <><LoaderCircle size={15} className="animate-spin" aria-hidden="true" />Queueing…</> : <><Clapperboard size={15} aria-hidden="true" />{retrying ? "Retry Generation" : stale ? "Regenerate Recap" : "Generate Recap"}</>}
           </button>
-        </> : actionIsRefresh ? <button type="button" onClick={() => void refreshStatus()} disabled={refreshing} className={secondaryButtonClass}>
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />{refreshing ? "Refreshing…" : "Refresh Status"}
-        </button> : !props.movie ? <Link href={props.projectHref} className={primaryButtonClass}>Open Project</Link>
+        </> : actionIsRefresh && readyTranscript && readyScenes ? null : !props.movie ? <Link href={props.projectHref} className={primaryButtonClass}>Open Project</Link>
           : !readyTranscript ? <Link href={props.transcriptionHref} className={primaryButtonClass}>Open Transcription</Link>
             : !readyScenes ? <Link href={props.scenesHref} className={primaryButtonClass}>Detect Scenes</Link>
               : recap && !stale ? <Link href={props.exportHref} className={primaryButtonClass}>Open Export<ChevronRight size={15} aria-hidden="true" /></Link>
                 : <button type="button" disabled className={secondaryButtonClass}>{job?.state === "failed" ? "Generation failed" : "Recap unavailable"}</button>}
+        {actionIsRefresh && <button type="button" onClick={() => void refreshStatus()} disabled={refreshing || submitting} className={secondaryButtonClass}>
+          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />{refreshing ? "Refreshing…" : "Refresh Status"}
+        </button>}
+        {retryUnsupported && <p className="max-w-[300px] text-xs leading-5 text-zinc-400">Retry is unavailable for this retained job. Refresh status; if still unavailable, inspect worker configuration.</p>}
+        {actionIsGenerate && !props.model && <p className="max-w-[300px] text-xs leading-5 text-zinc-400">Recap provider is not configured. Configure it before generation.</p>}
       </div>
     </header>
 
     {stale && <section className="flex gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4" role="status"><AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-200" aria-hidden="true" /><div><h2 className="text-sm font-medium text-amber-100">This recap is stale</h2><p className="mt-1 text-xs leading-5 text-amber-100/75">Source transcript, scenes, or character context changed after this recap was generated. The saved recap remains available for review; regenerate only when you choose.</p></div></section>}
     {props.sourceReason && !active && <section className="flex gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.045] p-4 text-sm text-amber-100" role="status"><AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><p className="leading-6">{!readyTranscript ? "Transcription is required before generating a recap." : !readyScenes ? "Scene detection is required to build the recap." : props.sourceReason}</p></section>}
-    {job?.state === "failed" && <section className="rounded-xl border border-rose-300/15 bg-rose-300/[0.04] p-4" role="alert"><p className="text-sm font-medium text-rose-200">Recap generation could not be completed.</p><p className="mt-1 text-xs leading-5 text-zinc-400">{job.error ?? "The saved generation job failed. Check worker configuration and source data."}</p></section>}
+    {job?.state === "failed" && <section className="rounded-xl border border-rose-300/15 bg-rose-300/[0.04] p-4" role="alert"><p className="text-sm font-medium text-rose-200">Recap generation could not be completed.</p><p className="mt-1 text-xs leading-5 text-zinc-400">{job.errorCode && <span>{job.errorCode} · </span>}{job.error ?? "The saved generation job failed. Check worker configuration and source data."}</p></section>}
     {props.jobUnavailable && <p role="status" className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs leading-5 text-zinc-400">Live generation status is unavailable. Saved recap data is still shown.</p>}
     {error && <p role="alert" className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-3 text-xs leading-5 text-amber-200">{error}</p>}
 
@@ -315,7 +346,7 @@ export default function RecapControls(props: Props) {
         </div>
       </aside>
     </div>
-    <p className="text-xs leading-5 text-zinc-500">Recap uses the newest movie in this project. Review important claims against the referenced Chinese source. Confidence labels describe support strength, not accuracy or truth probability.</p>
+    <p className="text-xs leading-5 text-zinc-500">Recap uses the selected movie shown above. Review important claims against the referenced Chinese source. Confidence labels describe support strength, not accuracy or truth probability.</p>
   </div>;
 }
 

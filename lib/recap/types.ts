@@ -36,8 +36,15 @@ const errors = {
   RECAP_PROVIDER_ERROR: [502, "Recap provider request failed"],
   RECAP_JOB_FAILED: [409, "The retained recap job failed; inspect configuration before retrying"],
   RECAP_JOB_INVALID: [400, "Invalid recap job reference"],
+  RECAP_RETRY_INVALID: [400, "Invalid recap retry request"],
+  RECAP_RETRY_CONFIRMATION_REQUIRED: [400, "Confirm that retrying may consume paid OpenRouter API tokens"],
+  RECAP_RETRY_UNSUPPORTED: [409, "This job cannot be retried safely; refresh status and inspect worker configuration"],
+  RECAP_RETRY_STALE: [409, "The failed attempt changed; refresh status and confirm again before retrying"],
 } as const;
 export class RecapError extends Error {
   readonly status: number;
   constructor(readonly code: keyof typeof errors) { super(errors[code][1]); this.name = "RecapError"; this.status = errors[code][0]; }
+}
+export function recapErrorMessage(code: unknown) {
+  return typeof code === "string" && Object.hasOwn(errors, code) ? errors[code as keyof typeof errors][1] : null;
 }

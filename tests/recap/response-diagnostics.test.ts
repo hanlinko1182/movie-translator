@@ -72,6 +72,23 @@ test("plot evidence can cite segment 1; character evidence is restricted to its 
   assert.throws(() => validateRecapOutput(output, input), e => check(e, { rule: "CHARACTER_EVIDENCE_NOT_ALLOWED", fieldPath: "output.characterInsights[0].evidence[0].segmentSequences" }));
 });
 
+test("live failure diagnostic: a valid first character anchor does not authorize a second plot-only anchor", async () => {
+  const { input, output } = fixture();
+  const original = structuredClone(output);
+  // Synthetic reproduction of the retained rule/path, not the private response.
+  // Segment 1 belongs to the scene but not to this character's evidence.
+  output.characterInsights[0].evidence.push({ sceneSequence: 0, segmentSequences: [1], note: "Synthetic unsupported character anchor." });
+  const invalid = structuredClone(output);
+  await assert.rejects(provider(envelope(output)).generate(input), error => check(error, {
+    stage: "OUTPUT_VALIDATION",
+    rule: "CHARACTER_EVIDENCE_NOT_ALLOWED",
+    fieldPath: "output.characterInsights[0].evidence[1].segmentSequences",
+    finishReason: "stop",
+  }));
+  assert.deepEqual(output, invalid, "Invalid evidence must not be repaired or removed");
+  assert.deepEqual(await provider(envelope(original)).generate(input).then(result => result.output), original);
+});
+
 test("unknown scene and segment references produce distinct rule codes and static paths", () => {
   const { input, output } = fixture();
   output.sections[0].evidence[0].sceneSequence = 1;
