@@ -20,3 +20,12 @@ test("no movie or metadata-only movie retains an honest fallback without request
     assert.doesNotMatch(html, /<video|\/api\//);
   }
 });
+
+test("player identity resets local playback, pending seek and errors for movie/project/availability changes", () => {
+  const props = { projectId: "project", movie: { id: "older-movie", title: "Source", sourceRecorded: true } };
+  const key = SourceVideoPreview(props).key;
+  assert.equal(SourceVideoPreview({ ...props, movie: { ...props.movie, title: "Renamed source" } }).key, key);
+  assert.notEqual(SourceVideoPreview({ ...props, movie: { ...props.movie, id: "newer-movie" } }).key, key);
+  assert.notEqual(SourceVideoPreview({ ...props, projectId: "other-project" }).key, key);
+  assert.notEqual(SourceVideoPreview({ ...props, movie: { ...props.movie, sourceRecorded: false } }).key, key);
+});

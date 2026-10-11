@@ -21,6 +21,10 @@ The supported workspaces honor an explicit `movieId` query parameter, validate t
 
 Transcript/translation timing controls seek to saved source timestamps. Recap evidence and saved scene intervals also seek within the original source. Timing, transcript text, translations, approval, QC, TM and rendering behavior remain unchanged. The native player reports the duration actually decoded by the browser; persisted duration metadata may be rounded.
 
+The player subscribes to `loadedmetadata`, `durationchange`, readiness, seek and time events, then immediately reads existing native metadata. This handles media loaded before React hydration and navigation back to an already loaded source. Displayed seconds are rounded to millisecond precision only for formatting. Missing/nonfinite/zero duration is never fabricated: pending metadata shows “Loading duration…”; loaded metadata without a finite positive duration shows “Duration unavailable”.
+
+Playback, pending seeks and error state belong to the exact project/movie/source-availability identity and reset on selection changes. Old event subscriptions and diagnostic HEAD requests are cleaned up; a late failure from a previous movie cannot replace the current preview. Native controls remain responsible for play/pause, volume, seeking and fullscreen.
+
 ## Compatibility and failures
 
 Accepted upload containers remain MP4, MOV, WebM and MKV. An accepted extension does not establish browser codec support. Native browser/platform decoding determines playback; no preview conversion is performed. Unsupported containers/codecs, missing files and network/decode failures produce an honest unavailable state with retry. No new source-download action is introduced.
@@ -30,8 +34,11 @@ Accepted upload containers remain MP4, MOV, WebM and MKV. An accepted extension 
 ```sh
 node --conditions=react-server --import tsx tests/source-video/stream.test.ts
 node --import tsx tests/source-video/preview.test.tsx
+node --import tsx tests/source-video/playback.test.ts
 SOURCE_VIDEO_INTEGRATION=1 node --conditions=react-server --import tsx tests/source-video/database.test.ts
 ```
+
+For browser selection/failure QA, run `SOURCE_VIDEO_BROWSER_FIXTURE=1 node --conditions=react-server --import tsx tests/source-video/browser-fixture.ts <first-authorized-movie-id> <second-authorized-movie-id>` in an interactive terminal. It streams copies of two existing MP4 uploads into a disposable three-movie project (including a deliberately missing file), prints the scoped URL, and checks that no render jobs were created. Send `cleanup` on stdin to remove its own records/files. It does not modify the original movies, encode video or call a provider.
 
 The integration test requires the existing local PostgreSQL and private storage. It creates and removes only its own temporary project, movies and small streaming fixture; it submits no jobs. Browser QA should use an authorized short MP4 to confirm native playback, audio, saved-timestamp seeking and the existing 1440/1024/390 layouts.
 
