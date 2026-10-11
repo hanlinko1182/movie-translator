@@ -12,7 +12,9 @@ function createPrismaClient() {
   const connectionString = databaseUrl();
 
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString, connectionTimeoutMillis: 2000 }),
+    // Prisma can fan out relation reads on one transaction connection. pg 8.23's
+    // supported pipeline preserves server order without its deprecated query queue.
+    adapter: new PrismaPg({ connectionString, connectionTimeoutMillis: 2000, pipeline: true }),
   });
 }
 
