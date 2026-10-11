@@ -1,8 +1,7 @@
 "use client";
 import RenderHistory, { RenderDownload } from "./render-history";
 import { useRenderJobs } from "./use-render-jobs";
-import { renderPrerequisite, type RenderItem } from "./render-model";
-import { BURN_IN_PROFILE } from "@/lib/video-render/contracts";
+import { completedRender, renderModes, renderModeLabel, renderProfile, renderPrerequisite, type RenderMode, type RenderItem } from "./render-model";
 import { withMovieSelection } from "@/lib/source-video/selection";
 
 import SourceVideoPreview, { type SourceVideoHandle } from "@/components/media/source-video-preview";
@@ -79,7 +78,7 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
   const [video, setVideo] = useState(false);
   const [cpuConfirmed, setCpuConfirmed] = useState(false);
   const renders = useRenderJobs(projectId, movie?.id);
-  const completed = renders.items.find((job) => job.state === "COMPLETED");
+  const [renderMode, setRenderMode] = useState<RenderMode>("BURN_IN");
   const [mode, setMode] = useState<SubtitleExportMode>("ALL_CURRENT");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -94,7 +93,7 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
   const renderBlocked = renderPrerequisite(!!movie, renderSelectionConfirmed, sourceAvailable, !!translation, count);
   function operateRender(job: RenderItem, operation: "retry" | "cancel") {
     if (operation === "retry" && (!renderSelectionConfirmed || !cpuConfirmed)) {
-      setVideo(true);
+      setVideo(true); setRenderMode(job.mode);
       setMessage(!renderSelectionConfirmed ? "Confirm the displayed movie in Export Settings before Retry or Resume." : "Confirm the local CPU resource notice in Export Settings, then select Retry or Resume again.");
       return;
     }
@@ -138,9 +137,9 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
           <span aria-current="page" className="text-zinc-300">Export</span>
         </nav>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Export</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-400">Export saved Myanmar subtitles or a locally rendered burn-in video.</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">Export saved Myanmar subtitles or a locally rendered MP4 video.</p>
       </div>
-      {video ? <button type="button" aria-describedby="render-prerequisites" disabled={!!renderBlocked || !cpuConfirmed || !!renders.busy || renders.loading || !!renders.error} onClick={() => { if (!renderBlocked && cpuConfirmed) void renders.act({ scope: mode }); }} className={primaryButtonClass}>
+      {video ? <button type="button" aria-describedby="render-prerequisites" disabled={!!renderBlocked || !cpuConfirmed || !!renders.busy || renders.loading || !!renders.error} onClick={() => { if (!renderBlocked && cpuConfirmed) void renders.act({ mode: renderMode, scope: mode }); }} className={primaryButtonClass}>
         {renders.busy === "submit" ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Film size={15} aria-hidden="true" />}{renders.busy === "submit" ? "Submitting…" : "Start Render"}
       </button> : <button type="button" onClick={() => void download()} disabled={busy || !canDownload} className={primaryButtonClass}>
         {busy ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
@@ -166,7 +165,7 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-3`} aria-labelledby="export-type-heading">
-        <div className="mb-4"><h2 id="export-type-heading" className="text-sm font-semibold text-zinc-100">Export Type</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Choose subtitles or a burn-in video.</p></div>
+        <div className="mb-4"><h2 id="export-type-heading" className="text-sm font-semibold text-zinc-100">Export Type</h2><p className="mt-1 text-xs leading-5 text-zinc-500">Choose subtitles or an MP4 render mode.</p></div>
         <div className="grid gap-3">
           {formatOptions.map((option) => {
             const Icon = option.icon;
@@ -177,9 +176,12 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
               <p className="mt-1 text-[11px] leading-4 text-zinc-500">{option.detail}</p>
             </button>;
           })}
-          <button type="button" aria-pressed={video} onClick={() => setVideo(true)} className={`min-w-0 rounded-lg border p-3 text-left transition ${focusClass} ${video ? "border-violet-400/70 bg-violet-500/[0.12]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"}`}>
-            <Film size={19} className={video ? "text-violet-300" : "text-zinc-400"} aria-hidden="true" /><p className="mt-3 text-xs font-semibold text-zinc-100">Burn-in Video</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">.mp4 · H.264 / AAC · local CPU</p>
-          </button>
+          {renderModes.map((option) => {
+            const selected = video && renderMode === option;
+            return <button key={option} type="button" aria-pressed={selected} onClick={() => { setVideo(true); setRenderMode(option); setError(""); setMessage(""); }} className={`min-w-0 rounded-lg border p-3 text-left transition ${focusClass} ${selected ? "border-violet-400/70 bg-violet-500/[0.12]" : "border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"}`}>
+              <Film size={19} className={selected ? "text-violet-300" : "text-zinc-400"} aria-hidden="true" /><p className="mt-3 text-xs font-semibold text-zinc-100">{renderModeLabel(option)}</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">{option === "BURN_IN" ? "Subtitles permanently visible · local CPU" : "Selectable Myanmar track · compatible players only"}</p>
+            </button>;
+          })}
         </div>
       </section>
 
@@ -205,7 +207,8 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
           </fieldset>
         </div>
         {video && <div id="render-prerequisites" className="mt-4 space-y-3 rounded-lg border border-white/[0.08] bg-black/10 p-3">
-          <p className="break-words text-xs leading-5 text-zinc-300">BURN_IN · <span className="break-all font-mono">{BURN_IN_PROFILE.id}</span></p>
+          <p className="break-words text-xs leading-5 text-zinc-300">{renderMode} · <span className="break-all font-mono">{renderProfile(renderMode).id}</span></p>
+          <p className="text-xs leading-5 text-zinc-400">{renderMode === "BURN_IN" ? "Burn-in subtitles are permanently visible in the exported video." : "Soft subtitles are a selectable Myanmar track in compatible players. Browser support varies; font coverage and styling depend on the player. Incompatible media or subtitle cues are rejected without automatic transcoding."}</p>
           <p className="text-xs leading-5 text-zinc-400">CPU rendering may take time and use local processor, memory and disk resources. It captures saved subtitles once; retry/resume uses that frozen snapshot. No AI requests are made.</p>
           <label className="flex items-start gap-2 text-xs leading-5 text-zinc-200"><input type="checkbox" checked={cpuConfirmed} onChange={(event) => setCpuConfirmed(event.target.checked)} className={`mt-1 shrink-0 accent-violet-500 ${focusClass}`} />I understand the local resource cost of Start Render, Retry and Resume.</label>
           {renderBlocked && <p role="status" className="text-xs leading-5 text-amber-200">{renderBlocked}</p>}
@@ -231,16 +234,24 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
             <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium text-zinc-200">Subtitle File ({fileFormat.toUpperCase()})</p><p className="mt-1 break-words text-[11px] text-zinc-500">{canDownload ? `${count.toLocaleString("en-US")} segments · ${mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}` : translation ? "No rows in the selected scope" : "Translation unavailable"}</p>{translationAvailable && <p className="mt-1 break-all font-mono text-[11px] text-zinc-500">{filenames[fileFormat]}</p>}</div>
             <button type="button" onClick={() => void download(fileFormat)} disabled={busy || !canDownload} aria-label={`Download ${fileFormat.toUpperCase()} subtitles`} className={secondaryButtonClass}><Download size={13} aria-hidden="true" />Download</button>
           </li>)}
-          {["Translated Video", "Recap Video"].map((label) => <li key={label} className="flex min-w-0 items-center gap-3 py-3">
+          {renderModes.map((outputMode) => {
+            const completed = completedRender(renders.items, outputMode);
+            return <li key={outputMode} className="flex min-w-0 items-center gap-3 py-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-black/10 text-zinc-500"><Film size={17} aria-hidden="true" /></span>
+              <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">{renderModeLabel(outputMode)}</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">{completed ? "Historical snapshot · current match not verified" : "No completed render in loaded history"}</p></div>
+              {completed ? <RenderDownload base={renders.base} job={completed} /> : <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[11px] text-zinc-500">Unavailable</span>}
+            </li>;
+          })}
+          <li className="flex min-w-0 items-center gap-3 py-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-black/10 text-zinc-500"><Film size={17} aria-hidden="true" /></span>
-            <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">{label}</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">{label === "Translated Video" ? completed ? "Historical snapshot · current match not verified" : "Not generated · choose Burn-in Video" : "Not generated · Not implemented yet"}</p></div>
-            {label === "Translated Video" && completed ? <RenderDownload base={renders.base} job={completed} /> : <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[11px] text-zinc-500">Unavailable</span>}
-          </li>)}
+            <div className="min-w-0 flex-1"><p className="text-xs font-medium text-zinc-300">Recap Video</p><p className="mt-1 text-[11px] leading-4 text-zinc-500">Not generated · Not implemented yet</p></div>
+            <span className="shrink-0 rounded-lg border border-white/[0.07] px-2.5 py-2 text-[11px] text-zinc-500">Unavailable</span>
+          </li>
         </ul>
       </section>
 
       <section className={`${panelClass} p-4 sm:p-5 xl:col-span-8`} aria-labelledby="subtitle-preview-heading">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="subtitle-preview-heading" className="text-sm font-semibold text-zinc-100">Preview &amp; Check</h2><p className="mt-1 text-xs leading-5 text-zinc-500">A saved subtitle sample and its original timing. Source playback does not include the translated subtitle overlay.</p></div><StatusPill>{video ? "MP4" : format.toUpperCase()} · {mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}</StatusPill></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="subtitle-preview-heading" className="text-sm font-semibold text-zinc-100">Preview &amp; Check</h2><p className="mt-1 text-xs leading-5 text-zinc-500">A saved subtitle sample and its original timing. Source playback shows the original file, without the translated burn-in or soft subtitle track.</p></div><StatusPill>{video ? "MP4" : format.toUpperCase()} · {mode === "APPROVED_ONLY" ? "Approved Only" : "All Current"}</StatusPill></div>
         {activePreview ? <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
           <div className="min-w-0 rounded-lg border border-white/[0.07] bg-black/15 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><button type="button" onClick={() => player.current?.seekTo(activePreview.startMs)} className={`${linkClass} text-[11px]`}>Segment {activePreview.sequence + 1} · {formatTime(activePreview.startMs)} → {formatTime(activePreview.endMs)}</button><StatusPill tone={activePreview.reviewStatus === "APPROVED" ? "green" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "amber" : "neutral"}>{activePreview.reviewStatus === "APPROVED" ? "Approved" : activePreview.reviewStatus === "NEEDS_REVIEW" ? "Needs review" : "Unreviewed"}</StatusPill></div>
             {activePreview.sourceText ? <p lang="zh" className="mt-3 break-words text-sm leading-6 text-zinc-200">{activePreview.sourceText}</p> : <p className="mt-3 text-xs text-zinc-500">Chinese source text unavailable.</p>}
@@ -257,7 +268,7 @@ export default function SubtitleExportControls({ projectId, projectName, renderS
           <li className="flex gap-2"><span className="text-violet-300">•</span><span>All Current includes every saved translation segment.</span></li>
           <li className="flex gap-2"><span className="text-violet-300">•</span><span>Approved Only includes human-approved rows and preserves original timing gaps.</span></li>
           <li className="flex gap-2"><span className="text-violet-300">•</span><span>SRT and ASS downloads use the current saved Myanmar text.</span></li>
-          <li className="flex gap-2"><span className="text-violet-300">•</span><span>Burn-in uses local CPU resources and a frozen subtitle snapshot. Recap video, soft subtitles and blur/cover remain unavailable.</span></li>
+          <li className="flex gap-2"><span className="text-violet-300">•</span><span>Video renders use local resources and a frozen subtitle snapshot. Soft track selection requires a compatible player; browser support varies. Recap video and blur/cover remain unavailable.</span></li>
         </ul>
       </section>
     </div>

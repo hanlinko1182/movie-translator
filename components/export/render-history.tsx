@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Download, LoaderCircle } from "lucide-react";
 import { badgeClass, badgeTones, secondaryButtonClass } from "@/components/ui/styles";
-import { renderActions, renderDownloadUrl, type RenderItem } from "./render-model";
+import { renderActions, renderDownloadUrl, renderModeLabel, type RenderItem } from "./render-model";
 
 export function RenderDownload({ base, job }: { base: string; job: RenderItem }) {
   const url = renderDownloadUrl(base, job);
-  return url ? <Link href={url} download prefetch={false} className={secondaryButtonClass} aria-label="Download historical burn-in MP4"><Download size={13} aria-hidden="true" />Download</Link> : null;
+  return url ? <Link href={url} download prefetch={false} className={secondaryButtonClass} aria-label={`Download historical ${renderModeLabel(job.mode)}`}><Download size={13} aria-hidden="true" />Download</Link> : null;
 }
 
 export default function RenderHistory({ items, base, loading, error, notice, busy, hasMovie, reload, operate }: {
@@ -18,14 +18,14 @@ export default function RenderHistory({ items, base, loading, error, notice, bus
       {loading && <p className="flex items-center gap-2 text-zinc-400"><LoaderCircle size={14} className="animate-spin" aria-hidden="true" />Loading render history…</p>}
       {error && <p role="alert" className="break-words text-amber-200">{error}</p>}
       {notice && <p className="break-words text-zinc-300">{notice}</p>}
-      {!loading && !error && !items.length && <p className="rounded-lg border border-dashed border-white/10 bg-black/10 p-4 text-zinc-400">{hasMovie ? "No render jobs. Choose Burn-in Video and start a render explicitly." : "Upload a project movie before rendering."}</p>}
+      {!loading && !error && !items.length && <p className="rounded-lg border border-dashed border-white/10 bg-black/10 p-4 text-zinc-400">{hasMovie ? "No render jobs. Choose a video mode and start a render explicitly." : "Upload a project movie before rendering."}</p>}
     </div>
     <ul className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto">
       {items.map((job) => {
         const actions = renderActions(job);
         const tone = job.state === "COMPLETED" ? "green" : job.state === "FAILED" ? "red" : job.execution === "DEFERRED" ? "amber" : job.state === "ACTIVE" ? "violet" : "neutral";
         return <li key={job.id} className="min-w-0 rounded-lg border border-white/[0.08] bg-black/10 p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2"><p className="text-xs font-medium text-zinc-200">Burn-in MP4</p><span className={`${badgeClass} ${badgeTones[tone]}`}>{job.execution === "DEFERRED" ? "DEFERRED" : job.state}</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-2"><p className="text-xs font-medium text-zinc-200">{renderModeLabel(job.mode)}</p><span className={`${badgeClass} ${badgeTones[tone]}`}>{job.execution === "DEFERRED" ? "DEFERRED" : job.state}</span></div>
           <p className="mt-2 text-[11px] leading-5 text-zinc-400">{job.exportMode === "APPROVED_ONLY" ? "Approved Only" : "All Current"} · {job.createdAt.replace("T", " ").slice(0, 16)} UTC</p>
           <p className="mt-1 text-[11px] leading-5 text-zinc-500">Historical snapshot · current subtitle match not verified</p>
           {job.state === "ACTIVE" && <p className="mt-2 text-xs text-violet-200">{job.phase ?? "Processing"}{job.progressPercent !== null ? ` · ${job.progressPercent}%` : " · progress unavailable"}</p>}

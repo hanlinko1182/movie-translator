@@ -16,9 +16,9 @@ The existing explicit render POST accepts this additional fixed combination:
 Use the existing database Project/Movie-scoped `/api/projects/{projectId}/movies/{movieId}/renders`
 route. `ALL_CURRENT` is also supported. Wrong mode/profile pairs or extra options
 are rejected. GET remains read-only; neither source inspection nor submission calls AI.
-The frozen Export UI still offers burn-in only; soft submission and mode-aware
-history presentation require a separately authorized UI task. Do not interpret its
-existing burn-in-only labels as soft-output qualification.
+Phase 21.3C connects this contract to the existing Export workspace without
+changing backend behavior. See `VIDEO_RENDER_EXPORT_UI.md` for explicit mode
+selection, per-mode history/downloads and player-compatibility disclosures.
 
 The copy-only input policy is deliberately conservative:
 

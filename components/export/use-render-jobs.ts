@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { SubtitleExportMode } from "@/lib/subtitle-export/types";
-import { needsRenderPolling, renderBase, renderRequest, type RenderItem } from "./render-model";
+import { needsRenderPolling, renderBase, renderRequest, type RenderAction, type RenderItem } from "./render-model";
 
 export function useRenderJobs(projectId: string, movieId?: string) {
   const [items, setItems] = useState<RenderItem[]>([]);
@@ -41,7 +40,7 @@ export function useRenderJobs(projectId: string, movieId?: string) {
     void read();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [base, movieId, refresh]);
-  async function act(action: { scope: SubtitleExportMode } | { job: RenderItem; operation: "retry" | "cancel" }) {
+  async function act(action: RenderAction) {
     if (!movieId || mutation.current) return;
     const controller = new AbortController(); mutation.current = controller;
     reading.current?.abort(); setBusy("job" in action ? action.job.id : "submit"); setActionError(""); setNotice("");
