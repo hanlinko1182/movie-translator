@@ -6,6 +6,9 @@ import { validateStoryEvents } from "./script";
 import { evaluateSourceReview } from "./verification";
 import { enumeration, fail, freeze, hash, id, integer, literal, nullable, record } from "./validation";
 
+// M1-D entry points. The earlier M1-A input/output contracts stay compatible.
+export { planStoryDuration, validateAutoStoryPolicy } from "./duration-engine";
+
 export function validateDurationPolicy(value: unknown): AutoDurationPolicyIdentity {
   const row = record(value, ["id", "coefficientSetId", "calibrationId"], "duration.policy");
   return freeze({ id: literal(row.id, "auto-story-v1", "duration.policy.id"), coefficientSetId: id(row.coefficientSetId, "duration.policy.coefficientSetId"), calibrationId: nullable(row.calibrationId, value => id(value, "duration.policy.calibrationId")) });

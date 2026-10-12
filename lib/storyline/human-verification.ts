@@ -11,6 +11,7 @@ import { HUMAN_VERIFICATION, SOURCE_COMPARISON_RUBRIC, type AuthorizedHumanDecis
   type SourceVerificationProposal } from "./human-verification-contracts";
 
 type Context = { source: StorySourceSnapshot; script: StoryScriptVersion };
+const foundations = new WeakSet<object>();
 type Authorization = {
   proposal: SourceVerificationProposal; operator: HumanOperator; reviewedAt: string;
   decision: HumanVerificationDecision | { receiptId: string; rationale: string };
@@ -165,7 +166,7 @@ export function createHumanSourceVerificationFoundation(options: {
     proposals.set(command.proposal, null);
     return entry;
   }
-  return Object.freeze({
+  const foundation = Object.freeze({
     capability: Object.freeze({ persistence: "NONE", operatorAuthority: authority ? "ADAPTER_CONFIGURED" : "UNAVAILABLE", liveCurrentness: "NOT_CHECKED" }),
     propose(source: StorySourceSnapshot, script: StoryScriptVersion, request: unknown): SourceVerificationProposal {
       canonicalJson(request, LIMITS.receiptBytes);
@@ -228,4 +229,14 @@ export function createHumanSourceVerificationFoundation(options: {
     },
     history: () => entries,
   });
+  foundations.add(foundation);
+  return foundation;
+}
+
+/** Read-only authority bridge. Structural lookalikes and deserialized review results
+ * cannot replace the instance-owned ledger. This performs no issuance or IO.
+ */
+export function readHumanSourceVerification(authority: unknown, source: StorySourceSnapshot, script: StoryScriptVersion) {
+  if (!authority || typeof authority !== "object" || !foundations.has(authority)) fail("UNTRUSTED_RECEIPT", "verification.authority");
+  return (authority as ReturnType<typeof createHumanSourceVerificationFoundation>).evaluate(source, script);
 }
