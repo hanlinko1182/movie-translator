@@ -45,6 +45,22 @@ M1-A canonical serialization preserves exact Unicode and rejects non-JSON/unboun
 
 ## Verification and M1-C prerequisites
 
+### Recap Studio integration boundary
+
+The implemented UI-v2.0-01 route and query navigation are preserved. M1-B must not edit `app/projects/[id]/recap/page.tsx`, `components/storyline/recap-studio-shell.tsx` or `components/storyline/navigation.ts`, or attach preparation to page rendering, navigation, GET, a Server Action or a new Storyline route. The shell continues to say **No persisted source snapshot**; preparing a provisional candidate does not change that state.
+
+`projectPreparedEvidence` in `lib/storyline/evidence-dto.ts` is a server-only, side-effect-free projection for a future UI-02 Evidence Inspector. It operates only on an already server-owned M1-B candidate, revalidates its hashes/admissions and exact expected database project/movie scope, and checks the selected scene/segment anchor. It does not load or persist anything. Never reconstruct a trusted candidate from a client/provider payload; structural revalidation is not proof of server origin, currentness or human verification.
+
+The versioned DTO exposes one exact Chinese segment, the aligned/current or explicitly excluded Myanmar row, original timing, translation revision/provenance/review/edit metadata, separate active/resolved/unscanned QC, anchor-specific character/relationship allowances and observations. Excluded text is inspection-only, never draft context. Subtitle approval and manual origin do not establish semantic verification. It is explicitly `PREPARED_CONTEXT`, `persisted: false`, `approved: false`, with `RECHECKED_AT_PREPARATION_ONLY` freshness and `NOT_PERFORMED` semantic verification.
+
+Owner lists identify only that owner's allowance at the selected anchor; they do not authorize a combined claim. Relationship/character claims still require the existing script validator's exact owner and endpoint restrictions, and trusted server-owned human verification receipts before approval.
+
+Selection requires `sceneSequence`, `segmentSequence`, `qcOffset`, `observationOffset` and `limit` (1–8). QC and observation pages return total/offset/nextOffset; omitted items are explicit, not silently treated as absent. Chinese/Myanmar text and selected findings/observations are exact and never truncated. A 256 KiB canonical UTF-8 output ceiling rejects an oversized view; the caller can explicitly request a smaller page. No automatic retry or data repair occurs.
+
+The projection excludes the full snapshot/manifest, storage/media identities, private source binding/dependency hash, refinement job IDs, manual binding hashes, aliases and legacy recap payloads. Only the bounded DTO may cross a future client boundary. No current component consumes it, and no API is added. UI-02 still requires separately approved scoped transport/currentness design; GET must not hash/probe media or prepare a candidate. M1-C persistence and trusted verification receipts remain separate prerequisites.
+
+Run the existing UI-v2.0-01 navigation component/browser regressions alongside preparation, DTO and integration-boundary tests. Browser fixtures remain synthetic and do not connect to application databases, queues or paid providers.
+
 Synthetic database fixtures prohibit unexpected operations and assert read-only isolation, exact movie selection, no writes, concurrent determinism, multiple beats in one scene, character/relationship restrictions and mid-preparation dependency changes. Filesystem tests use disposable storage: real missing/corrupt/unsafe-file failures, private-directory enforcement and replacement detection. Positive probe metadata is mocked; no media is encoded or existing source inspected. Tests prohibit network/provider requests.
 
 Before M1-C can persist anything, separately approve additive Studio/snapshot/version/verification schema and immutable-payload constraints. Recheck current dependency values and the authoritative private source binding in a fenced commit strategy; store any required server-only key outside the public candidate. Do not rely on a previously prepared candidate's freshness indefinitely. Preserve replaceable live child references as historical values. Implement server-owned human verification receipt persistence/trust separately; neither this preparation service nor structural M1-A validation supplies trusted receipts. No migration or persistence API is part of M1-B.
