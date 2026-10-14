@@ -1,0 +1,69 @@
+// REVIEW ONLY. Append after the six-model M2 fragment in an isolated schema.
+// Required reverse relations in that isolated copy:
+// StorylineStudio: spendingDecisions StorySpendingDecision[]; admissions StoryAdmission[]
+// StorySourceSnapshot: spendingDecisions StorySpendingDecision[]
+// StoryScriptVersion: spendingDecisions StorySpendingDecision[]
+// StoryTask: admissions StoryAdmission[]
+// StoryPaidConfirmation: admissions StoryAdmission[]
+// SQL adds immutable triggers and structural binding guards that Prisma cannot express.
+// These models are NOT a trusted issuer or an executable admission gateway.
+
+model StorySpendingDecision {
+  id String @id
+  studioId String
+  projectId String
+  movieId String
+  subjectId String
+  idempotencyKey String
+  authorityProvider String
+  authorityVersion String
+  taskCreateAllowed Boolean
+  spendAllowed Boolean
+  sourceSnapshotId String
+  sourceContentHash String @db.VarChar(64)
+  sourceContextHash String @db.VarChar(64)
+  scriptVersionId String?
+  scriptHash String? @db.VarChar(64)
+  kind StoryTaskKind
+  recipeHash String @db.VarChar(64)
+  canonicalRecipe String @db.Text
+  profileHash String @db.VarChar(64)
+  costPolicyHash String @db.VarChar(64)
+  quoteMaxUsdMicros BigInt
+  expectedStudioRevision Int
+  generation Int @default(0)
+  maxSubmissions Int @default(1)
+  nonceHash String @unique @db.VarChar(64)
+  acknowledgedAt DateTime
+  issuedAt DateTime
+  expiresAt DateTime
+  studio StorylineStudio @relation(fields: [studioId, projectId, movieId], references: [id, projectId, movieId], onDelete: Restrict, onUpdate: Restrict)
+  source StorySourceSnapshot @relation(fields: [sourceSnapshotId, studioId, sourceContentHash, sourceContextHash], references: [id, studioId, sourceContentHash, sourceContextHash], onDelete: Restrict, onUpdate: Restrict)
+  script StoryScriptVersion? @relation(fields: [scriptVersionId, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], references: [id, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], onDelete: Restrict, onUpdate: Restrict)
+  admission StoryAdmission?
+  @@unique([id, studioId, projectId, movieId, subjectId, idempotencyKey, recipeHash], map: "StorySpendingDecision_binding_key")
+}
+
+model StoryAdmission {
+  id String @id
+  decisionId String @unique
+  studioId String
+  projectId String
+  movieId String
+  subjectId String
+  idempotencyKey String
+  taskId String
+  recipeHash String @db.VarChar(64)
+  canonicalRecipe String @db.Text
+  generation Int
+  confirmationId String @unique
+  admittedAt DateTime @default(now())
+  decision StorySpendingDecision @relation(fields: [decisionId, studioId, projectId, movieId, subjectId, idempotencyKey, recipeHash], references: [id, studioId, projectId, movieId, subjectId, idempotencyKey, recipeHash], onDelete: Restrict, onUpdate: Restrict)
+  task StoryTask @relation(fields: [taskId, studioId, recipeHash], references: [id, studioId, recipeHash], onDelete: Restrict, onUpdate: Restrict)
+  confirmation StoryPaidConfirmation @relation(fields: [confirmationId, taskId, generation], references: [id, taskId, generation], onDelete: Restrict, onUpdate: Restrict)
+  studio StorylineStudio @relation(fields: [studioId, projectId, movieId], references: [id, projectId, movieId], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([subjectId, projectId, movieId, idempotencyKey], map: "StoryAdmission_scoped_key")
+  @@unique([taskId, generation], map: "StoryAdmission_task_generation_key")
+  @@unique([decisionId, studioId, projectId, movieId, subjectId, idempotencyKey, recipeHash], map: "StoryAdmission_decision_binding_key")
+  @@index([studioId, taskId])
+}

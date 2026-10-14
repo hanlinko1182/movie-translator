@@ -98,29 +98,6 @@ export function createHumanSourceVerificationFoundation(options: {
       return { claimId: basis.claimId, receiptHash: current.entryHash };
     });
   }
-  function parseDecision(value: unknown, proposal: SourceVerificationProposal): HumanVerificationDecision {
-    canonicalJson(value, LIMITS.receiptBytes);
-    const row = record(value, ["proposalHash", "chineseEvidenceHash", "translationContextHash", "acknowledgedChineseComparison", "outcome", "comparison", "rationale"], "decision");
-    for (const key of ["proposalHash", "chineseEvidenceHash", "translationContextHash"] as const) {
-      if (hash(row[key], `decision.${key}`) !== proposal[key]) fail("RECEIPT_BINDING_INVALID", `decision.${key}`);
-    }
-    if (row.acknowledgedChineseComparison !== true) fail("UNTRUSTED_RECEIPT", "decision.acknowledgedChineseComparison");
-    const raw = record(row.comparison, Object.keys(SOURCE_COMPARISON_RUBRIC), "decision.comparison");
-    const comparison = Object.fromEntries(Object.keys(SOURCE_COMPARISON_RUBRIC).map(key => [key,
-      enumeration(raw[key], ["SUPPORTED", "INSUFFICIENT", "CONTRADICTED", "NOT_APPLICABLE"], "decision.comparison")])) as SourceComparison;
-    for (const [key, verdict] of Object.entries(comparison)) {
-      if (verdict === "NOT_APPLICABLE" && (key !== "translationConsistency" || proposal.binding.translationContextRefs.length)) fail("INVALID_ENUM", "decision.comparison");
-    }
-    if (!proposal.binding.translationContextRefs.length && comparison.translationConsistency !== "NOT_APPLICABLE") fail("INVALID_ENUM", "decision.comparison.translationConsistency");
-    const outcome = enumeration(row.outcome, ["SOURCE_VERIFIED", "INCONCLUSIVE", "UNSUPPORTED"], "decision.outcome");
-    const verdicts = Object.values(comparison);
-    if (outcome === "SOURCE_VERIFIED" && verdicts.some(row => row !== "SUPPORTED" && row !== "NOT_APPLICABLE")
-      || outcome === "INCONCLUSIVE" && (!verdicts.includes("INSUFFICIENT") || verdicts.includes("CONTRADICTED"))
-      || outcome === "UNSUPPORTED" && !verdicts.includes("CONTRADICTED")) fail("UNTRUSTED_RECEIPT", "decision.outcome");
-    return freeze({ proposalHash: proposal.proposalHash, chineseEvidenceHash: proposal.chineseEvidenceHash,
-      translationContextHash: proposal.translationContextHash, acknowledgedChineseComparison: true,
-      outcome, comparison, rationale: text(row.rationale, 2000, "decision.rationale") });
-  }
   function assertProposal(proposal: SourceVerificationProposal) {
     if (!proposals.has(proposal)) fail("UNTRUSTED_RECEIPT", "proposal");
     if (proposal.ledgerHeadHash !== ledgerHash()) fail("STALE_CONTEXT", "proposal.ledgerHeadHash");
@@ -193,7 +170,7 @@ export function createHumanSourceVerificationFoundation(options: {
     authorize(proposal: SourceVerificationProposal, value: unknown, session: unknown): AuthorizedHumanDecision {
       const context = assertProposal(proposal);
       if (!context) fail("UNTRUSTED_RECEIPT", "proposal");
-      const decision = parseDecision(value, proposal), grant = operator(session, "VERIFY_SOURCE");
+      const decision = parseHumanVerificationDecision(value, proposal), grant = operator(session, "VERIFY_SOURCE");
       if (decision.outcome === "SOURCE_VERIFIED") basisReceipts(proposal, context);
       return token({ proposal, decision, operator: grant, reviewedAt: date(clock(), "server.reviewedAt") });
     },
@@ -239,4 +216,29 @@ export function createHumanSourceVerificationFoundation(options: {
 export function readHumanSourceVerification(authority: unknown, source: StorySourceSnapshot, script: StoryScriptVersion) {
   if (!authority || typeof authority !== "object" || !foundations.has(authority)) fail("UNTRUSTED_RECEIPT", "verification.authority");
   return (authority as ReturnType<typeof createHumanSourceVerificationFoundation>).evaluate(source, script);
+}
+
+/** Structural comparison validation only; this does not authorize or issue a receipt. */
+export function parseHumanVerificationDecision(value: unknown, proposal: SourceVerificationProposal): HumanVerificationDecision {
+  canonicalJson(value, LIMITS.receiptBytes);
+  const row = record(value, ["proposalHash", "chineseEvidenceHash", "translationContextHash", "acknowledgedChineseComparison", "outcome", "comparison", "rationale"], "decision");
+  for (const key of ["proposalHash", "chineseEvidenceHash", "translationContextHash"] as const) {
+    if (hash(row[key], `decision.${key}`) !== proposal[key]) fail("RECEIPT_BINDING_INVALID", `decision.${key}`);
+  }
+  if (row.acknowledgedChineseComparison !== true) fail("UNTRUSTED_RECEIPT", "decision.acknowledgedChineseComparison");
+  const raw = record(row.comparison, Object.keys(SOURCE_COMPARISON_RUBRIC), "decision.comparison");
+  const comparison = Object.fromEntries(Object.keys(SOURCE_COMPARISON_RUBRIC).map(key => [key,
+    enumeration(raw[key], ["SUPPORTED", "INSUFFICIENT", "CONTRADICTED", "NOT_APPLICABLE"], "decision.comparison")])) as SourceComparison;
+  for (const [key, verdict] of Object.entries(comparison)) {
+    if (verdict === "NOT_APPLICABLE" && (key !== "translationConsistency" || proposal.binding.translationContextRefs.length)) fail("INVALID_ENUM", "decision.comparison");
+  }
+  if (!proposal.binding.translationContextRefs.length && comparison.translationConsistency !== "NOT_APPLICABLE") fail("INVALID_ENUM", "decision.comparison.translationConsistency");
+  const outcome = enumeration(row.outcome, ["SOURCE_VERIFIED", "INCONCLUSIVE", "UNSUPPORTED"], "decision.outcome");
+  const verdicts = Object.values(comparison);
+  if (outcome === "SOURCE_VERIFIED" && verdicts.some(row => row !== "SUPPORTED" && row !== "NOT_APPLICABLE")
+    || outcome === "INCONCLUSIVE" && (!verdicts.includes("INSUFFICIENT") || verdicts.includes("CONTRADICTED"))
+    || outcome === "UNSUPPORTED" && !verdicts.includes("CONTRADICTED")) fail("UNTRUSTED_RECEIPT", "decision.outcome");
+  return freeze({ proposalHash: proposal.proposalHash, chineseEvidenceHash: proposal.chineseEvidenceHash,
+    translationContextHash: proposal.translationContextHash, acknowledgedChineseComparison: true,
+    outcome, comparison, rationale: text(row.rationale, 2000, "decision.rationale") });
 }

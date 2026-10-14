@@ -48,10 +48,8 @@ function sortedRead(movie: StorylineMovieRead) {
   };
 }
 type SourceBase = Omit<StorySourcePayload, "id" | "capturedAt" | "media" | "preparation">;
-export async function readStorylineSource(scope: Identity, database: StorylineReadDatabase = prisma) {
-  try { return await database.$transaction(async tx => {
-    // Enforced by PostgreSQL as well as the service's read-only contract.
-    await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+/** Caller owns transaction and source-writer locks. Used only by fenced persistence. */
+export async function captureStorylineSourceInTransaction(scope: Identity, tx: StorylineReadTransaction) {
     const found = await tx.movie.findUnique({ where: { id: scope.movieId }, select: STORYLINE_SOURCE_SELECT });
     if (!found) throw new StorylinePreparationError("MOVIE_NOT_FOUND");
     if (found.id !== scope.movieId || found.projectId !== scope.projectId || found.project.id !== scope.projectId) throw new StorylinePreparationError("PROJECT_MOVIE_MISMATCH");
@@ -104,6 +102,12 @@ export async function readStorylineSource(scope: Identity, database: StorylineRe
       // Recap validation needs actual duration later; no file operation occurs in this transaction.
       recap: movie.recap, legacySourceHash: legacySource.sourceHash,
     };
+}
+export async function readStorylineSource(scope: Identity, database: StorylineReadDatabase = prisma) {
+  try { return await database.$transaction(async tx => {
+    // Enforced by PostgreSQL as well as the service's read-only contract.
+    await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+    return captureStorylineSourceInTransaction(scope, tx);
   }, { isolationLevel: "RepeatableRead", timeout: 30_000, maxWait: 5000 }); }
   catch (error) {
     if (error instanceof StorylinePreparationError) throw error;

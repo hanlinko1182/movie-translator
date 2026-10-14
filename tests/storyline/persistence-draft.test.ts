@@ -19,7 +19,7 @@ const sql = readFileSync(`${draftPath}.sql`, "utf8");
 const models = ["StorylineStudio", "StorySourceSnapshot", "StoryScriptVersion", "StoryBeat", "StorySourceVerification"];
 
 // Static checks below review the draft, not PostgreSQL trigger execution.
-test("draft adds exactly five models, remains outside live migrations, and rolls back", async () => {
+test("promoted proposal retains exactly five draft models and review SQL still rolls back", async () => {
   assert.deepEqual([...fragment.matchAll(/^model (\w+)/gm)].map(match => match[1]), models);
   assert.deepEqual([...sql.matchAll(/^CREATE TABLE "(\w+)"/gm)].map(match => match[1]), models);
   assert.doesNotMatch(sql, /^\s*(?:DROP|TRUNCATE|DELETE FROM|ALTER TYPE|INSERT INTO)\b/m);
@@ -28,18 +28,20 @@ test("draft adds exactly five models, remains outside live migrations, and rolls
   assert.match(sql, /ROLLBACK;\s*$/);
   assert.doesNotMatch(sql, /\bCOMMIT\s*;/);
   const live = await readFile("prisma/schema.prisma", "utf8");
-  for (const model of models) assert.doesNotMatch(live, new RegExp(`model ${model}\\b`));
+  for (const model of models) assert.match(live, new RegExp(`model ${model}\\b`));
+  const migration = await readFile("prisma/migrations/20261012120000_add_storyline_m1_foundation/migration.sql", "utf8");
+  assert.match(migration, /COMMIT;\s*$/);
+  assert.doesNotMatch(migration, /ROLLBACK;\s*$/);
+  const statements = (text: string) => text.split("\n").filter(line => !line.trimStart().startsWith("--")).join("\n");
+  assert.equal(statements(migration), statements(sql).replace(/ROLLBACK;\s*$/, "COMMIT;\n"));
 });
 
-test("assembled proposal validates with installed Prisma using isolated dummy configuration and no database", async () => {
+test("live proposal validates with installed Prisma using isolated dummy configuration and no database", async () => {
   const livePath = join(root, "prisma/schema.prisma");
   const before = await readFile(livePath, "utf8");
-  const movie = /model Movie \{([\s\S]*?)\n\}/;
-  assert.match(before, movie);
-  const assembled = before.replace(movie, (_all, body: string) => `model Movie {${body}\n  storylineStudio StorylineStudio?\n  @@unique([id, projectId], map: "Movie_id_projectId_key")\n}`) + "\n" + fragment;
   const directory = await mkdtemp(join(tmpdir(), "storyline-schema-review-"));
   try {
-    await writeFile(join(directory, "schema.prisma"), assembled);
+    await writeFile(join(directory, "schema.prisma"), before);
     // No dotenv import, real configuration or database endpoint is used.
     await writeFile(join(directory, "prisma.config.ts"), 'export default { schema: "./schema.prisma", datasource: { url: "postgresql://review:review@127.0.0.1:1/disposable_not_connected" } };\n');
     const environment: NodeJS.ProcessEnv = { ...process.env, NODE_OPTIONS: "", DATABASE_URL: "postgresql://review:review@127.0.0.1:1/disposable_not_connected" };

@@ -97,6 +97,33 @@ export class DisposableStorylinePostgres {
       application_name: "storyline-m1e15-disposable-test" };
   }
 
+  /** For a Prisma adapter in this process only. Never serialize or log this value. */
+  prismaAdapterConfig(): ClientConfig {
+    return this.config(this.name, this.user, this.password);
+  }
+
+  /** Privileged access ONLY to this workflow's verified scratch database. */
+  async securityAdministrator() {
+    const client = new Client(this.config(this.name, this.admin, this.adminPassword));
+    await client.connect();
+    try { await this.assertTarget(client, this.name, this.admin, this.user); return client; }
+    catch (error) { await client.end(); throw error; }
+  }
+
+  /** Credentials are generated in memory and never use the app datasource. */
+  async restrictedLogin(group: "storyline_runtime" | "storyline_verification_issuer" | "storyline_admission_writer" | "storyline_checkpoint_worker" | "storyline_synthetic_issuer" | "storyline_outbox" | "storyline_m2_reader" | "storyline_fake_worker") {
+    const prefix = { storyline_runtime: "m1_runtime", storyline_verification_issuer: "m1_issuer",
+      storyline_admission_writer: "m2_admission", storyline_checkpoint_worker: "m2_checkpoint",
+      storyline_synthetic_issuer: "m2_synthetic_issuer", storyline_outbox: "m2_outbox", storyline_m2_reader: "m2_reader",
+      storyline_fake_worker: "m2_fake_worker" }[group];
+    const user = `${prefix}_${randomBytes(10).toString("hex")}`;
+    const password = randomBytes(32).toString("hex");
+    const admin = await this.securityAdministrator();
+    try { await admin.query(`CREATE ROLE "${user}" LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS IN ROLE "${group}" PASSWORD '${password}'`); }
+    finally { await admin.end(); }
+    return this.config(this.name, user, password);
+  }
+
   async client() {
     const client = new Client(this.config(this.name, this.user, this.password));
     await client.connect();
@@ -110,7 +137,7 @@ export class DisposableStorylinePostgres {
     }
   }
 
-  private async assertTarget(client: Client, database: string, user: string) {
+  private async assertTarget(client: Client, database: string, user: string, expectedOwner = user) {
     const result = await client.query<{
       database: string; user: string; data: string; socket: string; address: string | null;
       encoding: string; version: string; owner: string;
@@ -131,7 +158,7 @@ export class DisposableStorylinePostgres {
     }
     assert.equal(row.address, null, "Test must connect through the private Unix socket");
     assert.equal(row.encoding, "UTF8");
-    assert.equal(row.owner, user);
+    assert.equal(row.owner, expectedOwner);
     assert.match(row.version, /^18\./);
     assert.ok(database.startsWith("m1e15_db_") || database === "postgres");
   }

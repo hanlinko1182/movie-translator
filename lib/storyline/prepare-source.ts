@@ -1,10 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { contractHash } from "./canonical";
+import { assertAuthoritativeStorylineSource, reconstructStorylineSource } from "./authoritative-source";
 import type { Identity, Immutable, StorySourceSnapshot } from "./contracts";
 import { inspectStorylineMedia, type InspectedStorylineMedia } from "./media";
-import { readStorylineSource, captureLegacyRecap, type StorylineReadDatabase } from "./read-source";
-import { validateSourceSnapshot } from "./source";
+import { readStorylineSource, type StorylineReadDatabase } from "./read-source";
 import { StorylinePreparationError } from "./preparation-errors";
 import { StorylineContractError, freeze, id, record } from "./validation";
 
@@ -29,18 +28,7 @@ export async function prepareStorylineSource(value: unknown, dependencies: Depen
     const captured = await readStorylineSource(scope, database);
     // Hash/probe and file identity checks happen after the read transaction is closed.
     const media = await (dependencies.inspectMedia ?? inspectStorylineMedia)(captured.storageKey);
-    if (media.storageKey !== captured.storageKey || captured.recordedSize !== null && captured.recordedSize !== BigInt(media.sizeBytes)) throw new StorylinePreparationError("SOURCE_MEDIA_CHANGED");
-    const source = { ...captured.source,
-      id: `candidate-${contractHash("story-candidate-v1", { dependencyHash: captured.dependencyHash, sha256: media.sha256, video: media.video })}`,
-      capturedAt: (dependencies.now ?? (() => new Date().toISOString()))(),
-      media: { sha256: media.sha256, bytes: media.sizeBytes, durationMs: media.durationMs },
-    };
-    const advisory = captureLegacyRecap(captured, source);
-    const snapshot = validateSourceSnapshot({ ...source, preparation: {
-      policyVersion: "story-source-preparation-v1", dependencyHash: captured.dependencyHash, sourceBindingHash: captured.sourceBindingHash,
-      translationQcState: !source.translation ? "TRANSLATION_MISSING" : source.translation.qcScannedAt === null ? "UNSCANNED" : "SCAN_RECORDED",
-      video: media.video, characterAnalysis: captured.characterAnalysis, aliases: captured.aliases, observations: captured.observations, ...advisory,
-    } }, scope);
+    const snapshot = reconstructStorylineSource(captured, media, (dependencies.now ?? (() => new Date().toISOString()))());
     let current;
     try { current = await readStorylineSource(scope, database); }
     catch (error) {
@@ -48,6 +36,7 @@ export async function prepareStorylineSource(value: unknown, dependencies: Depen
       throw new StorylinePreparationError("STALE_STORYLINE_SOURCE");
     }
     if (current.dependencyHash !== captured.dependencyHash) throw new StorylinePreparationError("STALE_STORYLINE_SOURCE");
+    assertAuthoritativeStorylineSource(snapshot, current, media);
     await media.assertUnchanged();
     return freeze({ kind: "PREPARED_CANDIDATE", persisted: false, approved: false, snapshot });
   } catch (error) {

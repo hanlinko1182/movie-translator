@@ -1,6 +1,8 @@
 # Storyline persistence review — Phase 23.2 M1-E1
 
-**Status: proposed, not approved for deployment.** M1-E1.5 has now tested this draft in a newly created, disposable PostgreSQL 18.6 cluster; see [STORYLINE_PERSISTENCE_VALIDATION.md](STORYLINE_PERSISTENCE_VALIDATION.md). No application database was contacted or changed. No live Prisma declaration, migration, API, worker, UI, media, environment or dependency is changed. Existing untracked `logs/` is preserved.
+M1-E2B follow-up: [verification security](STORYLINE_VERIFICATION_SECURITY.md) documents the gated server issuer/lookup, pinned receipt signatures and disposable role tests. Live database deployment and real issuance remain prohibited pending the documented authority/credential/key gates.
+
+**Status: integrated in source, not approved for deployment.** M1-E1.5 tested the draft in disposable PostgreSQL 18.6; M1-E2A has integrated the five models and transactional migration artifact into application source and added server-only snapshot/script services. See [validation](STORYLINE_PERSISTENCE_VALIDATION.md) and [M1-E2A write contract](STORYLINE_PERSISTENCE_M1_E2A.md). No application database was contacted or changed. No API, worker, UI, media, environment or dependency changed. Existing untracked `logs/` is preserved.
 
 ## 1. Repository compatibility and reuse
 
@@ -20,12 +22,13 @@ Reuse:
 
 | Artifact | Purpose |
 | --- | --- |
-| `docs/drafts/storyline-m1-foundation.prisma` | Complete five-model fragment, four enums and explicit relation/index names |
-| `docs/drafts/storyline-m1-foundation.sql` | PostgreSQL DDL, CHECKs, custom guards and indexes; deliberately ends in `ROLLBACK` |
+| `docs/drafts/storyline-m1-foundation.prisma` | Historical review fragment, now integrated into `prisma/schema.prisma` |
+| `docs/drafts/storyline-m1-foundation.sql` | Review-only SQL, still ending in `ROLLBACK`; promoted executable statements match the migration artifact |
+| `prisma/migrations/20261012120000_add_storyline_m1_foundation/migration.sql` | Additive reviewed migration artifact; never applied to the application database by M1-E2A |
 | `tests/storyline/persistence-draft.test.ts` | Static draft checks, isolated Prisma validation and existing pure contract round trips |
 | `tests/storyline/disposable-postgres.ts`, `persistence-postgres.test.ts` | Private scratch PostgreSQL lifecycle and real DDL, guard, rollback and concurrency tests |
 
-To validate the proposal, the test assembles a **temporary copy** of the current full schema, adds `Movie.storylineStudio StorylineStudio?` and `Movie.@@unique([id, projectId])`, then appends the fragment. It uses an isolated config with a dummy unreachable datasource, no dotenv import, and `prisma validate` only. It does not generate a client or execute SQL. Live schema/migration files remain unchanged.
+M1-E1 tested an assembled temporary schema. M1-E2A placed the reviewed declarations in the live schema source and created the additive migration artifact, without running it on the application database. The draft test now validates a temporary copy of that live schema through an isolated dummy datasource and checks executable SQL parity. Disposable integration tests alone execute the migration.
 
 The composite Movie index is necessary for an actual FK enforcing selected project/movie ownership. Its leading `id` is already a primary key, so it cannot introduce duplicate-data failures and requires no backfill. It is nevertheless a new index over an existing table, with disk/build/locking cost. Use a short lock timeout and a maintenance window for a small trusted-local database; a separately reviewed concurrent-index deployment would be necessary if that becomes inappropriate.
 
@@ -174,10 +177,11 @@ DDL is transaction-wrapped with short timeouts. A draft failure or its final ROL
 - [ ] Specify and test the new durable receipt content/version, authoritative reload/issuance adapter and trusted-local operator/role boundary. Do not make M1-C receipt JSON trusted by import.
 - [ ] Audit cooperating source publication locks and define the Serializable/fail-closed fallback, lock timeouts and bounded retry policy.
 - [ ] Pass the remaining disposable PostgreSQL parity, role-privilege and full concurrency/rollback matrix; M1-E1.5 passed representative real-database tests but not the entire deployment gate.
-- [ ] Explicitly authorize promotion into the live Prisma schema/migration directory and the target of any subsequent migration application. Existing DB application remains prohibited by this task.
+- [x] Authorize promotion into the live Prisma schema/migration directory for M1-E2A source integration only.
+- [ ] Explicitly authorize the target and timing of any migration application to an existing database; M1-E2A prohibits that action.
 
-Recommended M1-E2 order: approve the draft/retention/trust decisions → disposable migration validation → finalize live additive declarations and custom SQL → generate client → implement scoped server persistence/authoritative lookup with optimistic fencing and transaction tests. Keep durable receipt issuance unavailable until its dedicated adapter/authority tests pass. No APIs, paid generation, UI integration, voice or queues are implied by schema approval.
+M1-E2A completed source integration, disposable migration validation and server-only snapshot/script writes. M1-E2B now implements the gated issuer/lookup, role proposal and disposable security/currentness tests. Enabling issuance still requires an installed authenticated operator source, restricted live credentials, trusted signing-key management and separate deployment authorization. No APIs, paid generation, UI integration, voice or queues are implied by the schema integration.
 
 ## 11. Verification boundary
 
-The draft tests check structure, assemble/validate the proposal using the installed Prisma CLI without connecting, and prove canonical source/script round trips plus approval/QC/text/alignment staleness with synthetic fixtures. The new disposable PostgreSQL suite executes the committed baseline and draft SQL on PostgreSQL 18.6 and checks actual constraints, triggers and races. Existing Storyline contract, preparation, verification and duration tests remain the semantic regression suite. Run lint, TypeScript and `git diff --check` separately. Treat the untested privilege/currentness/retention cases in the validation report as open gates.
+The draft tests check structure, validate the live proposal with an isolated dummy Prisma config, and prove canonical source/script round trips plus approval/QC/text/alignment staleness with synthetic fixtures. The M1-E1.5 disposable suite executes the committed baseline and review SQL on PostgreSQL 18.6; the M1-E2A suite applies the promoted migration artifact and tests real Prisma services, locks and rollback on another disposable cluster. Existing Storyline contract, preparation, verification and duration tests remain semantic regressions. Run lint, TypeScript and `git diff --check` separately. Treat the privilege/retention and M1-E2B issuance cases as open gates.

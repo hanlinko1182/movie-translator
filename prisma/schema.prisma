@@ -146,8 +146,10 @@ model Movie {
   recap              Recap?
   recapEvidence      RecapEvidence[]
   renderJobs         RenderJob[]
+  storylineStudio     StorylineStudio?
 
   @@index([projectId])
+  @@unique([id, projectId], map: "Movie_id_projectId_key")
 }
 
 model Scene {
@@ -645,4 +647,177 @@ model RenderDispatch {
 
   @@index([nextDispatchAt])
   @@index([activeLeaseUntil])
+}
+
+// Storyline M1 persistence; project identity is enforced through Movie.
+
+enum StoryScriptOrigin {
+  MODEL
+  HUMAN
+}
+
+enum StoryBeatCategory {
+  SETUP
+  OBSERVATION
+  CONFLICT
+  DECISION
+  CONSEQUENCE
+  RELATIONSHIP_CHANGE
+  TURNING_POINT
+  RESOLUTION
+}
+
+enum StoryVerificationKind {
+  RECEIPT
+  REVOCATION
+}
+
+enum StoryVerificationOutcome {
+  SOURCE_VERIFIED
+  INCONCLUSIVE
+  UNSUPPORTED
+  REVOKED
+}
+
+model StorylineStudio {
+  id                      String   @id @default(cuid())
+  projectId               String
+  movieId                 String   @unique
+  revision                Int      @default(0)
+  nextScriptVersion       Int      @default(1)
+  verificationGenesisHash String   @db.VarChar(64)
+  currentSnapshotId       String?
+  currentScriptVersionId  String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  movie         Movie                @relation(fields: [movieId, projectId], references: [id, projectId], onDelete: Restrict, onUpdate: Restrict, map: "StorylineStudio_movie_scope_fkey")
+  snapshots     StorySourceSnapshot[] @relation("StudioSnapshots")
+  scripts       StoryScriptVersion[]  @relation("StudioScripts")
+  verifications StorySourceVerification[]
+  currentSnapshot StorySourceSnapshot? @relation("CurrentSnapshot", fields: [currentSnapshotId, id], references: [id, studioId], onDelete: Restrict, onUpdate: Restrict, map: "StorylineStudio_currentSnapshot_fkey")
+  currentScript   StoryScriptVersion?  @relation("CurrentScript", fields: [currentScriptVersionId, id], references: [id, studioId], onDelete: Restrict, onUpdate: Restrict, map: "StorylineStudio_currentScript_fkey")
+
+  @@unique([id, projectId, movieId], map: "StorylineStudio_scope_key")
+  @@unique([movieId, projectId], map: "StorylineStudio_movieId_projectId_key")
+  @@index([projectId, updatedAt])
+}
+
+model StorySourceSnapshot {
+  // Preserve prepared payload.id; never replace it with a new DB-generated ID.
+  id                String @id
+  studioId          String
+  projectId         String
+  movieId           String
+  schemaVersion     String @default("story-source-v1")
+  sourceContentHash String @db.VarChar(64)
+  sourceContextHash String @db.VarChar(64)
+  dependencyHash    String @db.VarChar(64)
+  sourceBindingHash String @db.VarChar(64)
+  sourceSha256      String @db.VarChar(64)
+  sourceBytes       BigInt
+  sourceDurationMs  Int
+  canonicalPayload  String @db.Text
+  capturedAt        DateTime
+  createdAt         DateTime @default(now())
+
+  studio StorylineStudio @relation("StudioSnapshots", fields: [studioId, projectId, movieId], references: [id, projectId, movieId], onDelete: Restrict, onUpdate: Restrict, map: "StorySourceSnapshot_scope_fkey")
+  scripts StoryScriptVersion[]
+  currentIn StorylineStudio[] @relation("CurrentSnapshot")
+
+  @@unique([id, studioId], map: "StorySourceSnapshot_studio_key")
+  @@unique([id, studioId, sourceContentHash, sourceContextHash], map: "StorySourceSnapshot_binding_key")
+  @@unique([studioId, sourceContextHash])
+  @@index([studioId, createdAt])
+}
+
+model StoryScriptVersion {
+  // Server allocates ID and version before validation/hash; payload is immutable.
+  id                String @id
+  studioId          String
+  sourceSnapshotId  String
+  sourceContentHash String @db.VarChar(64)
+  sourceContextHash String @db.VarChar(64)
+  scriptHash        String @db.VarChar(64)
+  schemaVersion     String @default("story-script-v1")
+  version           Int
+  parentVersionId   String?
+  parentVersion     Int?
+  origin            StoryScriptOrigin
+  canonicalPayload  String @db.Text
+  createdAt         DateTime @default(now())
+
+  studio StorylineStudio @relation("StudioScripts", fields: [studioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "StoryScriptVersion_studio_fkey")
+  source StorySourceSnapshot @relation(fields: [sourceSnapshotId, studioId, sourceContentHash, sourceContextHash], references: [id, studioId, sourceContentHash, sourceContextHash], onDelete: Restrict, onUpdate: Restrict, map: "StoryScriptVersion_source_fkey")
+  parent StoryScriptVersion? @relation("ScriptParent", fields: [parentVersionId, studioId, parentVersion], references: [id, studioId, version], onDelete: Restrict, onUpdate: Restrict, map: "StoryScriptVersion_parent_fkey")
+  children StoryScriptVersion[] @relation("ScriptParent")
+  beats StoryBeat[]
+  verifications StorySourceVerification[]
+  currentIn StorylineStudio[] @relation("CurrentScript")
+
+  @@unique([studioId, version])
+  @@unique([studioId, scriptHash])
+  @@unique([id, studioId], map: "StoryScriptVersion_studio_key")
+  @@unique([id, studioId, version], map: "StoryScriptVersion_parent_key")
+  @@unique([id, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], map: "StoryScriptVersion_binding_key")
+  @@index([sourceSnapshotId, studioId])
+  @@index([studioId, createdAt])
+}
+
+model StoryBeat {
+  // Payload beat IDs may recur in later script versions; no global beat-ID key.
+  scriptVersionId String
+  studioId        String
+  beatId          String
+  order           Int
+  category        StoryBeatCategory
+  startMs         Int
+  endMs           Int
+  canonicalPayload String @db.Text
+  script StoryScriptVersion @relation(fields: [scriptVersionId, studioId], references: [id, studioId], onDelete: Restrict, onUpdate: Restrict, map: "StoryBeat_script_fkey")
+
+  @@id([scriptVersionId, beatId])
+  @@unique([scriptVersionId, order])
+  @@index([studioId, scriptVersionId])
+}
+
+model StorySourceVerification {
+  // Durable issuer contract is a NEW version, not an import of M1-C JSON.
+  id                    String @id
+  studioId              String
+  scriptVersionId       String
+  sourceSnapshotId      String
+  sourceContentHash     String @db.VarChar(64)
+  sourceContextHash     String @db.VarChar(64)
+  scriptHash            String @db.VarChar(64)
+  claimId               String
+  claimContentHash      String @db.VarChar(64)
+  anchorSetHash         String @db.VarChar(64)
+  allowedAnchorSetHash  String @db.VarChar(64)
+  translationContextHash String @db.VarChar(64)
+  qualificationHash     String @db.VarChar(64)
+  policyVersion         String @default("story-human-verification-v1")
+  issuerPolicyVersion   String @default("story-server-issuer-v1")
+  entryHash             String @db.VarChar(64)
+  sequence              Int
+  previousLedgerHash    String @db.VarChar(64)
+  previousEntryId       String? @unique
+  kind                  StoryVerificationKind
+  outcome               StoryVerificationOutcome
+  canonicalPayload      String @db.Text
+  reviewedAt            DateTime
+  issuedAt              DateTime
+  createdAt             DateTime @default(now())
+
+  studio StorylineStudio @relation(fields: [studioId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "StorySourceVerification_studio_fkey")
+  script StoryScriptVersion @relation(fields: [scriptVersionId, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], references: [id, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], onDelete: Restrict, onUpdate: Restrict, map: "StorySourceVerification_script_fkey")
+  previous StorySourceVerification? @relation("VerificationSupersession", fields: [previousEntryId, studioId, claimId], references: [id, studioId, claimId], onDelete: Restrict, onUpdate: Restrict, map: "StorySourceVerification_previous_fkey")
+  successor StorySourceVerification[] @relation("VerificationSupersession")
+
+  @@unique([id, studioId, claimId], map: "StorySourceVerification_claim_key")
+  @@unique([studioId, entryHash])
+  @@unique([studioId, sequence])
+  @@index([studioId, claimId, sequence])
+  @@index([scriptVersionId, studioId])
+  // SQL also supplies a partial unique root index for (studioId, claimId).
 }

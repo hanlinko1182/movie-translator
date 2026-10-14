@@ -3,6 +3,7 @@ import { canonicalJson, contractHash } from "./canonical";
 import { EVENT_KINDS, LIMITS, type Immutable, type StorySourceSnapshot, type StoryScriptVersion, type StoryEvent } from "./contracts";
 import { DURATION_ENGINE, type AutoStoryPolicy, type SourceInterval, type StoryComplexityInventory } from "./duration-contracts";
 import { readHumanSourceVerification } from "./human-verification";
+import type { HumanVerificationState } from "./human-verification-contracts";
 import { allClaims, validateStoryEvents } from "./script";
 import { anchorKey } from "./source";
 import { array, enumeration, fail, freeze, hash, id, integer, interval, literal, record, unique } from "./validation";
@@ -110,10 +111,19 @@ function parseInventory(value: unknown, source: StorySourceSnapshot, script: Sto
  */
 export function planStoryDuration(source: StorySourceSnapshot, script: StoryScriptVersion, inventoryValue: unknown, policyValue: unknown, authority: unknown) {
   const review = readHumanSourceVerification(authority, source, script);
+  return calculateUntrustedStoryDuration(source, script, inventoryValue, policyValue, review);
+}
+/** Numerical kernel only: supplied states confer NO authority. Its output always
+ * says PROVIDED_IMMUTABLE_CONTEXT_ONLY. The durable service calls it inside its
+ * own verified read; callers cannot promote this result into a trusted view. */
+export function calculateUntrustedStoryDuration(source: StorySourceSnapshot, script: StoryScriptVersion, inventoryValue: unknown, policyValue: unknown,
+  review: { claims: readonly { claimId: string; state: HumanVerificationState; receiptId: string | null }[]; dependencyHash: string }) {
   const inventory = parseInventory(inventoryValue, source, script), policy = validateAutoStoryPolicy(policyValue);
   return calculate(source, script, inventory, policy, review);
 }
-function calculate(source: StorySourceSnapshot, script: StoryScriptVersion, inventory: Immutable<StoryComplexityInventory>, policy: Immutable<AutoStoryPolicy>, review: ReturnType<typeof readHumanSourceVerification>) {
+function calculate(source: StorySourceSnapshot, script: StoryScriptVersion, inventory: Immutable<StoryComplexityInventory>, policy: Immutable<AutoStoryPolicy>, review: {
+  claims: readonly { claimId: string; state: HumanVerificationState; receiptId: string | null }[]; dependencyHash: string;
+}) {
   const claims = allClaims(script), supportedClaims = new Set(review.claims.filter(row => row.state === "SOURCE_VERIFIED").map(row => row.claimId));
   const groups = new Map<string, typeof inventory.events[number][]>();
   for (const event of inventory.events) {
@@ -189,7 +199,7 @@ function calculate(source: StorySourceSnapshot, script: StoryScriptVersion, inve
   const inputHash = contractHash("story-duration-plan-input-v1", { schemaVersion: DURATION_ENGINE.version,
     projectId: source.payload.projectId, movieId: source.payload.movieId, sourceContentHash: source.sourceContentHash,
     sourceContextHash: source.sourceContextHash, scriptHash: script.scriptHash, verificationDependencyHash: review.dependencyHash, inventory, policy });
-  const result = { schemaVersion: DURATION_ENGINE.version, policy, inputHash, contextStatus: review.contextStatus, persisted: false as const, status,
+  const result = { schemaVersion: DURATION_ENGINE.version, policy, inputHash, contextStatus: "PROVIDED_IMMUTABLE_CONTEXT_ONLY" as const, persisted: false as const, status,
     verificationDependencyHash: review.dependencyHash, candidateInventory: inventory,
     counts: { submittedEvents: inventory.events.length, distinctCandidates: canonicalEvents.length, supportedEvents: features.events, provisionalEvents: provisionalEvents.length },
     supportedEventIds: supportedEvents.map(row => row.id),

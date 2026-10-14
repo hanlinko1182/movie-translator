@@ -148,7 +148,7 @@ test("Storyline M1 draft SQL against a disposable PostgreSQL cluster", { timeout
     });
     await step(t, "all committed baseline migrations apply to the empty scratch database", async () => {
       const root = "prisma/migrations";
-      const folders = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
+      const folders = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory() && !entry.name.includes("storyline_m1_foundation")).map(entry => entry.name).sort();
       assert.ok(folders.length >= 14);
       for (const folder of folders) await client.query(await readFile(join(root, folder, "migration.sql"), "utf8"));
       assert.equal((await client.query("SELECT count(*)::int AS n FROM \"Movie\"")).rows[0].n, 0);

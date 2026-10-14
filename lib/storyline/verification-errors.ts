@@ -1,0 +1,11 @@
+import "server-only";
+
+export type VerificationSecurityCode =
+  | "VERIFICATION_DISABLED" | "OPERATOR_UNAUTHORIZED" | "VERIFICATION_AUTHORIZATION_INVALID"
+  | "VERIFICATION_DATABASE_UNSAFE" | "VERIFICATION_CONTEXT_INVALID" | "VERIFICATION_SOURCE_STALE"
+  | "VERIFICATION_LEDGER_CONFLICT" | "VERIFICATION_HISTORY_INVALID" | "VERIFICATION_DECISION_INVALID"
+  | "VERIFICATION_BASIS_UNVERIFIED" | "VERIFICATION_UNAVAILABLE" | "VERIFICATION_LEDGER_FULL";
+
+export class VerificationSecurityError extends Error {
+  constructor(readonly code: VerificationSecurityCode) { super(code); this.name = "VerificationSecurityError"; }
+}

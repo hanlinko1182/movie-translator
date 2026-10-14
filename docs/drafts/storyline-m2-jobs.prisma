@@ -1,0 +1,179 @@
+// REVIEW ONLY. Append to an isolated copy of prisma/schema.prisma for validation.
+// Add these reverse fields to the existing M1 models in that copy:
+// StorylineStudio: tasks StoryTask[]; paidConfirmations StoryPaidConfirmation[]
+// StorySourceSnapshot: storyTasks StoryTask[]
+// StoryScriptVersion: storyTasks StoryTask[]
+// No live Prisma schema or migration is changed by this fragment.
+// M2-02C parity: pre-checkpoint redispatch retains task generation and the
+// consumed, unexpired confirmation; preSubmitAttempts increments in SQL.
+// Only a fresh consumed confirmation permits terminal generation +1.
+// Post-checkpoint cancellation remains pending until the original result is
+// stored and its submission is RESOLVED. SQL guards carry these invariants.
+
+enum StoryTaskKind {
+  ANALYZE_EVIDENCE
+  PLAN_BEATS
+  DRAFT_SCRIPT
+  REVIEW_EVIDENCE
+  REVIEW_MYANMAR
+}
+
+enum StoryTaskState {
+  QUEUED
+  LEASED
+  SUBMITTED
+  UNKNOWN
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StoryConfirmationState {
+  PREPARED
+  CONSUMED
+}
+
+enum StorySubmissionState {
+  SUBMITTED
+  UNKNOWN
+  RESOLVED
+}
+
+enum StoryResultOutcome {
+  VALIDATED_CANDIDATE
+  REJECTED_RESPONSE
+  DEFINITIVE_FAILURE
+}
+
+enum StoryUsageClass {
+  UNKNOWN
+  PARTIAL
+  REPORTED
+}
+
+model StoryTask {
+  id String @id
+  studioId String
+  projectId String
+  movieId String
+  sourceSnapshotId String
+  sourceContentHash String @db.VarChar(64)
+  sourceContextHash String @db.VarChar(64)
+  scriptVersionId String?
+  scriptHash String? @db.VarChar(64)
+  kind StoryTaskKind
+  recipeHash String @db.VarChar(64)
+  canonicalRecipe String @db.Text
+  profileHash String @db.VarChar(64)
+  expectedStudioRevision Int
+  state StoryTaskState @default(QUEUED)
+  generation Int @default(0)
+  stateRevision Int @default(0)
+  leaseOwner String?
+  leaseUntil DateTime?
+  cancelRequestedAt DateTime?
+  errorCode String?
+  createdAt DateTime @default(now())
+  stateChangedAt DateTime @default(now())
+  studio StorylineStudio @relation(fields: [studioId, projectId, movieId], references: [id, projectId, movieId], onDelete: Restrict, onUpdate: Restrict)
+  source StorySourceSnapshot @relation(fields: [sourceSnapshotId, studioId, sourceContentHash, sourceContextHash], references: [id, studioId, sourceContentHash, sourceContextHash], onDelete: Restrict, onUpdate: Restrict)
+  script StoryScriptVersion? @relation(fields: [scriptVersionId, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], references: [id, studioId, sourceSnapshotId, sourceContentHash, sourceContextHash, scriptHash], onDelete: Restrict, onUpdate: Restrict)
+  dispatch StoryTaskDispatch?
+  confirmations StoryPaidConfirmation[]
+  submissions StoryProviderSubmission[]
+  results StoryTaskResult[]
+  events StoryTaskEvent[]
+  @@unique([studioId, kind, recipeHash])
+  @@unique([id, studioId, recipeHash])
+  @@index([studioId, state, createdAt])
+  @@index([projectId, movieId, createdAt])
+}
+
+model StoryTaskDispatch {
+  taskId String @id
+  generation Int
+  nextDispatchAt DateTime
+  queueReceipt String?
+  publishAttempts Int @default(0)
+  preSubmitAttempts Int @default(0)
+  owner String?
+  leaseUntil DateTime?
+  updatedAt DateTime @default(now())
+  task StoryTask @relation(fields: [taskId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([nextDispatchAt, generation])
+}
+
+model StoryPaidConfirmation {
+  id String @id
+  studioId String
+  taskId String?
+  generation Int
+  recipeHash String @db.VarChar(64)
+  profileHash String @db.VarChar(64)
+  expectedStudioRevision Int
+  quoteMaxUsdMicros BigInt
+  authorityRef String
+  state StoryConfirmationState @default(PREPARED)
+  preparedAt DateTime
+  expiresAt DateTime
+  consumedAt DateTime?
+  studio StorylineStudio @relation(fields: [studioId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  task StoryTask? @relation(fields: [taskId, studioId, recipeHash], references: [id, studioId, recipeHash], onDelete: Restrict, onUpdate: Restrict)
+  submissions StoryProviderSubmission[]
+  @@unique([id, taskId, generation])
+  @@unique([taskId, generation])
+  @@index([studioId, expiresAt])
+}
+
+model StoryProviderSubmission {
+  id String @id
+  taskId String
+  generation Int
+  confirmationId String @unique
+  requestHash String @db.VarChar(64)
+  owner String
+  state StorySubmissionState @default(SUBMITTED)
+  checkpointAt DateTime @default(now())
+  definitiveAt DateTime?
+  task StoryTask @relation(fields: [taskId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  confirmation StoryPaidConfirmation @relation(fields: [confirmationId, taskId, generation], references: [id, taskId, generation], onDelete: Restrict, onUpdate: Restrict)
+  result StoryTaskResult?
+  @@unique([taskId, generation])
+  @@unique([id, taskId, generation])
+  @@index([state, checkpointAt])
+  // SQL adds unique global unresolved slot; Prisma cannot express a partial index.
+}
+
+model StoryTaskResult {
+  id String @id
+  taskId String
+  generation Int
+  submissionId String @unique
+  outcome StoryResultOutcome
+  normalizedPayload String @db.Text
+  payloadHash String @db.VarChar(64)
+  validatorVersion String
+  usageClass StoryUsageClass
+  inputTokens Int?
+  outputTokens Int?
+  reportedUsdMicros BigInt?
+  safeErrorCode String?
+  recordedAt DateTime @default(now())
+  task StoryTask @relation(fields: [taskId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  submission StoryProviderSubmission @relation(fields: [submissionId, taskId, generation], references: [id, taskId, generation], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([submissionId, taskId, generation])
+  @@index([taskId, generation])
+}
+
+model StoryTaskEvent {
+  id String @id
+  taskId String
+  generation Int
+  sequence Int
+  state StoryTaskState
+  reasonCode String
+  createdAt DateTime @default(now())
+  task StoryTask @relation(fields: [taskId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([taskId, sequence])
+  @@index([taskId, generation, createdAt])
+}
