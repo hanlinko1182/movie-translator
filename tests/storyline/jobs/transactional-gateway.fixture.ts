@@ -16,6 +16,8 @@ import { createStoryTaskReconciler } from "../../../lib/storyline/jobs/reconcile
 import { createStoryTaskReader } from "../../../lib/storyline/jobs/read";
 import { createStoryTaskFakeWorker } from "../../../lib/storyline/jobs/fake-worker";
 import { createStoryTaskFakeRecovery } from "../../../lib/storyline/jobs/fake-worker-recovery";
+import { createStoryTaskFakeCheckpoint } from "../../../lib/storyline/jobs/fake-checkpoint";
+import { createSyntheticEvidenceCandidatePersistence } from "../../../lib/storyline/evidence-analysis/persist-candidate";
 import { persistPreparedStorylineSource } from "../../../lib/storyline/persist-source";
 import { persistStorylineScriptDraft } from "../../../lib/storyline/persist-script";
 import { prepareStorylineSource } from "../../../lib/storyline/prepare-source";
@@ -31,7 +33,8 @@ export type ProofHooks = {
   afterFinalize?: () => Promise<void>;
 };
 export type DispatchClaim = { taskId: string; generation: number; stateRevision: number; owner: string };
-export async function transactionalFixture(m1First: boolean, withFakeWorker = false) {
+export async function transactionalFixture(m1First: boolean, withFakeWorker = false, withCheckpoint = false, withApiReader = false, withM3Reader = false, withM3Candidate = false,
+  seedAdditionalSourceForTest?: (database: PrismaClient) => Promise<void>) {
   const owned = await DisposableStorylinePostgres.start();
   const baseline = await owned.client(), admin = await owned.securityAdministrator();
   const setup = new PrismaClient({ adapter: new PrismaPg({ ...owned.prismaAdapterConfig(), pipeline: true, max: 1 }) });
@@ -45,6 +48,7 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
     for (const folder of (await readdir("prisma/migrations", { withFileTypes: true })).filter(row => row.isDirectory()).map(row => row.name).sort())
       await baseline.query(await readFile(join("prisma/migrations", folder, "migration.sql"), "utf8"));
     await seedPersistenceFixture(setup);
+    await seedAdditionalSourceForTest?.(setup);
     const roles = await readFile("docs/drafts/storyline-verification-roles.sql", "utf8");
     if (m1First) await admin.query(roles);
     for (const name of ["storyline-m2-jobs.sql", "storyline-m2-admission-ledger.sql"]) {
@@ -60,13 +64,32 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
       const sql = await readFile("docs/drafts/storyline-m2-fake-worker-gateway.sql", "utf8");
       assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
     }
+    if (withCheckpoint) {
+      assert.equal(withFakeWorker, true);
+      const sql = await readFile("docs/drafts/storyline-m2-checkpoint-gateway.sql", "utf8");
+      assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
+    }
+    if (withApiReader) {
+      const sql = await readFile("docs/drafts/storyline-m2-api-read.sql", "utf8");
+      assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
+    }
+    if (withM3Reader) {
+      assert.equal(withCheckpoint && withApiReader, true);
+      const sql = await readFile("docs/drafts/storyline-m3-evidence-read.sql", "utf8");
+      assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
+    }
+    if (withM3Candidate) {
+      assert.equal(withM3Reader, true);
+      const sql = await readFile("docs/drafts/storyline-m3-candidate-persistence.sql", "utf8");
+      assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
+    }
     const runtimeConfig = await owned.restrictedLogin("storyline_runtime");
     const admissionConfig = await owned.restrictedLogin("storyline_admission_writer");
     const issuerConfig = await owned.restrictedLogin("storyline_synthetic_issuer");
     const outboxConfig = await owned.restrictedLogin("storyline_outbox");
     const readerConfig = await owned.restrictedLogin("storyline_m2_reader");
     const runtime = new PrismaClient({ adapter: new PrismaPg({ ...runtimeConfig, pipeline: true, max: 1 }) });
-    const admission = new PrismaClient({ adapter: new PrismaPg({ ...admissionConfig, pipeline: true, max: 2 }) });
+    const admission = new PrismaClient({ adapter: new PrismaPg({ ...admissionConfig, pipeline: true, max: withCheckpoint ? 1 : 2 }) });
     prismaClients.push(runtime, admission);
     const connect = async (config: typeof runtimeConfig) => { const client = new Client(config); await client.connect(); clients.push(client); return client; };
     const issuer = await connect(issuerConfig), outbox = await connect(outboxConfig), outboxTwin = await connect(outboxConfig), reader = await connect(readerConfig), legacyRuntime = await connect(runtimeConfig), rawAdmission = await connect(admissionConfig);
@@ -98,8 +121,9 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
       expectedStudioRevision:scriptSaved.revision});
     let currentProfile = profile("ANALYZE_EVIDENCE");
     let identity:StoryTaskRecipeIdentity;
-    const configure = async (key: string, kind: "ANALYZE_EVIDENCE" | "REVIEW_EVIDENCE" = "ANALYZE_EVIDENCE", last = 11) => {
-      currentProfile = profile(kind);
+    const configure = async (key: string, kind: "ANALYZE_EVIDENCE" | "REVIEW_EVIDENCE" = "ANALYZE_EVIDENCE", last = 11,
+      responseSchemaVersion = "s1") => {
+      currentProfile = { ...profile(kind), responseSchemaVersion };
       const inspected=await media.inspect((await readStorylineSource(scope,admission)).storageKey);
       identity=await sourceAccess.transaction(async tx=> {
         const handle=await sourceAccess.load(tx,sourceReference(kind),inspected);
@@ -179,7 +203,7 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
       const dispatch = createStoryTaskDispatch({ database: outboxDatabase, delivery, scope: { ...scope, studioId: saved.studioId } });
       return {
         admission: createStoryTaskAdmission({ database: admission, profile: currentProfile, inspectMedia, validationKey: secret }),
-        dispatch, reconcile: createStoryTaskReconciler(dispatch), read: createStoryTaskReader(readerDatabase),
+        dispatch, reconcile: createStoryTaskReconciler(dispatch), read: createStoryTaskReader(readerDatabase), resultDatabase: readerDatabase,
       };
     };
     const workerDatabases: PrismaClient[] = [];
@@ -197,8 +221,45 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
         profile: currentProfile, inspectMedia, validationKey: secret });
       return { worker, recovery: createStoryTaskFakeRecovery(worker), database: workerDatabase };
     };
+    const checkpointDatabases: PrismaClient[] = [];
+    const checkpointServices = async (worker: ReturnType<typeof createStoryTaskFakeWorker>, options: {
+      acknowledgementFault?: "DROP_AFTER_COMMIT"; separateConnection?: boolean; inspectMedia?: typeof media.inspect;
+    } = {}) => {
+      assert.equal(withCheckpoint, true, "Checkpoint gateway is disposable opt-in only");
+      const slot = options.separateConnection ? 1 : 0;
+      if (!checkpointDatabases[slot]) {
+        const config = await owned.restrictedLogin("storyline_checkpoint_worker");
+        await admin.query(`INSERT INTO public."StoryTestCheckpointAccess" VALUES ($1,$2,$3,$4)`, [config.user, scope.projectId, scope.movieId, saved.studioId]);
+        checkpointDatabases[slot] = new PrismaClient({ adapter: new PrismaPg({ ...config, pipeline: true, max: 1 }) });
+        prismaClients.push(checkpointDatabases[slot]);
+      }
+      return { service: createStoryTaskFakeCheckpoint({ database: checkpointDatabases[slot], worker, scope: { ...scope, studioId: saved.studioId },
+        profile: currentProfile, validationKey: secret, inspectMedia: options.inspectMedia ?? media.inspect, acknowledgementFault: options.acknowledgementFault }),
+        database: checkpointDatabases[slot] };
+    };
+    const candidateDatabases: PrismaClient[] = [];
+    const candidateWriter = async (separateConnection = false) => {
+      assert.equal(withM3Candidate, true, "Candidate gateway is disposable opt-in only");
+      const slot = separateConnection ? 1 : 0;
+      if (!candidateDatabases[slot]) {
+        const config = await owned.restrictedLogin("storyline_m3_candidate_writer");
+        await admin.query(`INSERT INTO public."StoryTestCandidateAccess" VALUES ($1,$2,$3,$4)`,
+          [config.user, scope.projectId, scope.movieId, saved.studioId]);
+        candidateDatabases[slot] = new PrismaClient({ adapter: new PrismaPg({ ...config, pipeline: true, max: 1 }) });
+        prismaClients.push(candidateDatabases[slot]);
+      }
+      return candidateDatabases[slot];
+    };
+    const candidateService = async (readerDatabase: PrismaClient, options: {
+      separateConnection?: boolean; afterInsertForTest?: () => Promise<void>;
+    } = {}) => createSyntheticEvidenceCandidatePersistence({
+      writerDatabase: await candidateWriter(options.separateConnection), readerDatabase,
+      inspectMedia: media.inspect, profile: currentProfile, validationKey: secret,
+      afterInsertForTest: options.afterInsertForTest,
+    });
+    if (withCheckpoint) await setup.$disconnect(); // Release provisioning pool; never worker runtime.
     return { owned, admin, runtime, admission, issuer, outbox, outboxTwin, reader, legacyRuntime, rawAdmission, m1Issuer, checkpoint, saved, scriptSaved, source, media,
       configure, issue, admit, replay, mutateSource, claim, delivery, status, sourceAccess, sourceReference, currentRecipe:()=>identity,
-      currentProfile:()=>currentProfile,candidate,keyEnabled,services,fakeWorker, close };
+      currentProfile:()=>currentProfile,candidate,keyEnabled,services,fakeWorker,checkpointServices,candidateWriter,candidateService, close };
   } catch (error) { await close(); throw error; }
 }

@@ -146,6 +146,16 @@ export function createStoryTaskFakeWorker(dependencies: {
   const summary = (task: Task, result: Mutation) => Object.freeze({ taskId: task.taskId, generation: task.generation,
     state: result.state, stateRevision: result.stateRevision, reasonCode: result.reasonCode, errorCode: result.errorCode });
   const worker = {
+    /** Server-bootstrap handoff only. Consumes the genuine factory-owned handle
+     * before invoking the trusted checkpoint service; JSON cannot provide a lease
+     * or a callback. A failed/uncertain handoff never restores local ownership. */
+    async withCheckpointLease<T>(value: unknown, run: (lease: Readonly<LeaseData>) => Promise<T>): Promise<T> {
+      return serviceCall(async () => {
+        const data = resolve(value);
+        leases.delete(value as object);
+        return run(Object.freeze({ task: Object.freeze({ ...data.task }), owner: data.owner }));
+      });
+    },
     async claim(value: unknown) {
       return serviceCall(async () => {
         const task = await peek(parseFakeStoryTaskReference(value));

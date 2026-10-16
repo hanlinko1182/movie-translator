@@ -113,8 +113,9 @@ export function createPersistedStoryTaskSourceAccess(database: PrismaClient) {
     return read(tx,entry.selection,entry.media);
   }
   return Object.freeze({
-    async transaction<T>(work:(tx:Prisma.TransactionClient)=>Promise<T>):Promise<T> {
+    async transaction<T>(work:(tx:Prisma.TransactionClient)=>Promise<T>,options?:{readOnly?:boolean}):Promise<T> {
       try {return await database.$transaction(async tx=>{
+        if(options?.readOnly) await tx.$executeRaw`SET TRANSACTION READ ONLY`;
         await databaseBoundary(tx); active.add(tx);
         try {return await work(tx);} finally {active.delete(tx);}
       },{isolationLevel:"ReadCommitted",maxWait:5000,timeout:20000});}
@@ -125,6 +126,11 @@ export function createPersistedStoryTaskSourceAccess(database: PrismaClient) {
       const handle=Object.freeze({toJSON(){taskFail("STORY_TASK_INVALID","persistedSource.serialization");}});
       handles.set(handle,{tx,selection:request,media});
       return handle as unknown as PersistedStoryTaskSource;
+    },
+    /** Server-only current source inspection for provisional downstream analysis.
+     * The handle remains bound to this transaction; this is not a freshness lease. */
+    async inspect(tx:Prisma.TransactionClient,handle:unknown):Promise<Context> {
+      return resolve(tx,handle);
     },
     async createRecipe(tx:Prisma.TransactionClient,input:unknown,handle:unknown,profile:unknown):Promise<StoryTaskRecipeIdentity> {
       const c=await resolve(tx,handle);

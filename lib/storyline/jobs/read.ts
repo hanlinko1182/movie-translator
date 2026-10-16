@@ -31,6 +31,19 @@ export type StoryTaskReadStatus = ReturnType<typeof safeStatus>;
 export function createStoryTaskReader(database: PrismaClient) {
   const transaction = restrictedTransactions(database, "READER");
   return Object.freeze({
+    async get(value: unknown): Promise<StoryTaskReadStatus | null> {
+      return serviceCall(async () => {
+        const input = record(value, ["scope", "taskId"], "read.one");
+        const scope = taskScope(input.scope), taskId = id(input.taskId, "read.taskId");
+        return transaction(async tx => {
+          const rows = await tx.$queryRaw<unknown[]>`
+            SELECT * FROM public.story_m2_test_status_one(${scope.projectId},${scope.movieId},${scope.studioId},${taskId})
+          `;
+          if (rows.length > 1) taskFail("STORY_TASK_INVALID", "read.one");
+          return rows.length === 0 ? null : safeStatus(rows[0]);
+        });
+      });
+    },
     async list(value: unknown) {
       return serviceCall(async () => {
         const input = record(value, ["scope", "afterTaskId", "limit"], "read");

@@ -1,0 +1,25 @@
+# M3-02 server-side evidence integration (fake-only)
+
+## Boundary implemented
+
+`createPersistedEvidenceCandidateValidator` is an explicit, server-only composition. It has no production bootstrap, route, worker, queue, provider port or environment-driven activation. The caller supplies trusted server dependencies: a restricted M1 runtime Prisma client, an M2 reader Prisma client, the existing private media inspector and a fixed synthetic `ANALYZE_EVIDENCE` profile. The validation request contains only exact Project/Movie/Studio scope, task ID, generation and a synthetic candidate. Unknown request fields, including purported persistence or verification assertions, are rejected.
+
+The service reads one task and result through `story_m3_test_evidence_result` in `docs/drafts/storyline-m3-evidence-read.sql`. This review-only function is installed only in a newly owned disposable PostgreSQL cluster. It has a fixed search path, exact scope and task/generation predicates, a `StoryTestAccess` reader grant, no PUBLIC access, and no direct paid-table DML grant. The service also checks the actual restricted reader privilege and runs its transaction read-only. The function returns private task/recipe and immutable result bindings only to the server service; it is never installed in an application API or returned to a browser.
+
+The M2 result must be `COMPLETED` with a resolved submission and `VALIDATED_CANDIDATE` outcome. Its immutable synthetic normalized payload, hash, submission ID, request hash, generation and validator version must agree with the reviewed M2 fake result contract. `UNKNOWN`, pending, failed, cancelled and absent results cannot validate a candidate. The service never invokes checkpoint, transport, dispatch, reconciliation or result mutation.
+
+The server then loads the exact persisted M1 snapshot through the existing `createPersistedStoryTaskSourceAccess` service inside a read-only transaction. That service rechecks Studio revision/current pointers, canonical source bytes and hashes, authoritative Chinese/scene/character data, translation/QC context and inspected source media. The M2 canonical recipe and fixed profile are revalidated against this current M1 context. The M3-01 validator finally checks the separately supplied candidate against those server-owned identities. No candidate JSON field establishes source, task or result authority by itself.
+
+## Result and candidate meaning
+
+The durable M2 fake result is a **completion marker**, `story-fake-result-v1`. It does not contain the M3 evidence candidate. M3-02 binds a separately supplied, clearly `SYNTHETIC_TEST` candidate to that genuine task/result identity for a disposable integration proof. The service returns `PROVISIONAL_CANDIDATE`, `STRUCTURALLY_GROUNDED` and `CURRENT_AT_VALIDATION`, with the immutable result and candidate hashes. It does not claim that the candidate was persisted, submitted to a provider, semantically verified, approved or included in the M2 result payload.
+
+The M2 fake checkpoint accepts exactly two synthetic response-schema identities: its previous `s1` regression profile and `story-evidence-candidate-v1` for this integration proof. Both still use the same seven-field synthetic completion envelope and all existing checkpoint, one-use permit, UNKNOWN and immutable-result guards. No real model/profile is approved by this test allowance.
+
+`CURRENT_AT_VALIDATION` means the source, Studio revision and media passed the authoritative checks during the read-only transaction. It is not a durable freshness lease. Future publication must revalidate dependencies under its own transaction fence. The current `ANALYZE_EVIDENCE` recipe has no script dependency; a Studio script change is caught through the expected Studio revision. Review-task script binding remains an M2 contract but is outside this candidate type.
+
+## Disposable acceptance and M3-03 handoff
+
+`tests/storyline/evidence-analysis-postgres.test.ts` drives exported M1 preparation/persistence, restricted M2 admission/outbox/worker/checkpoint/result and the M3 service in both M1/M2 role-script orders. It uses synthetic records and the fake wire only. Negative cases cover missing/UNKNOWN result, task/generation/scope forgery, Chinese quotation and owner violations, provisional Myanmar context, source/media/QC/Studio drift, reader privilege separation, read-only counts and zero human verification receipts.
+
+**M3-03 fake-only readiness:** the integration boundary is ready for a separately reviewed candidate storage/publication design. Before any candidate may be treated as a durable M2 result, that design must define its immutable serialized payload, schema/size hash, restricted write/read gateway, checkpoint result validation, stale-source publication fence and rejection diagnostics. A completed synthetic envelope alone is insufficient to authenticate arbitrary candidate bytes. Production SQL installation, real provider transport, paid spending, script approval and human `SOURCE_VERIFIED` issuance remain blocked.

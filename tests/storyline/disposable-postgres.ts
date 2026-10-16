@@ -63,7 +63,7 @@ export class DisposableStorylinePostgres {
       }
       // No TCP listener. The socket directory is inside an owned mode-0700 root.
       await chmod(socket, 0o700);
-      await writeFile(join(data, "postgresql.conf"), `\nlisten_addresses = ''\nunix_socket_directories = '${socket}'\nunix_socket_permissions = 0700\nport = ${port}\nmax_connections = 20\nshared_buffers = '16MB'\n`, { flag: "a" });
+      await writeFile(join(data, "postgresql.conf"), `\nlisten_addresses = ''\nunix_socket_directories = '${socket}'\nunix_socket_permissions = 0700\nport = ${port}\nmax_connections = 32\nshared_buffers = '16MB'\n`, { flag: "a" });
       try {
         await command("pg_ctl", ["-D", data, "-l", join(root, "postgres.log"), "-w", "-t", "20", "start"]);
       } catch (error) {
@@ -111,11 +111,11 @@ export class DisposableStorylinePostgres {
   }
 
   /** Credentials are generated in memory and never use the app datasource. */
-  async restrictedLogin(group: "storyline_runtime" | "storyline_verification_issuer" | "storyline_admission_writer" | "storyline_checkpoint_worker" | "storyline_synthetic_issuer" | "storyline_outbox" | "storyline_m2_reader" | "storyline_fake_worker") {
+  async restrictedLogin(group: "storyline_runtime" | "storyline_verification_issuer" | "storyline_admission_writer" | "storyline_checkpoint_worker" | "storyline_synthetic_issuer" | "storyline_outbox" | "storyline_m2_reader" | "storyline_fake_worker" | "storyline_m3_candidate_writer") {
     const prefix = { storyline_runtime: "m1_runtime", storyline_verification_issuer: "m1_issuer",
       storyline_admission_writer: "m2_admission", storyline_checkpoint_worker: "m2_checkpoint",
       storyline_synthetic_issuer: "m2_synthetic_issuer", storyline_outbox: "m2_outbox", storyline_m2_reader: "m2_reader",
-      storyline_fake_worker: "m2_fake_worker" }[group];
+      storyline_fake_worker: "m2_fake_worker", storyline_m3_candidate_writer: "m3_candidate" }[group];
     const user = `${prefix}_${randomBytes(10).toString("hex")}`;
     const password = randomBytes(32).toString("hex");
     const admin = await this.securityAdministrator();
