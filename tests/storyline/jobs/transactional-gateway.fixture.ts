@@ -17,6 +17,7 @@ import { createStoryTaskReader } from "../../../lib/storyline/jobs/read";
 import { createStoryTaskFakeWorker } from "../../../lib/storyline/jobs/fake-worker";
 import { createStoryTaskFakeRecovery } from "../../../lib/storyline/jobs/fake-worker-recovery";
 import { createStoryTaskFakeCheckpoint } from "../../../lib/storyline/jobs/fake-checkpoint";
+import { createProvisionalNarrationPersistence } from "../../../lib/storyline/narration-integration/persist";
 import { createSyntheticEvidenceCandidatePersistence } from "../../../lib/storyline/evidence-analysis/persist-candidate";
 import { persistPreparedStorylineSource } from "../../../lib/storyline/persist-source";
 import { persistStorylineScriptDraft } from "../../../lib/storyline/persist-script";
@@ -34,7 +35,7 @@ export type ProofHooks = {
 };
 export type DispatchClaim = { taskId: string; generation: number; stateRevision: number; owner: string };
 export async function transactionalFixture(m1First: boolean, withFakeWorker = false, withCheckpoint = false, withApiReader = false, withM3Reader = false, withM3Candidate = false,
-  seedAdditionalSourceForTest?: (database: PrismaClient) => Promise<void>) {
+  seedAdditionalSourceForTest?: (database: PrismaClient) => Promise<void>, withM4NarrationReader = false, withM4NarrationPersistence = false) {
   const owned = await DisposableStorylinePostgres.start();
   const baseline = await owned.client(), admin = await owned.securityAdministrator();
   const setup = new PrismaClient({ adapter: new PrismaPg({ ...owned.prismaAdapterConfig(), pipeline: true, max: 1 }) });
@@ -81,6 +82,16 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
     if (withM3Candidate) {
       assert.equal(withM3Reader, true);
       const sql = await readFile("docs/drafts/storyline-m3-candidate-persistence.sql", "utf8");
+      assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
+    }
+    if (withM4NarrationReader) {
+      assert.equal(withM3Candidate, true);
+      const sql = await readFile("docs/drafts/storyline-m4-narration-read.sql", "utf8");
+      assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
+    }
+    if (withM4NarrationPersistence) {
+      assert.equal(withM4NarrationReader, true);
+      const sql = await readFile("docs/drafts/storyline-m4-narration-persistence.sql", "utf8");
       assert.match(sql, /ROLLBACK;\s*$/); await admin.query(sql.replace(/ROLLBACK;\s*$/, "COMMIT;"));
     }
     const runtimeConfig = await owned.restrictedLogin("storyline_runtime");
@@ -257,9 +268,39 @@ export async function transactionalFixture(m1First: boolean, withFakeWorker = fa
       inspectMedia: media.inspect, profile: currentProfile, validationKey: secret,
       afterInsertForTest: options.afterInsertForTest,
     });
+    const narrationDatabases: PrismaClient[] = [];
+    const narrationReader = async (separateConnection = false) => {
+      assert.equal(withM4NarrationReader, true, "Narration read gateway is disposable opt-in only");
+      const slot = separateConnection ? 1 : 0;
+      if (!narrationDatabases[slot]) {
+        const config = await owned.restrictedLogin("storyline_m4_narration_reader");
+        await admin.query(`INSERT INTO public."StoryTestAccess" VALUES ($1,'READER',$2,$3,$4)`,
+          [config.user, scope.projectId, scope.movieId, saved.studioId]);
+        narrationDatabases[slot] = new PrismaClient({ adapter: new PrismaPg({ ...config, pipeline: true, max: 1 }) });
+        prismaClients.push(narrationDatabases[slot]);
+      }
+      return narrationDatabases[slot];
+    };
+    const narrationWriters: PrismaClient[] = [];
+    const narrationWriter = async (separateConnection = false) => {
+      assert.equal(withM4NarrationPersistence, true);
+      const slot = separateConnection ? 1 : 0;
+      if (!narrationWriters[slot]) {
+        const config = await owned.restrictedLogin("storyline_m4_narration_writer");
+        await admin.query(`INSERT INTO public."StoryTestAccess" VALUES ($1,'READER',$2,$3,$4)`,
+          [config.user, scope.projectId, scope.movieId, saved.studioId]);
+        narrationWriters[slot] = new PrismaClient({ adapter: new PrismaPg({ ...config, pipeline: true, max: 1 }) });
+        prismaClients.push(narrationWriters[slot]);
+      }
+      return narrationWriters[slot];
+    };
+    const narrationPersistence = async (options: {
+      separateConnection?: boolean; beforeFenceForTest?: () => Promise<void>; afterComposeForTest?: () => Promise<void>; afterInsertForTest?: () => Promise<void>;
+    } = {}) => createProvisionalNarrationPersistence({ database: await narrationWriter(options.separateConnection),
+      readerDatabase: await narrationReader(), inspectMedia: media.inspect, profile: currentProfile, validationKey: secret, ...options });
     if (withCheckpoint) await setup.$disconnect(); // Release provisioning pool; never worker runtime.
     return { owned, admin, runtime, admission, issuer, outbox, outboxTwin, reader, legacyRuntime, rawAdmission, m1Issuer, checkpoint, saved, scriptSaved, source, media,
       configure, issue, admit, replay, mutateSource, claim, delivery, status, sourceAccess, sourceReference, currentRecipe:()=>identity,
-      currentProfile:()=>currentProfile,candidate,keyEnabled,services,fakeWorker,checkpointServices,candidateWriter,candidateService, close };
+      currentProfile:()=>currentProfile,candidate,keyEnabled,services,fakeWorker,checkpointServices,candidateWriter,candidateService,narrationReader,narrationWriter,narrationPersistence, close };
   } catch (error) { await close(); throw error; }
 }

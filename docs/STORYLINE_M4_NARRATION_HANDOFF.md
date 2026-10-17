@@ -1,5 +1,7 @@
 # M4 Myanmar narration handoff — M3-05
 
+M4-01 now implements the pure synthetic validator/composer described in [STORYLINE_M4_NARRATION_IMPLEMENTATION.md](STORYLINE_M4_NARRATION_IMPLEMENTATION.md). The original handoff below records the planning boundary. The implementation adds explicit composer/section IDs, `RELATIONSHIP_CONTEXT` and unavailable estimated-duration metadata; production persistence and approval remain future work.
+
 ## Ready implementation boundary
 
 M4-01 can implement bounded provisional Myanmar narration contracts, parsing and a deterministic fake composer against current, persisted M3 candidates. It must remain explicitly invoked, server-only and disposable-only. M3 acceptance is not permission to activate a provider, authentication, spending, approval, a production worker or a live migration.

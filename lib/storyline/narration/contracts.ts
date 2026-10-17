@@ -2,9 +2,10 @@ import type { Immutable, StoryBeat, StorySourceSnapshot } from "../contracts";
 import { LIMITS, STORYLINE } from "../contracts";
 import type { AutoStoryPolicy } from "../duration-contracts";
 import type { EvidenceAnalysisCandidate } from "../evidence-analysis/contracts";
+import type { ValidatedEvidenceAnalysisCandidate } from "../evidence-analysis/contracts";
+import type { StoryTaskProfileDefinition, StoryTaskRecipeIdentity } from "../jobs/contracts";
 
-/** M4 handoff types only. No parser, generator, persistence or approval issuer
- * is installed. An object satisfying these types never establishes authority. */
+/** Pure synthetic contracts. Shape never establishes persistence or authority. */
 export const NARRATION_DRAFT = {
   version: "story-narration-draft-v1", hashDomain: "story-narration-draft-v1",
   language: "my", style: STORYLINE.style, durationMode: STORYLINE.durationMode,
@@ -12,6 +13,8 @@ export const NARRATION_DRAFT = {
   maxBytes: LIMITS.scriptBytes, maxBeats: LIMITS.beats, maxClaimsPerBeat: LIMITS.claimsPerBeat,
   maxParagraphsPerBeat: LIMITS.claimsPerBeat, maxTextPerBeat: LIMITS.narrationPerBeat,
   maxTextTotal: LIMITS.narrationTotal,
+  maxHeading: 160, maxFindingRefs: 12,
+  composerVersion: "story-synthetic-narration-v1",
 } as const;
 
 export type NarrationAnalysisDependency = {
@@ -33,13 +36,14 @@ export type NarrationDurationTarget =
       policy: AutoStoryPolicy; budgetMs: number };
 
 export type NarrationSection = {
-  beatId: string; order: number; heading: string;
-  focus: "CHARACTER_BEHAVIOR" | "QUALIFIED_MOTIVATION" | "PSYCHOLOGICAL_TENSION" | "DECISION" | "RELATIONSHIP_CHANGE" | "CONSEQUENCE" | "RESOLUTION";
+  id: string; beatId: string; order: number; heading: string;
+  focus: "CHARACTER_BEHAVIOR" | "QUALIFIED_MOTIVATION" | "PSYCHOLOGICAL_TENSION" | "DECISION" | "RELATIONSHIP_CONTEXT" | "RELATIONSHIP_CHANGE" | "CONSEQUENCE" | "RESOLUTION";
 };
 export type NarrationParagraphAnnotation = {
   beatId: string; paragraphIndex: number;
   uncertainty: "OBSERVED_ONLY" | "QUALIFIED_INFERENCE" | "COMPETING_INTERPRETATIONS" | "INSUFFICIENT_EVIDENCE";
-  pacing: { intent: "MEASURED" | "REFLECTIVE" | "TENSE"; targetDurationMs: number | null };
+  pacing: { intent: "MEASURED" | "REFLECTIVE" | "TENSE"; targetDurationMs: number | null;
+    estimatedDurationMs: null; estimation: "UNAVAILABLE_UNCALIBRATED_MYANMAR_VOICE" };
 };
 export type NarrationClaimLineage = {
   claimId: string; candidateFindingIds: string[];
@@ -50,7 +54,7 @@ export type NarrationClaimLineage = {
  * preserve observed/inferred classification, cautious qualification, Chinese
  * anchors, character ownership, and advisory translation row hashes. */
 export type NarrationDraftPayload = {
-  schemaVersion: typeof NARRATION_DRAFT.version; id: string; version: number;
+  schemaVersion: typeof NARRATION_DRAFT.version; composerVersion: typeof NARRATION_DRAFT.composerVersion; id: string; version: number;
   parentDraft: { id: string; hash: string } | null;
   language: typeof NARRATION_DRAFT.language; style: typeof NARRATION_DRAFT.style;
   durationMode: typeof NARRATION_DRAFT.durationMode; translationContextPolicy: typeof NARRATION_DRAFT.translationPolicy;
@@ -63,6 +67,24 @@ export type NarrationDraftPayload = {
   review: { status: "UNREVIEWED" | "NEEDS_HUMAN_REVIEW"; approval: "PROVISIONAL" };
 };
 export type NarrationDraft = Immutable<{ payload: NarrationDraftPayload; draftHash: string }>;
+
+/** Separate trusted server inputs, never a client/provider request. A pure
+ * function can check their consistency but cannot prove database existence,
+ * live freshness or authentication. M4-02 must acquire these through gateways. */
+export type SyntheticNarrationContext = {
+  source: StorySourceSnapshot; recipe: StoryTaskRecipeIdentity; profile: StoryTaskProfileDefinition;
+  candidate: ValidatedEvidenceAnalysisCandidate;
+  record: NarrationAnalysisDependency;
+  result: { state: "COMPLETED"; submissionState: "RESOLVED"; outcome: "VALIDATED_CANDIDATE";
+    taskId: string; generation: number; resultId: string; submissionId: string;
+    requestHash: string; canonicalMarker: string; resultHash: string };
+};
+/** Text handoff only. No provider, voice, audio estimate or synthesis permission. */
+export type NarrationSpeechText = Immutable<{
+  schemaVersion: "story-narration-speech-text-v1"; language: "my"; draftHash: string;
+  eligibleForSynthesis: false; reason: "PROVISIONAL_SYNTHETIC_DRAFT";
+  sections: { sectionId: string; order: number; text: string; estimatedDurationMs: null }[];
+}>;
 
 /** Proposed future server-derived read DTO, never an approval request. Issuance
  * is not implemented. Synthetic lineage is permanently ineligible for approval. */

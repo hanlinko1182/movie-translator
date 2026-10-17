@@ -111,11 +111,11 @@ export class DisposableStorylinePostgres {
   }
 
   /** Credentials are generated in memory and never use the app datasource. */
-  async restrictedLogin(group: "storyline_runtime" | "storyline_verification_issuer" | "storyline_admission_writer" | "storyline_checkpoint_worker" | "storyline_synthetic_issuer" | "storyline_outbox" | "storyline_m2_reader" | "storyline_fake_worker" | "storyline_m3_candidate_writer") {
+  async restrictedLogin(group: "storyline_runtime" | "storyline_verification_issuer" | "storyline_admission_writer" | "storyline_checkpoint_worker" | "storyline_synthetic_issuer" | "storyline_outbox" | "storyline_m2_reader" | "storyline_fake_worker" | "storyline_m3_candidate_writer" | "storyline_m4_narration_reader" | "storyline_m4_narration_writer") {
     const prefix = { storyline_runtime: "m1_runtime", storyline_verification_issuer: "m1_issuer",
       storyline_admission_writer: "m2_admission", storyline_checkpoint_worker: "m2_checkpoint",
       storyline_synthetic_issuer: "m2_synthetic_issuer", storyline_outbox: "m2_outbox", storyline_m2_reader: "m2_reader",
-      storyline_fake_worker: "m2_fake_worker", storyline_m3_candidate_writer: "m3_candidate" }[group];
+      storyline_fake_worker: "m2_fake_worker", storyline_m3_candidate_writer: "m3_candidate", storyline_m4_narration_reader: "m4_narration", storyline_m4_narration_writer: "m4_writer" }[group];
     const user = `${prefix}_${randomBytes(10).toString("hex")}`;
     const password = randomBytes(32).toString("hex");
     const admin = await this.securityAdministrator();
