@@ -70,7 +70,7 @@ test("R4 static errors carry no raw database, request, source or authentication 
   assert.doesNotMatch(JSON.stringify(error), /stack|sql|session|secret|source/);
 });
 
-test("R4 remains explicitly disposable, server-only and absent from production pages/routes/workers/UI", async () => {
+test("R4 authorities remain disposable/server-only and absent from production runtime; UI shares DTO types only", async () => {
   const service = await readFile("lib/storyline/studio-versions/service.ts", "utf8");
   assert.match(service, /STORYLINE_STUDIO_VERSION_PRODUCTION_ENABLED = false/);
   for (const file of await readdir("lib/storyline/studio-versions")) {
@@ -82,7 +82,14 @@ test("R4 remains explicitly disposable, server-only and absent from production p
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) await inspect(path);
-      else if (/\.[cm]?[jt]sx?$/.test(path)) assert.doesNotMatch(await readFile(path, "utf8"), /studio-versions|story_r4_|storyline-m9-r4/);
+      else if (/\.[cm]?[jt]sx?$/.test(path)) {
+        const source = await readFile(path, "utf8");
+        // M9-05 explicitly authorizes shared DTO types in the injected UI.
+        // Exempt only erased type-only contract imports. Server authorities,
+        // runtime imports, SQL, fixture identities and API activation still fail.
+        const runtime = source.replace(/^import type \{[\w,\s]+\} from "@\/lib\/storyline\/studio-versions\/contracts";$/gm, "");
+        assert.doesNotMatch(runtime, /studio-versions|story_r4_|storyline-m9-r4/);
+      }
     }
   }
   for (const directory of ["app", "components", "workers"]) await inspect(directory);

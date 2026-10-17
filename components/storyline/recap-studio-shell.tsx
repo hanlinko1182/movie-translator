@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import SourceVideoPreview from "@/components/media/source-video-preview";
 import { badgeClass, badgeTones, cardClass, focusClass, linkClass } from "@/components/ui/styles";
 import { recapExperienceHref, selectedStudioWorkspace, studioWorkspaces, type StudioWorkspace } from "./navigation";
 import { dirtySectionCount, previewSessionKey, scopedPreview, type StudioPreviewState } from "./local-script-model";
+import ScriptVersionPanel from "./script-version-panel";
+import { ScriptVersionSession, scriptSections, versionBufferDirty, type SyntheticScriptVersionAdapter } from "./script-version-session";
 import ScriptPreview, { useScriptPreviewSession } from "./script-preview";
 
 type MovieContext = { id: string; title: string; filename: string | null; sourceRecorded: boolean };
@@ -41,6 +43,9 @@ function ReadOnlyPanel({ title, children }: { title: string; children: ReactNode
   </section>;
 }
 
+const emptySubscribe = () => () => {};
+const emptySnapshot = () => null;
+
 type ShellProps = {
   context: RecapStudioContext;
   recapPath: string;
@@ -48,15 +53,27 @@ type ShellProps = {
   children: ReactNode;
   /** Isolated synthetic harness only. Production callers omit this input. */
   previewForTest?: StudioPreviewState;
+  versionAdapterForTest?: SyntheticScriptVersionAdapter;
 };
 
 export default function RecapStudioShell(props: ShellProps) {
   const preview = scopedPreview(props.previewForTest, props.context.projectId, props.context.movie?.id ?? null);
-  return <StudioShell key={previewSessionKey(props.context.projectId, props.context.movie?.id ?? null, preview)} {...props} previewForTest={preview} />;
+  return <StudioShell key={JSON.stringify([previewSessionKey(props.context.projectId, props.context.movie?.id ?? null, preview), props.versionAdapterForTest?.identityKey, props.versionAdapterForTest?.target])} {...props} previewForTest={preview} />;
 }
 
-function StudioShell({ context, recapPath, query, children, previewForTest }: ShellProps) {
+function StudioShell({ context, recapPath, query, children, previewForTest, versionAdapterForTest }: ShellProps) {
   const session = useScriptPreviewSession(previewForTest);
+  const [versions] = useState(() => previewForTest?.status === "READY" && versionAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY"
+    ? new ScriptVersionSession(versionAdapterForTest, previewForTest.artifact) : null);
+  useEffect(() => { versions?.connect(); return () => versions?.dispose(); }, [versions]);
+  const versionState = useSyncExternalStore(versions?.subscribe ?? emptySubscribe, versions?.getSnapshot ?? emptySnapshot, versions?.getSnapshot ?? emptySnapshot);
+  const unsaved = session.artifact && (versionState ? versionBufferDirty(versionState, scriptSections(session.artifact, session.edits)) : dirtySectionCount(session.artifact, session.edits) > 0);
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
   const workspace = selectedStudioWorkspace(query);
   const prerequisitesReady = !!context.movie && context.transcriptState === "READY" && context.sceneCount > 0 && context.characterState === "CURRENT";
   const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
@@ -75,7 +92,7 @@ function StudioShell({ context, recapPath, query, children, previewForTest }: Sh
   }
 
   return <div className="min-w-0 space-y-5">
-    {session.artifact && dirtySectionCount(session.artifact, session.edits) > 0 && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
+    {unsaved && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
     <nav aria-label="Recap experience" className="flex min-w-0 flex-wrap gap-2 rounded-xl border border-white/10 bg-[#111115] p-2">
       <Link href={href(null)} prefetch={false} scroll={false} aria-current={!workspace ? "page" : undefined} className={navClass(!workspace)}>Saved Recap</Link>
       <Link href={href("script")} prefetch={false} scroll={false} aria-current={workspace ? "page" : undefined} className={navClass(!!workspace)}>Storyline Studio</Link>
@@ -103,7 +120,8 @@ function StudioShell({ context, recapPath, query, children, previewForTest }: Sh
       <div id="studio-context-panel" role="tabpanel" aria-labelledby={`studio-tab-${workspace}`} tabIndex={0} className={`min-w-0 space-y-5 ${focusClass}`}>
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-5">
-            {previewForTest && (workspace === "script" || workspace === "ai-review") ? <ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} /> : <ReadOnlyPanel title={unavailable[workspace].title}>
+            {previewForTest && (workspace === "script" || workspace === "ai-review") ? <><ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} versioning={versionState ? { unsaved: !!unsaved } : undefined} />
+              {versions && versionState && <ScriptVersionPanel controller={versions} state={versionState} session={session} />}</> : <ReadOnlyPanel title={unavailable[workspace].title}>
               <span className={`${badgeClass} ${badgeTones.neutral}`}>Unavailable · Read-only shell</span>
               <p>{unavailable[workspace].description}</p>
               <p>No Studio generation, review, voice or rendering starts from navigation.</p>

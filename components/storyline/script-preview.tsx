@@ -26,6 +26,7 @@ export function useScriptPreviewSession(state?: StudioPreviewState) {
     else setError(result.error);
   }
   return { artifact, edits, selected, expanded, findingId, resetPending, error, select, edit,
+    replaceEdits(next: LocalScript) { setEdits(next); setResetPending(false); setError(""); },
     toggle(id: string) { setExpanded(rows => rows.includes(id) ? rows.filter(row => row !== id) : [...rows, id]); },
     inspect(id: string) { setFindingId(id); },
     requestReset() { setResetPending(true); }, cancelReset() { setResetPending(false); },
@@ -107,7 +108,7 @@ function Analysis({ artifact, session }: { artifact: StudioPreviewArtifact; sess
   </section>;
 }
 
-export default function ScriptPreview({ state, session, review }: { state: StudioPreviewState; session: Session; review: boolean }) {
+export default function ScriptPreview({ state, session, review, versioning }: { state: StudioPreviewState; session: Session; review: boolean; versioning?: { unsaved: boolean } }) {
   if (state.status !== "READY" || !session.artifact) {
     const messages = { LOADING: "Loading synthetic preview…", EMPTY: "No narration sections available", ERROR: "Synthetic preview could not be loaded", UNAVAILABLE: "Storyline preview unavailable for the selected source" };
     return <section className={`${cardClass} p-5`}><h2 className="text-sm font-semibold text-zinc-100">Storyline preview</h2><p role={state.status === "ERROR" ? "alert" : "status"} className="mt-3 text-sm text-zinc-400">{state.status === "READY" ? messages.UNAVAILABLE : messages[state.status]}</p><p className="mt-3 text-xs text-zinc-400">Production Storyline reads are disabled. No request is made by this panel.</p></section>;
@@ -120,9 +121,9 @@ export default function ScriptPreview({ state, session, review }: { state: Studi
   return <section aria-label="Synthetic Storyline preview" className={`${cardClass} space-y-4 p-5`}>
     <h2 className="text-sm font-semibold text-zinc-100">{review ? "Evidence review" : "Myanmar script preview"}</h2>
     <div className="flex flex-wrap gap-2"><span className={`${badgeClass} ${badgeTones.amber}`}>Synthetic test only · Provisional</span><span className={`${badgeClass} ${artifact.currentness === "CURRENT_AT_READ" ? badgeTones.neutral : badgeTones.amber}`}>{artifact.currentness === "STALE" ? "Stale dependencies" : artifact.currentness === "UNKNOWN" ? "Currentness unknown" : "Current at fixture read"}</span></div>
-    <p className="text-sm leading-6 text-zinc-400">Memory-only local preview. Changes are lost on reload or movie/source/artifact change. Production reads, saving and publication are disabled.</p>
+    <p className="text-sm leading-6 text-zinc-400">{versioning ? "Local editor buffer is memory only. Only an explicit synthetic Save persists an edited version in disposable PostgreSQL. Production reads, saving and publication are disabled." : "Memory-only local preview. Changes are lost on reload or movie/source/artifact change. Production reads, saving and publication are disabled."}</p>
     <p className="text-xs leading-6 text-zinc-400">Human approval: None · Source verification: Not issued · Voice duration: Unknown · No TTS authorization</p>
-    <p role="status" className="text-sm text-amber-200">{dirty ? `Unsaved local changes · ${dirty} section${dirty === 1 ? "" : "s"}` : "No local changes"}</p>
+    <p role="status" className="text-sm text-amber-200">{versioning ? (versioning.unsaved ? "Unsaved Draft · memory only" : "Editor matches loaded/saved baseline") : dirty ? `Unsaved local changes · ${dirty} section${dirty === 1 ? "" : "s"}` : "No local changes"}</p>
     <details className="text-xs leading-6 text-zinc-400"><summary className="cursor-pointer text-zinc-200">Exact source and candidate provenance</summary>
       <dl className="mt-2 space-y-2">{Object.entries({ draftId: draft.payload.id, draftHash: draft.draftHash, originalVersion: draft.payload.version,
         parentDraftId: draft.payload.parentDraft?.id ?? "None", parentDraftHash: draft.payload.parentDraft?.hash ?? "None",
@@ -135,7 +136,7 @@ export default function ScriptPreview({ state, session, review }: { state: Studi
       return <section key={section.id} className={`min-w-0 rounded-lg border p-3 ${session.selected === section.id ? "border-violet-400/30 bg-violet-400/5" : "border-white/10"}`}>
         <div className="flex flex-wrap items-center gap-2"><button type="button" aria-pressed={session.selected === section.id} onClick={() => session.select(section.id)} className={`${secondaryButtonClass} max-w-full break-words text-left`}><span lang="my">Select section {index + 1}: {section.heading}</span></button>
           <button type="button" className={secondaryButtonClass} aria-expanded={open} aria-controls={`narration-${section.id}`} onClick={() => session.toggle(section.id)}>{open ? "Collapse" : "Expand"} section {index + 1}</button>
-          {sectionDirty(artifact, session.edits, section.id) && <span className="text-xs text-amber-200">Locally edited</span>}
+          {sectionDirty(artifact, session.edits, section.id) && <span className="text-xs text-amber-200">{versioning ? "Changed from original" : "Locally edited"}</span>}
         </div>
         <div id={`narration-${section.id}`} hidden={!open} role="region" aria-label={`Narration section ${index + 1} text`} tabIndex={0} className={`mt-3 max-h-80 space-y-3 overflow-y-auto ${focusClass}`}>{sectionText(artifact, session.edits, section.id).map((text, i) => <p key={i} lang="my" className="whitespace-pre-wrap break-words text-sm leading-8 text-zinc-200">{text || "Empty local paragraph"}</p>)}
           {!sectionText(artifact, session.edits, section.id).length && <p className={missingClass}>Narration beat reference unavailable.</p>}
@@ -144,12 +145,12 @@ export default function ScriptPreview({ state, session, review }: { state: Studi
     })}</div>
     {!review && selected && <section aria-label="Local Myanmar editor" className="space-y-3 border-t border-white/10 pt-4">
       <h3 className="break-words text-sm font-semibold text-zinc-100" lang="my">Local editor: {selected.heading}</h3>
-      <p id="local-editor-limit" className="text-xs leading-6 text-zinc-400">Up to 1,200 Unicode characters per section and 36,000 per script. Edits do not update claims or evidence. An edited preview has no new version identity.</p>
+      <p id="local-editor-limit" className="text-xs leading-6 text-zinc-400">Up to 1,200 Unicode characters per section and 36,000 per script. Edits do not update claims or evidence. {versioning ? "The editor buffer has no version identity until an explicit save is verified." : "An edited preview has no new version identity."}</p>
       {paragraphs.map((text, index) => <div key={index} className="space-y-2"><label className="block text-xs text-zinc-400" htmlFor={`local-paragraph-${index}`}>Myanmar paragraph {index + 1}</label><textarea id={`local-paragraph-${index}`} lang="my" aria-describedby="local-editor-limit" aria-invalid={!!session.error} value={text} rows={6} onChange={event => session.edit(index, event.target.value)} className={`${controlClass} w-full resize-y leading-8`} /></div>)}
       {session.error && <p role="alert" className="text-sm text-amber-200">{session.error}</p>}
       <button type="button" className={secondaryButtonClass} disabled={!sectionDirty(artifact, session.edits, selected.id)} onClick={session.requestReset}>Reset selected section</button>
       {session.resetPending && <div role="group" aria-label="Confirm local reset" className="space-y-3"><p className="text-sm text-amber-200">Discard local edits to this section and restore the original draft text?</p><div className="flex flex-wrap gap-2"><button type="button" className={secondaryButtonClass} onClick={session.confirmReset}>Discard local edits</button><button type="button" className={secondaryButtonClass} onClick={session.cancelReset}>Keep editing</button></div></div>}
-      <h3 className="text-sm font-semibold text-zinc-100">Local preview · Unsaved</h3>
+      <h3 className="text-sm font-semibold text-zinc-100">Local preview · {versioning ? versioning.unsaved ? "Unsaved Draft" : "Loaded/saved baseline" : "Unsaved"}</h3>
       <div role="region" aria-label="Local preview text" tabIndex={0} className={`max-h-80 space-y-3 overflow-y-auto ${focusClass}`}>{paragraphs.map((text, index) => <p key={index} lang="my" className="whitespace-pre-wrap break-words text-sm leading-8 text-zinc-200">{text || "Empty local paragraph"}</p>)}</div>
     </section>}
     {selected && <Analysis artifact={artifact} session={session} />}
