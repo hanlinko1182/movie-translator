@@ -5,6 +5,8 @@ import { useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
 import SourceVideoPreview from "@/components/media/source-video-preview";
 import { badgeClass, badgeTones, cardClass, focusClass, linkClass } from "@/components/ui/styles";
 import { recapExperienceHref, selectedStudioWorkspace, studioWorkspaces, type StudioWorkspace } from "./navigation";
+import { dirtySectionCount, previewSessionKey, scopedPreview, type StudioPreviewState } from "./local-script-model";
+import ScriptPreview, { useScriptPreviewSession } from "./script-preview";
 
 type MovieContext = { id: string; title: string; filename: string | null; sourceRecorded: boolean };
 export type RecapStudioContext = {
@@ -39,12 +41,22 @@ function ReadOnlyPanel({ title, children }: { title: string; children: ReactNode
   </section>;
 }
 
-export default function RecapStudioShell({ context, recapPath, query, children }: {
+type ShellProps = {
   context: RecapStudioContext;
   recapPath: string;
   query: string;
   children: ReactNode;
-}) {
+  /** Isolated synthetic harness only. Production callers omit this input. */
+  previewForTest?: StudioPreviewState;
+};
+
+export default function RecapStudioShell(props: ShellProps) {
+  const preview = scopedPreview(props.previewForTest, props.context.projectId, props.context.movie?.id ?? null);
+  return <StudioShell key={previewSessionKey(props.context.projectId, props.context.movie?.id ?? null, preview)} {...props} previewForTest={preview} />;
+}
+
+function StudioShell({ context, recapPath, query, children, previewForTest }: ShellProps) {
+  const session = useScriptPreviewSession(previewForTest);
   const workspace = selectedStudioWorkspace(query);
   const prerequisitesReady = !!context.movie && context.transcriptState === "READY" && context.sceneCount > 0 && context.characterState === "CURRENT";
   const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
@@ -63,6 +75,7 @@ export default function RecapStudioShell({ context, recapPath, query, children }
   }
 
   return <div className="min-w-0 space-y-5">
+    {session.artifact && dirtySectionCount(session.artifact, session.edits) > 0 && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
     <nav aria-label="Recap experience" className="flex min-w-0 flex-wrap gap-2 rounded-xl border border-white/10 bg-[#111115] p-2">
       <Link href={href(null)} prefetch={false} scroll={false} aria-current={!workspace ? "page" : undefined} className={navClass(!workspace)}>Saved Recap</Link>
       <Link href={href("script")} prefetch={false} scroll={false} aria-current={workspace ? "page" : undefined} className={navClass(!!workspace)}>Storyline Studio</Link>
@@ -90,12 +103,12 @@ export default function RecapStudioShell({ context, recapPath, query, children }
       <div id="studio-context-panel" role="tabpanel" aria-labelledby={`studio-tab-${workspace}`} tabIndex={0} className={`min-w-0 space-y-5 ${focusClass}`}>
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-5">
-            <ReadOnlyPanel title={unavailable[workspace].title}>
+            {previewForTest && (workspace === "script" || workspace === "ai-review") ? <ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} /> : <ReadOnlyPanel title={unavailable[workspace].title}>
               <span className={`${badgeClass} ${badgeTones.neutral}`}>Unavailable · Read-only shell</span>
               <p>{unavailable[workspace].description}</p>
               <p>No Studio generation, review, voice or rendering starts from navigation.</p>
-            </ReadOnlyPanel>
-            {workspace === "script" && <ReadOnlyPanel title="No persisted source snapshot">
+            </ReadOnlyPanel>}
+            {workspace === "script" && !previewForTest && <ReadOnlyPanel title="No persisted source snapshot">
               <p>Source preparation contracts exist, but Studio snapshot persistence is not implemented. This page does not prepare or approve a snapshot.</p>
               <p>Duration planning is unavailable until verified story events and an approved duration policy exist.</p>
             </ReadOnlyPanel>}
@@ -115,7 +128,7 @@ export default function RecapStudioShell({ context, recapPath, query, children }
               <div><dt className="text-zinc-400">Transcript</dt><dd className="text-zinc-200">{context.transcriptState === "READY" ? `${context.transcriptSegmentCount} saved segments` : context.transcriptState === "EMPTY" ? "No usable transcript segments" : "No transcript available"}</dd></div>
               <div><dt className="text-zinc-400">Scenes</dt><dd className="text-zinc-200">{context.sceneCount ? `${context.sceneCount} saved intervals` : "No scene intervals available"}</dd></div>
               <div><dt className="text-zinc-400">Character analysis</dt><dd className="text-zinc-200">{context.characterState === "CURRENT" ? "Current · advisory" : context.characterState === "STALE" ? "Stale · needs attention" : context.characterState === "UNAVAILABLE" ? "Currentness unavailable" : "Not available"}</dd></div>
-              <div><dt className="text-zinc-400">Studio source snapshot</dt><dd className="text-zinc-200">No persisted source snapshot</dd></div>
+              <div><dt className="text-zinc-400">Studio source snapshot</dt><dd className="break-all text-zinc-200">{previewForTest?.status === "READY" ? `Synthetic snapshot: ${previewForTest.artifact.source.payload.id}` : "No persisted source snapshot"}</dd></div>
             </dl>
             <p>Saved source context is not an approved Studio script or evidence-verification receipt.</p>
             {!context.movie && <Link href={context.projectHref} className={linkClass}>Open Project Overview</Link>}
