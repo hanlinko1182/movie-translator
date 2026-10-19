@@ -8,6 +8,8 @@ import { recapExperienceHref, selectedStudioWorkspace, studioWorkspaces, type St
 import { dirtySectionCount, previewSessionKey, scopedPreview, type StudioPreviewState } from "./local-script-model";
 import HighlightsWorkspace, { highlightWorkspaceKey } from "./highlights-workspace";
 import { HighlightVersionSession, highlightUnsaved, type SyntheticHighlightAdapter } from "./highlight-version-session";
+import TimelineWorkspace, { timelineWorkspaceKey } from "./timeline-workspace";
+import { TimelineVersionSession, timelineUnsaved, type SyntheticTimelineAdapter } from "./timeline-version-session";
 import ScriptVersionPanel from "./script-version-panel";
 import { ScriptVersionSession, scriptSections, versionBufferDirty, type SyntheticScriptVersionAdapter } from "./script-version-session";
 import ScriptPreview, { useScriptPreviewSession } from "./script-preview";
@@ -57,6 +59,7 @@ type ShellProps = {
   previewForTest?: StudioPreviewState;
   versionAdapterForTest?: SyntheticScriptVersionAdapter;
   highlightsAdapterForTest?: SyntheticHighlightAdapter;
+  timelineAdapterForTest?: SyntheticTimelineAdapter;
 };
 
 export default function RecapStudioShell(props: ShellProps) {
@@ -64,7 +67,7 @@ export default function RecapStudioShell(props: ShellProps) {
   return <StudioShell key={JSON.stringify([previewSessionKey(props.context.projectId, props.context.movie?.id ?? null, preview), props.versionAdapterForTest?.identityKey, props.versionAdapterForTest?.target])} {...props} previewForTest={preview} />;
 }
 
-function StudioShell({ context, recapPath, query, children, previewForTest, versionAdapterForTest, highlightsAdapterForTest }: ShellProps) {
+function StudioShell({ context, recapPath, query, children, previewForTest, versionAdapterForTest, highlightsAdapterForTest, timelineAdapterForTest }: ShellProps) {
   const session = useScriptPreviewSession(previewForTest);
   const [versions] = useState(() => previewForTest?.status === "READY" && versionAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY"
     ? new ScriptVersionSession(versionAdapterForTest, previewForTest.artifact) : null);
@@ -80,7 +83,16 @@ function StudioShell({ context, recapPath, query, children, previewForTest, vers
   useEffect(() => { highlights?.connect(); return () => highlights?.dispose(); }, [highlights]);
   const highlightsState = useSyncExternalStore(highlights?.subscribe ?? emptySubscribe, highlights?.getSnapshot ?? emptySnapshot, highlights?.getSnapshot ?? emptySnapshot);
   const highlightDirty = highlightsState ? highlightUnsaved(highlightsState) : false;
-  const unsaved = scriptUnsaved || highlightDirty;
+  const timelineKey = timelineWorkspaceKey(timelineAdapterForTest);
+  const timeline = useMemo(() => timelineAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY" && timelineAdapterForTest.target.input.scope.projectId === context.projectId && timelineAdapterForTest.target.input.scope.movieId === context.movie?.id
+    ? new TimelineVersionSession(timelineAdapterForTest) : null,
+    // Full metadata and session identity dispose Timeline alone; Script/Highlights retain their buffers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timelineKey, context.projectId, context.movie?.id]);
+  useEffect(() => { timeline?.connect(); return () => timeline?.dispose(); }, [timeline]);
+  const timelineState = useSyncExternalStore(timeline?.subscribe ?? emptySubscribe, timeline?.getSnapshot ?? emptySnapshot, timeline?.getSnapshot ?? emptySnapshot);
+  const timelineDirty = timelineState ? timelineUnsaved(timelineState) : false;
+  const unsaved = scriptUnsaved || highlightDirty || timelineDirty;
   useEffect(() => {
     if (!unsaved) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -106,6 +118,7 @@ function StudioShell({ context, recapPath, query, children, previewForTest, vers
 
   return <div className="min-w-0 space-y-5">
     {scriptUnsaved && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
+    {timelineDirty && <p role="status" className="text-sm text-amber-200">Timeline has unsaved work. It remains in memory while switching destinations.</p>}
     {highlightDirty && <p role="status" className="text-sm text-amber-200">Highlights plan has unsaved work. It remains in memory while switching destinations.</p>}
     <nav aria-label="Recap experience" className="flex min-w-0 flex-wrap gap-2 rounded-xl border border-white/10 bg-[#111115] p-2">
       <Link href={href(null)} prefetch={false} scroll={false} aria-current={!workspace ? "page" : undefined} className={navClass(!workspace)}>Saved Recap</Link>
@@ -134,7 +147,7 @@ function StudioShell({ context, recapPath, query, children, previewForTest, vers
       <div id="studio-context-panel" role="tabpanel" aria-labelledby={`studio-tab-${workspace}`} tabIndex={0} className={`min-w-0 space-y-5 ${focusClass}`}>
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-5">
-            {workspace === "highlights" && highlights ? <HighlightsWorkspace key={highlightKey} controller={highlights} /> : previewForTest && (workspace === "script" || workspace === "ai-review") ? <><ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} versioning={versionState ? { unsaved: !!scriptUnsaved } : undefined} />
+            {workspace === "export" && timeline ? <TimelineWorkspace key={timelineKey} controller={timeline} /> : workspace === "highlights" && highlights ? <HighlightsWorkspace key={highlightKey} controller={highlights} /> : previewForTest && (workspace === "script" || workspace === "ai-review") ? <><ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} versioning={versionState ? { unsaved: !!scriptUnsaved } : undefined} />
               {versions && versionState && <ScriptVersionPanel controller={versions} state={versionState} session={session} />}</> : <ReadOnlyPanel title={unavailable[workspace].title}>
               <span className={`${badgeClass} ${badgeTones.neutral}`}>Unavailable · Read-only shell</span>
               <p>{unavailable[workspace].description}</p>

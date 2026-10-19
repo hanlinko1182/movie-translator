@@ -35,10 +35,15 @@ test("transitive timeline runtime graph has no database/auth/network/provider/me
   }
   await visit(resolve("lib/storyline/timeline/index.ts")); assert.ok(seen.size > 10);
 });
-test("production sources have no timeline composition, test seam, route, action or UI integration", async () => {
+test("production sources have no timeline planner/resolver composition or activated test adapter", async () => {
   for (const dir of ["app", "components", "workers", "scripts"]) for (const file of await files(dir)) {
     if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
-    assert.ok(!/storyline\/timeline|generateRecapTimelinePlan|SyntheticTimelineResolver|story-recap-timeline-/.test(await readFile(file, "utf8")), file);
+    const source = await readFile(file, "utf8");
+    assert.ok(!/storyline\/timeline|generateRecapTimelinePlan|validateRecapTimelinePlan|SyntheticTimelineResolver/.test(source), file);
+    // M7-03 explicitly authorizes metadata UI. Only its coordinator may contain
+    // protocol domain literals for independent browser DTO hash verification.
+    if (file !== "components/storyline/timeline-version-session.ts") assert.ok(!/story-recap-timeline-/.test(source), file);
+    if (file.startsWith("app/")) assert.ok(!/timelineAdapterForTest\s*=/.test(source), file);
   }
 });
 test("pure generation/replay makes zero network calls and leaves fixture originals unchanged", async () => {

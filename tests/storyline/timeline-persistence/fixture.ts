@@ -11,8 +11,8 @@ import { createDisposableTimelineRepositoryForTest } from "../../../lib/storylin
 export const origin = "https://timelines.m702.invalid";
 export { connect, timelineProposalHash };
 export const uid = (prefix = "save") => `${prefix}-${randomBytes(12).toString("hex")}`;
-export async function timelineDatabaseFixture(edited = false) {
-  const m6 = await highlightDatabaseFixture(edited), { admin, scope, owned } = m6;
+export async function timelineDatabaseFixture(edited = false, mutateBeforeSeed?: Parameters<typeof highlightDatabaseFixture>[1]) {
+  const m6 = await highlightDatabaseFixture(edited, mutateBeforeSeed), { admin, scope, owned } = m6;
   try {
     const selected = await m6.save(); if (selected.status === "UNKNOWN") throw Error("Fixture M6 save ambiguous");
     const sessions = m6.sessions.map(s => ({ ...structuredClone(s), token: randomBytes(32).toString("hex"), csrf: randomBytes(32).toString("hex") }));

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 async function files(dir) { return (await Promise.all((await readdir(dir, { withFileTypes: true })).map(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]))).flat(); }
-const marker = /timeline_m702|m702_(?:read|create)_|M702_DISPOSABLE_ONLY|createDisposableTimelineRepositoryForTest|createSyntheticTimelineAuthenticationForTest|createTimelineGatewayForTest|timelineDatabaseFixture|timeline-persistence|story-recap-timeline-(?:save-proposal|saved-record|stored-dependency|currentness-fence|save-audit)-v1/;
+const marker = /timeline_m702|m702_(?:read|create)_|M702_DISPOSABLE_ONLY|createDisposableTimelineRepositoryForTest|createSyntheticTimelineAuthenticationForTest|createTimelineGatewayForTest|timelineDatabaseFixture|timeline-persistence|story-recap-timeline-(?:stored-dependency|currentness-fence|save-audit)-v1/;
 const chunks = (await files(".next/static/chunks")).filter(f => f.endsWith(".js"));
 const server = (await files(".next/server")).filter(f => f.endsWith(".js"));
 for (const f of [...chunks, ...server]) assert.ok(!marker.test(await readFile(f, "utf8")), f);
