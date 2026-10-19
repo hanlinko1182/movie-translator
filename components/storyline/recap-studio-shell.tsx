@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import SourceVideoPreview from "@/components/media/source-video-preview";
 import { badgeClass, badgeTones, cardClass, focusClass, linkClass } from "@/components/ui/styles";
 import { recapExperienceHref, selectedStudioWorkspace, studioWorkspaces, type StudioWorkspace } from "./navigation";
 import { dirtySectionCount, previewSessionKey, scopedPreview, type StudioPreviewState } from "./local-script-model";
+import HighlightsWorkspace, { highlightWorkspaceKey } from "./highlights-workspace";
+import { HighlightVersionSession, highlightUnsaved, type SyntheticHighlightAdapter } from "./highlight-version-session";
 import ScriptVersionPanel from "./script-version-panel";
 import { ScriptVersionSession, scriptSections, versionBufferDirty, type SyntheticScriptVersionAdapter } from "./script-version-session";
 import ScriptPreview, { useScriptPreviewSession } from "./script-preview";
@@ -54,6 +56,7 @@ type ShellProps = {
   /** Isolated synthetic harness only. Production callers omit this input. */
   previewForTest?: StudioPreviewState;
   versionAdapterForTest?: SyntheticScriptVersionAdapter;
+  highlightsAdapterForTest?: SyntheticHighlightAdapter;
 };
 
 export default function RecapStudioShell(props: ShellProps) {
@@ -61,13 +64,23 @@ export default function RecapStudioShell(props: ShellProps) {
   return <StudioShell key={JSON.stringify([previewSessionKey(props.context.projectId, props.context.movie?.id ?? null, preview), props.versionAdapterForTest?.identityKey, props.versionAdapterForTest?.target])} {...props} previewForTest={preview} />;
 }
 
-function StudioShell({ context, recapPath, query, children, previewForTest, versionAdapterForTest }: ShellProps) {
+function StudioShell({ context, recapPath, query, children, previewForTest, versionAdapterForTest, highlightsAdapterForTest }: ShellProps) {
   const session = useScriptPreviewSession(previewForTest);
   const [versions] = useState(() => previewForTest?.status === "READY" && versionAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY"
     ? new ScriptVersionSession(versionAdapterForTest, previewForTest.artifact) : null);
   useEffect(() => { versions?.connect(); return () => versions?.dispose(); }, [versions]);
   const versionState = useSyncExternalStore(versions?.subscribe ?? emptySubscribe, versions?.getSnapshot ?? emptySnapshot, versions?.getSnapshot ?? emptySnapshot);
-  const unsaved = session.artifact && (versionState ? versionBufferDirty(versionState, scriptSections(session.artifact, session.edits)) : dirtySectionCount(session.artifact, session.edits) > 0);
+  const scriptUnsaved = session.artifact && (versionState ? versionBufferDirty(versionState, scriptSections(session.artifact, session.edits)) : dirtySectionCount(session.artifact, session.edits) > 0);
+  const highlightKey = highlightWorkspaceKey(highlightsAdapterForTest);
+  const highlights = useMemo(() => highlightsAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY" && highlightsAdapterForTest.target.scope.projectId === context.projectId && highlightsAdapterForTest.target.scope.movieId === context.movie?.id
+    ? new HighlightVersionSession(highlightsAdapterForTest) : null,
+    // identityKey and the full target define the isolated workspace, not object allocation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [highlightKey, context.projectId, context.movie?.id]);
+  useEffect(() => { highlights?.connect(); return () => highlights?.dispose(); }, [highlights]);
+  const highlightsState = useSyncExternalStore(highlights?.subscribe ?? emptySubscribe, highlights?.getSnapshot ?? emptySnapshot, highlights?.getSnapshot ?? emptySnapshot);
+  const highlightDirty = highlightsState ? highlightUnsaved(highlightsState) : false;
+  const unsaved = scriptUnsaved || highlightDirty;
   useEffect(() => {
     if (!unsaved) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -92,7 +105,8 @@ function StudioShell({ context, recapPath, query, children, previewForTest, vers
   }
 
   return <div className="min-w-0 space-y-5">
-    {unsaved && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
+    {scriptUnsaved && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
+    {highlightDirty && <p role="status" className="text-sm text-amber-200">Highlights plan has unsaved work. It remains in memory while switching destinations.</p>}
     <nav aria-label="Recap experience" className="flex min-w-0 flex-wrap gap-2 rounded-xl border border-white/10 bg-[#111115] p-2">
       <Link href={href(null)} prefetch={false} scroll={false} aria-current={!workspace ? "page" : undefined} className={navClass(!workspace)}>Saved Recap</Link>
       <Link href={href("script")} prefetch={false} scroll={false} aria-current={workspace ? "page" : undefined} className={navClass(!!workspace)}>Storyline Studio</Link>
@@ -120,7 +134,7 @@ function StudioShell({ context, recapPath, query, children, previewForTest, vers
       <div id="studio-context-panel" role="tabpanel" aria-labelledby={`studio-tab-${workspace}`} tabIndex={0} className={`min-w-0 space-y-5 ${focusClass}`}>
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-5">
-            {previewForTest && (workspace === "script" || workspace === "ai-review") ? <><ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} versioning={versionState ? { unsaved: !!unsaved } : undefined} />
+            {workspace === "highlights" && highlights ? <HighlightsWorkspace key={highlightKey} controller={highlights} /> : previewForTest && (workspace === "script" || workspace === "ai-review") ? <><ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} versioning={versionState ? { unsaved: !!scriptUnsaved } : undefined} />
               {versions && versionState && <ScriptVersionPanel controller={versions} state={versionState} session={session} />}</> : <ReadOnlyPanel title={unavailable[workspace].title}>
               <span className={`${badgeClass} ${badgeTones.neutral}`}>Unavailable · Read-only shell</span>
               <p>{unavailable[workspace].description}</p>
@@ -137,7 +151,7 @@ function StudioShell({ context, recapPath, query, children, previewForTest, vers
             </ReadOnlyPanel>}
             {workspace === "highlights" && <ReadOnlyPanel title="Original source video">
               <SourceVideoPreview projectId={context.projectId} movie={context.movie} className="w-full rounded-lg" />
-              <p>Read-only source playback. No clip plan, generated narration or recap preview is available.</p>
+              <p>Read-only source playback. No clips have been extracted; no generated narration or rendered recap preview is available.</p>
             </ReadOnlyPanel>}
           </div>
           <ReadOnlyPanel title="Selected source context">
