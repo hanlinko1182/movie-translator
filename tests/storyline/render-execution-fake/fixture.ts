@@ -53,7 +53,7 @@ export async function executionFixture() {
     }
     const auth=createSyntheticExecutionAuthenticationForTest(sessions),gateway=createExecutionGatewayForTest({mode:"M803_DISPOSABLE_ONLY",connections,keys,authentication:auth.authentication,catalogDiagnosticForTest:(code,message)=>console.error("M803 catalog diagnostic",code,message)}),process=createFakeProcessOwnerForTest();
     const storage=attached.port;
-    const service=(overrides:Partial<Parameters<typeof createFakeExecutionServiceForTest>[0]>={})=>createFakeExecutionServiceForTest({mode:"M803_DISPOSABLE_ONLY",context,gateway,source,storage,process,...overrides});
+    const service=(overrides:Partial<Parameters<typeof createFakeExecutionServiceForTest>[0]>={})=>createFakeExecutionServiceForTest({mode:"M803_DISPOSABLE_ONLY",context,gateway,source,storage,process,quarantineRequest:()=>request("quarantine","editor-b"),...overrides});
     const api=service();
     function request(action:Action,name="editor-a",headers:Record<string,string|null>={}) {
       const s=sessions.find(s=>s.principalId===name)!;

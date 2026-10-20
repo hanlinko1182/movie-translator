@@ -50,6 +50,7 @@ export function createExecutionGatewayForTest(options:{mode:"M803_DISPOSABLE_ONL
       const call=async(input:Record<string,unknown>)=>{
         if(!same(authenticate(action,request,context),session))reject("SESSION_INVALID");
         const b=JSON.parse(canonicalJson(input,limits.capture));
+        if((b.op==="capture"||b.op==="inspect")&&!session.actions.includes("inspect"))reject("FORBIDDEN");
         if(b.fact) {
           const kind=({checkpoint:"checkpoint",result:"result",verify:"verification",finalize:"artifact"} as Record<string,Kind>)[b.op];
           if(!kind)reject("INVALID_FACT");parseEnvelope(kind,b.fact);

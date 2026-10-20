@@ -17,8 +17,9 @@ export type ExecutionState = { work:{id:string;work_hash:string;request:Envelope
 export type Barrier = (phase:string,pid?:number)=>Promise<void>;
 const uid=()=>`operation-${randomBytes(16).toString("hex")}`;
 const fence=(s:ExecutionState)=>({revision:s.state.revision,generation:s.state.owner_generation});
-export function createFakeExecutionServiceForTest(options:{mode:"M803_DISPOSABLE_ONLY";context:Context;gateway:ExecutionGateway;source:FakeSourceAuthority;storage:PrivateBlobPort;process?:FakeProcessOwner;journal?:(id:string)=>Envelope|null;barrier?:Barrier}) {
+export function createFakeExecutionServiceForTest(options:{mode:"M803_DISPOSABLE_ONLY";context:Context;gateway:ExecutionGateway;source:FakeSourceAuthority;storage:PrivateBlobPort;quarantineRequest:()=>unknown;process?:FakeProcessOwner;journal?:(id:string)=>Envelope|null;barrier?:Barrier}) {
   if(options.mode!=="M803_DISPOSABLE_ONLY")reject("INVALID_MODE");
+  if(typeof options.quarantineRequest!=="function")reject("QUARANTINE_REQUIRED");
   const {context,gateway:db,source,storage}=options,barrier:Barrier=options.barrier??(async()=>{});
   const originalFlows=new Map<string,{session:string;principal:string}>();
   const journal=options.journal??options.process?.originalResult??(()=>null);
@@ -67,9 +68,10 @@ export function createFakeExecutionServiceForTest(options:{mode:"M803_DISPOSABLE
     catch(e){if((e as {code?:string}).code==="EVIDENCE_CONFLICT")await quarantine(request,id).catch(()=>{});throw e;}
   }
   async function executeFake(request:unknown,id:string,fault:"NONE"|"CHECKPOINT_ACK_LOST"|"BEFORE_START"|"AFTER_START"|"UNKNOWN"|"FAILURE"="NONE") {
-    const flow=originalFlows.get(id);originalFlows.delete(id); // Consumed before awaits; never rebuilt from SQL.
     const actor=db.authenticate("execute",request,context);
+    const flow=originalFlows.get(id);
     if(!flow||flow.session!==actor.id||flow.principal!==actor.principalId||!options.process)reject("NO_ORIGINAL_FLOW");
+    originalFlows.delete(id); // Only its authenticated owner consumes it, still before awaits.
     let checkpointed=false;
     try {
       await barrier("before-checkpoint");await source.inspect(context,source.sourceHash);
@@ -145,7 +147,11 @@ export function createFakeExecutionServiceForTest(options:{mode:"M803_DISPOSABLE
       const current=await load(request,id,"read");
       await db.transaction("read",request,context,async tx=>{await fresh(tx,current.work.request.body.recipe);await tx.call({op:"readFinish",id,...fence(current),hold});});
       return {artifact,bytes:Uint8Array.from(bytes)};
-    } catch(e) {await quarantine(request,id).catch(()=>{});throw e;}
+    } catch(e) {
+      // Read-only GET credentials cannot mutate quarantine. The injected fixture
+      // coordinator supplies its own live POST identity/grant, verified afresh.
+      await quarantine(options.quarantineRequest(),id).catch(()=>{});throw e;
+    }
     finally {await change(request,id,"read",{op:"readRelease",hold}).catch(()=>{});}
   }
   async function recover(request:unknown,id:string) {
@@ -174,6 +180,6 @@ export function createFakeExecutionServiceForTest(options:{mode:"M803_DISPOSABLE
     parseId(key,"execution.key");parseHash(requestHash,"execution.requestHash");
     return db.transaction("read",request,context,tx=>tx.call({op:"lookup",key,requestHash})) as Promise<{status:"FOUND";id:string}|{status:"NOT_FOUND"}>;
   }
-  return Object.freeze({proposal,reserve,executeFake,capture,verify,finalize,inspectPrivate,inspect:load,observeOriginal:recordOriginal,readOperation,recovery,cancel:async(request:unknown,id:string)=>{originalFlows.delete(id);const result=await change(request,id,"execute",{op:"cancel"});options.process?.cancelAndObserve(id);return result;},
+  return Object.freeze({proposal,reserve,executeFake,capture,verify,finalize,inspectPrivate,inspect:load,observeOriginal:recordOriginal,readOperation,recovery,cancel:async(request:unknown,id:string)=>{const result=await change(request,id,"execute",{op:"cancel"});originalFlows.delete(id);options.process?.cancelAndObserve(id);return result;},
     canonicalRequest:(r:unknown)=>canonicalJson(parseEnvelope("request",r))});
 }

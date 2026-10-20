@@ -60,28 +60,49 @@ export async function attachOwnedBlobFixture(identity: StorageIdentity) {
     try { await f.writeFile(bytes); await f.sync(); await f.chmod(0o400); } finally { await f.close(); }
     await dir.sync();
   }
+  // All attachments/processes share this exclusive mutation fence. A crash leaves
+  // it in place: a clock deadline is never authority to reap a possibly live owner.
+  async function mutate<T>(work: () => Promise<T>): Promise<T> {
+    const lockPath = `/proc/self/fd/${root.fd}/MUTATION_LOCK`;
+    const lock = await open(lockPath, constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW | constants.O_WRONLY, 0o600)
+      .catch(e => { if (e.code === "EEXIST") reject("STORAGE_BUSY"); throw e; });
+    try { return await work(); }
+    finally { await lock.close(); await unlink(lockPath); await root.sync(); }
+  }
   const port: PrivateBlobPort = Object.freeze({
     async register(c:Context, v:string) {
+      return mutate(async () => {
       if (c.namespace !== identity.namespace) reject("STORAGE_SCOPE");
       const names = await readdir(`/proc/self/fd/${dir.fd}`); if (names.length > limits.versions*3) reject("STORAGE_QUOTA");
       if (await exists(v,"owner")) { await authorized(c,v); return; }
       if (names.filter(n=>n.endsWith(".owner")).length >= limits.versions) reject("STORAGE_QUOTA");
       await exclusive(v,"owner", Buffer.from(JSON.stringify(c)));
+      });
     },
     async create(c:Context,v:string,value:Uint8Array,fault:"NONE"|"ACK_LOST"|"PARTIAL"="NONE") {
+      const captured = captureBytes(value);
+      return mutate(async () => {
       await authorized(c,v); if (await exists(v,"deleted")) reject("STORAGE_TOMBSTONE");
-      const bytes = captureBytes(value), names = await readdir(`/proc/self/fd/${dir.fd}`); let used = 0;
+      const bytes = captured, names = await readdir(`/proc/self/fd/${dir.fd}`); let used = 0;
       for (const name of names.filter(n=>/^[a-f0-9]{32}\.blob$/.test(n))) used += (await smallRead(name.slice(0,32),"blob",limits.blob)).length;
       if (used + bytes.length > limits.total-limits.reserve) reject("STORAGE_QUOTA");
       await exclusive(v,"blob",fault === "PARTIAL" ? bytes.subarray(0,1) : bytes);
       if (fault !== "NONE") reject(`STORAGE_${fault}`);
+      });
     },
     async read(c:Context,v:string) { await authorized(c,v); return smallRead(v,"blob",limits.blob); },
     async remove(c:Context,v:string,hash:string,count:number,intent:string,ackLost=false) {
+      return mutate(async () => {
       await authorized(c,v);
       const tombstone = { version:v, byteSha256:hash, byteCount:count, intent };
       if (await exists(v,"deleted")) {
         if (!same(JSON.parse(Buffer.from(await smallRead(v,"deleted",4096)).toString()),tombstone)) reject("DELETE_MISMATCH");
+        // A matching intent acknowledges absence only. Surviving bytes still
+        // require the original exact hash/length before conditional removal.
+        try {
+          const bytes = await smallRead(v,"blob",limits.blob);
+          if (byteHash(bytes)!==hash || bytes.length!==count) reject("DELETE_MISMATCH");
+        } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; }
       } else {
         const bytes = await smallRead(v,"blob",limits.blob); if (byteHash(bytes)!==hash || bytes.length!==count) reject("DELETE_MISMATCH");
         await exclusive(v,"deleted",Buffer.from(JSON.stringify(tombstone)));
@@ -89,6 +110,7 @@ export async function attachOwnedBlobFixture(identity: StorageIdentity) {
       // A tombstone proves the same conditional delete intent, not generic absence.
       await unlink(path(v,"blob")).catch(e=>{ if(e.code!=="ENOENT") throw e; }); await dir.sync();
       if (ackLost) reject("DELETE_ACK_LOST");
+      });
     },
   });
   return { port, close: async()=>{ await dir.close(); await root.close(); } };

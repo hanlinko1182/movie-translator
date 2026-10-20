@@ -119,14 +119,15 @@ BEGIN
  SELECT * INTO ss FROM execution_m803.session WHERE (namespace,tenant,id,principal)=(n,t,w->>'sessionId',w->>'principalId') FOR SHARE;
  SELECT * INTO g FROM execution_m803.access_grant WHERE (namespace,tenant,project,movie,studio,principal)=(n,t,p,m,s,w->>'principalId') FOR SHARE;
  nowms:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
- IF ss.id IS NULL OR g.principal IS NULL OR ss.revoked OR ss.expires_at<=clock_timestamp() OR NOT action=ANY(g.actions)
- OR action IN('execute','validate','finalize','read') AND NOT 'inspect'=ANY(g.actions) OR action='finalize' AND NOT 'execute'=ANY(g.actions)
+ IF ss.id IS NULL OR g.principal IS NULL OR ss.revoked OR ss.expires_at<=clock_timestamp() OR (action=ANY(g.actions)) IS NOT TRUE
+ OR action IN('execute','validate','finalize','read') AND ('inspect'=ANY(g.actions)) IS NOT TRUE OR action='finalize' AND ('execute'=ANY(g.actions)) IS NOT TRUE
  OR w->>'origin' IS DISTINCT FROM ss.origin OR w->>'csrfHash' IS DISTINCT FROM ss.csrf_hash
  OR w->>'expiresAtMs' IS NULL OR (w->>'expiresAtMs')::bigint<=nowms OR (w->>'expiresAtMs')::bigint>nowms+5000 THEN RAISE EXCEPTION 'E803_FORBIDDEN'; END IF;
  IF (SELECT count(*) FROM execution_m803.used_proof)>=(CASE WHEN action IN('recover','quarantine','gc') THEN 20000 ELSE 14000 END) THEN RAISE EXCEPTION 'E803_QUOTA'; END IF;
  INSERT INTO execution_m803.used_proof VALUES(w->>'nonce',n,t,ss.id) ON CONFLICT DO NOTHING;
  GET DIAGNOSTICS affected=ROW_COUNT;IF affected<>1 THEN RAISE EXCEPTION 'E803_PROOF_INVALID'; END IF;
  IF op='capture' THEN
+  IF ('inspect'=ANY(g.actions)) IS NOT TRUE THEN RAISE EXCEPTION 'E803_FORBIDDEN'; END IF;
   SELECT * INTO src FROM execution_m803.source WHERE (namespace,tenant,project,movie,studio,hash)=(n,t,p,m,s,b->>'sourceHash') FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'E803_SOURCE_UNAVAILABLE'; END IF;
   stored:=jsonb_build_object('observation',execution_m803.capture(n,t,p,m,s,src.hash),'source',src.binding,'recipe',src.recipe);
@@ -176,6 +177,7 @@ BEGIN
   SELECT * INTO src FROM execution_m803.source WHERE (namespace,tenant,project,movie,studio,hash)=(n,t,p,m,s,job.source_hash) FOR SHARE;
   SELECT * INTO st FROM execution_m803.state WHERE (namespace,tenant,project,movie,studio,id)=(n,t,p,m,s,target) FOR UPDATE;
   IF op='inspect' THEN
+   IF ('inspect'=ANY(g.actions)) IS NOT TRUE THEN RAISE EXCEPTION 'E803_FORBIDDEN'; END IF;
    RETURN jsonb_build_object('work',to_jsonb(job),'state',to_jsonb(st),'facts',coalesce((SELECT jsonb_object_agg(execution_m803.fact.kind,payload) FROM execution_m803.fact WHERE (namespace,tenant,project,movie,studio,operation_id)=(n,t,p,m,s,target)),'{}'::jsonb),'intent',(SELECT payload FROM execution_m803.gc_intent WHERE (namespace,tenant,project,movie,studio,operation_id)=(n,t,p,m,s,target)));
   END IF;
   IF st.revision IS DISTINCT FROM (b->>'revision')::int OR st.owner_generation IS DISTINCT FROM (b->>'generation')::int THEN RAISE EXCEPTION 'E803_CONFLICT'; END IF;
@@ -194,8 +196,11 @@ BEGIN
   ELSIF op='result' AND action='observe' THEN
    IF st.state NOT IN('CHECKPOINTED','UNKNOWN','SUCCESS','FAILURE') THEN RAISE EXCEPTION 'E803_INVALID_STATE'; END IF;
    v_kind:='result';fact:=b->'fact';
-   IF fact->'body'->>'submissionId' IS DISTINCT FROM job.submission->'body'->>'submissionId' OR fact->'body'->>'generation'<>'1' OR fact->'body'->>'quiescence'<>'QUIESCENT' THEN RAISE EXCEPTION 'E803_INVALID_RESULT'; END IF;
-   IF fact->'body'->>'outcome'='SUCCESS' AND (fact->'body'->>'byteSha256' IS DISTINCT FROM job.stage->'body'->>'byteSha256' OR fact->'body'->'byteCount' IS DISTINCT FROM job.stage->'body'->'byteCount') OR fact->'body'->>'outcome'='FAILURE' AND (fact->'body'->'byteSha256'<>'null'::jsonb OR fact->'body'->'byteCount'<>'0'::jsonb) THEN RAISE EXCEPTION 'E803_INVALID_RESULT'; END IF;
+   IF (fact->'body'->>'outcome' IN('SUCCESS','FAILURE')) IS NOT TRUE THEN RAISE EXCEPTION 'E803_INVALID_RESULT'; END IF;
+   stored:=jsonb_build_object('operationId',target,'submissionId',job.submission->'body'->>'submissionId','generation',1,'outcome',fact->'body'->>'outcome','quiescence','QUIESCENT',
+    'byteSha256',CASE WHEN fact->'body'->>'outcome'='SUCCESS' THEN job.stage->'body'->'byteSha256' ELSE 'null'::jsonb END,
+    'byteCount',CASE WHEN fact->'body'->>'outcome'='SUCCESS' THEN job.stage->'body'->'byteCount' ELSE '0'::jsonb END);
+   IF fact->'body' IS DISTINCT FROM stored THEN RAISE EXCEPTION 'E803_INVALID_RESULT'; END IF;
    UPDATE execution_m803.state SET state=CASE WHEN fact->'body'->>'outcome'='SUCCESS' THEN 'SUCCESS' ELSE 'FAILURE' END WHERE (namespace,tenant,project,movie,studio,id)=(n,t,p,m,s,target);
    UPDATE execution_m803.fixture SET active=NULL WHERE namespace=n AND active=target;
   ELSIF op='verify' AND action='validate' THEN
@@ -248,6 +253,7 @@ BEGIN
    UPDATE execution_m803.state SET availability='DELETED' WHERE (namespace,tenant,project,movie,studio,id)=(n,t,p,m,s,target);
   ELSE RAISE EXCEPTION 'E803_FORBIDDEN'; END IF;
   IF v_kind IS NOT NULL THEN
+   IF timeline_m702.keys(fact,ARRAY['schemaVersion','namespace','scope','restrictions','body']) IS NOT TRUE THEN RAISE EXCEPTION 'E803_INVALID_BINDING'; END IF;
    domain:=CASE v_kind WHEN 'verification' THEN 'story-recap-execution-fake-byte-verification-v1' ELSE 'story-recap-execution-'||v_kind||'-v1' END;
    IF fact->>'namespace' IS DISTINCT FROM n OR fact->'scope' IS DISTINCT FROM sc OR fact->'restrictions' IS DISTINCT FROM job.request->'restrictions' OR fact->'body'->>'operationId' IS DISTINCT FROM target OR fact->>'schemaVersion' IS DISTINCT FROM domain THEN RAISE EXCEPTION 'E803_INVALID_BINDING'; END IF;
    IF v_kind='verification' THEN

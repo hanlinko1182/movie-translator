@@ -14,8 +14,8 @@ process.once("message",async(setup:Setup)=>{
   const attached=await attachOwnedBlobFixture(setup.storageIdentity),auth=createSyntheticExecutionAuthenticationForTest(setup.sessions),owner=createFakeProcessOwnerForTest();
   const gateway=createExecutionGatewayForTest({mode:"M803_DISPOSABLE_ONLY",connections:setup.connections,keys:setup.keys,authentication:auth.authentication});
   const source=createFakeSourceAuthorityForTest(setup.context,setup.binding,attached.port),s=setup.sessions.find(s=>s.principalId==="editor-a")!;
-  function request(read=false){return new Request(`${s.origin}/isolated-fixture`,{method:read?"GET":"POST",headers:{origin:s.origin,"sec-fetch-site":"same-origin",cookie:`execution_m803_session=${s.token}`,"x-execution-m803-csrf":s.csrf}});}
-  const api=createFakeExecutionServiceForTest({mode:"M803_DISPOSABLE_ONLY",context:setup.context,gateway,source,storage:attached.port,process:owner,barrier:async phase=>{
+  function request(read=false,session=s){return new Request(`${session.origin}/isolated-fixture`,{method:read?"GET":"POST",headers:{origin:session.origin,"sec-fetch-site":"same-origin",cookie:`execution_m803_session=${session.token}`,"x-execution-m803-csrf":session.csrf}});}
+  const api=createFakeExecutionServiceForTest({mode:"M803_DISPOSABLE_ONLY",context:setup.context,gateway,source,storage:attached.port,process:owner,quarantineRequest:()=>request(false,setup.sessions.find(s=>s.principalId==="editor-b")!),barrier:async phase=>{
    if(phase===setup.phase){process.send?.({event:"barrier",id,starts:owner.starts()});await new Promise<void>(()=>{});}
   }});
   const r=await api.reserve(request(),await api.proposal(request(true),"child-original-key"));id=r.id;
