@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import SourceVideoPreview from "@/components/media/source-video-preview";
 import { badgeClass, badgeTones, cardClass, focusClass, linkClass } from "@/components/ui/styles";
 import { recapExperienceHref, selectedStudioWorkspace, studioWorkspaces, type StudioWorkspace } from "./navigation";
+import { dirtySectionCount, previewSessionKey, scopedPreview, type StudioPreviewState } from "./local-script-model";
+import HighlightsWorkspace, { highlightWorkspaceKey } from "./highlights-workspace";
+import { HighlightVersionSession, highlightUnsaved, type SyntheticHighlightAdapter } from "./highlight-version-session";
+import TimelineWorkspace, { timelineWorkspaceKey } from "./timeline-workspace";
+import { TimelineVersionSession, timelineUnsaved, type SyntheticTimelineAdapter } from "./timeline-version-session";
+import ScriptVersionPanel from "./script-version-panel";
+import { ScriptVersionSession, scriptSections, versionBufferDirty, type SyntheticScriptVersionAdapter } from "./script-version-session";
+import ScriptPreview, { useScriptPreviewSession } from "./script-preview";
 
 type MovieContext = { id: string; title: string; filename: string | null; sourceRecorded: boolean };
 export type RecapStudioContext = {
@@ -39,12 +47,58 @@ function ReadOnlyPanel({ title, children }: { title: string; children: ReactNode
   </section>;
 }
 
-export default function RecapStudioShell({ context, recapPath, query, children }: {
+const emptySubscribe = () => () => {};
+const emptySnapshot = () => null;
+
+type ShellProps = {
   context: RecapStudioContext;
   recapPath: string;
   query: string;
   children: ReactNode;
-}) {
+  /** Isolated synthetic harness only. Production callers omit this input. */
+  previewForTest?: StudioPreviewState;
+  versionAdapterForTest?: SyntheticScriptVersionAdapter;
+  highlightsAdapterForTest?: SyntheticHighlightAdapter;
+  timelineAdapterForTest?: SyntheticTimelineAdapter;
+};
+
+export default function RecapStudioShell(props: ShellProps) {
+  const preview = scopedPreview(props.previewForTest, props.context.projectId, props.context.movie?.id ?? null);
+  return <StudioShell key={JSON.stringify([previewSessionKey(props.context.projectId, props.context.movie?.id ?? null, preview), props.versionAdapterForTest?.identityKey, props.versionAdapterForTest?.target])} {...props} previewForTest={preview} />;
+}
+
+function StudioShell({ context, recapPath, query, children, previewForTest, versionAdapterForTest, highlightsAdapterForTest, timelineAdapterForTest }: ShellProps) {
+  const session = useScriptPreviewSession(previewForTest);
+  const [versions] = useState(() => previewForTest?.status === "READY" && versionAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY"
+    ? new ScriptVersionSession(versionAdapterForTest, previewForTest.artifact) : null);
+  useEffect(() => { versions?.connect(); return () => versions?.dispose(); }, [versions]);
+  const versionState = useSyncExternalStore(versions?.subscribe ?? emptySubscribe, versions?.getSnapshot ?? emptySnapshot, versions?.getSnapshot ?? emptySnapshot);
+  const scriptUnsaved = session.artifact && (versionState ? versionBufferDirty(versionState, scriptSections(session.artifact, session.edits)) : dirtySectionCount(session.artifact, session.edits) > 0);
+  const highlightKey = highlightWorkspaceKey(highlightsAdapterForTest);
+  const highlights = useMemo(() => highlightsAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY" && highlightsAdapterForTest.target.scope.projectId === context.projectId && highlightsAdapterForTest.target.scope.movieId === context.movie?.id
+    ? new HighlightVersionSession(highlightsAdapterForTest) : null,
+    // identityKey and the full target define the isolated workspace, not object allocation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [highlightKey, context.projectId, context.movie?.id]);
+  useEffect(() => { highlights?.connect(); return () => highlights?.dispose(); }, [highlights]);
+  const highlightsState = useSyncExternalStore(highlights?.subscribe ?? emptySubscribe, highlights?.getSnapshot ?? emptySnapshot, highlights?.getSnapshot ?? emptySnapshot);
+  const highlightDirty = highlightsState ? highlightUnsaved(highlightsState) : false;
+  const timelineKey = timelineWorkspaceKey(timelineAdapterForTest);
+  const timeline = useMemo(() => timelineAdapterForTest?.mode === "DISPOSABLE_SYNTHETIC_ONLY" && timelineAdapterForTest.target.input.scope.projectId === context.projectId && timelineAdapterForTest.target.input.scope.movieId === context.movie?.id
+    ? new TimelineVersionSession(timelineAdapterForTest) : null,
+    // Full metadata and session identity dispose Timeline alone; Script/Highlights retain their buffers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timelineKey, context.projectId, context.movie?.id]);
+  useEffect(() => { timeline?.connect(); return () => timeline?.dispose(); }, [timeline]);
+  const timelineState = useSyncExternalStore(timeline?.subscribe ?? emptySubscribe, timeline?.getSnapshot ?? emptySnapshot, timeline?.getSnapshot ?? emptySnapshot);
+  const timelineDirty = timelineState ? timelineUnsaved(timelineState) : false;
+  const unsaved = scriptUnsaved || highlightDirty || timelineDirty;
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
   const workspace = selectedStudioWorkspace(query);
   const prerequisitesReady = !!context.movie && context.transcriptState === "READY" && context.sceneCount > 0 && context.characterState === "CURRENT";
   const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
@@ -63,6 +117,9 @@ export default function RecapStudioShell({ context, recapPath, query, children }
   }
 
   return <div className="min-w-0 space-y-5">
+    {scriptUnsaved && <p role="status" className="text-sm text-amber-200">Local script has unsaved edits. They remain in memory while switching destinations.</p>}
+    {timelineDirty && <p role="status" className="text-sm text-amber-200">Timeline has unsaved work. It remains in memory while switching destinations.</p>}
+    {highlightDirty && <p role="status" className="text-sm text-amber-200">Highlights plan has unsaved work. It remains in memory while switching destinations.</p>}
     <nav aria-label="Recap experience" className="flex min-w-0 flex-wrap gap-2 rounded-xl border border-white/10 bg-[#111115] p-2">
       <Link href={href(null)} prefetch={false} scroll={false} aria-current={!workspace ? "page" : undefined} className={navClass(!workspace)}>Saved Recap</Link>
       <Link href={href("script")} prefetch={false} scroll={false} aria-current={workspace ? "page" : undefined} className={navClass(!!workspace)}>Storyline Studio</Link>
@@ -90,12 +147,13 @@ export default function RecapStudioShell({ context, recapPath, query, children }
       <div id="studio-context-panel" role="tabpanel" aria-labelledby={`studio-tab-${workspace}`} tabIndex={0} className={`min-w-0 space-y-5 ${focusClass}`}>
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-5">
-            <ReadOnlyPanel title={unavailable[workspace].title}>
+            {workspace === "export" && timeline ? <TimelineWorkspace key={timelineKey} controller={timeline} /> : workspace === "highlights" && highlights ? <HighlightsWorkspace key={highlightKey} controller={highlights} /> : previewForTest && (workspace === "script" || workspace === "ai-review") ? <><ScriptPreview state={previewForTest} session={session} review={workspace === "ai-review"} versioning={versionState ? { unsaved: !!scriptUnsaved } : undefined} />
+              {versions && versionState && <ScriptVersionPanel controller={versions} state={versionState} session={session} />}</> : <ReadOnlyPanel title={unavailable[workspace].title}>
               <span className={`${badgeClass} ${badgeTones.neutral}`}>Unavailable · Read-only shell</span>
               <p>{unavailable[workspace].description}</p>
               <p>No Studio generation, review, voice or rendering starts from navigation.</p>
-            </ReadOnlyPanel>
-            {workspace === "script" && <ReadOnlyPanel title="No persisted source snapshot">
+            </ReadOnlyPanel>}
+            {workspace === "script" && !previewForTest && <ReadOnlyPanel title="No persisted source snapshot">
               <p>Source preparation contracts exist, but Studio snapshot persistence is not implemented. This page does not prepare or approve a snapshot.</p>
               <p>Duration planning is unavailable until verified story events and an approved duration policy exist.</p>
             </ReadOnlyPanel>}
@@ -106,7 +164,7 @@ export default function RecapStudioShell({ context, recapPath, query, children }
             </ReadOnlyPanel>}
             {workspace === "highlights" && <ReadOnlyPanel title="Original source video">
               <SourceVideoPreview projectId={context.projectId} movie={context.movie} className="w-full rounded-lg" />
-              <p>Read-only source playback. No clip plan, generated narration or recap preview is available.</p>
+              <p>Read-only source playback. No clips have been extracted; no generated narration or rendered recap preview is available.</p>
             </ReadOnlyPanel>}
           </div>
           <ReadOnlyPanel title="Selected source context">
@@ -115,7 +173,7 @@ export default function RecapStudioShell({ context, recapPath, query, children }
               <div><dt className="text-zinc-400">Transcript</dt><dd className="text-zinc-200">{context.transcriptState === "READY" ? `${context.transcriptSegmentCount} saved segments` : context.transcriptState === "EMPTY" ? "No usable transcript segments" : "No transcript available"}</dd></div>
               <div><dt className="text-zinc-400">Scenes</dt><dd className="text-zinc-200">{context.sceneCount ? `${context.sceneCount} saved intervals` : "No scene intervals available"}</dd></div>
               <div><dt className="text-zinc-400">Character analysis</dt><dd className="text-zinc-200">{context.characterState === "CURRENT" ? "Current · advisory" : context.characterState === "STALE" ? "Stale · needs attention" : context.characterState === "UNAVAILABLE" ? "Currentness unavailable" : "Not available"}</dd></div>
-              <div><dt className="text-zinc-400">Studio source snapshot</dt><dd className="text-zinc-200">No persisted source snapshot</dd></div>
+              <div><dt className="text-zinc-400">Studio source snapshot</dt><dd className="break-all text-zinc-200">{previewForTest?.status === "READY" ? `Synthetic snapshot: ${previewForTest.artifact.source.payload.id}` : "No persisted source snapshot"}</dd></div>
             </dl>
             <p>Saved source context is not an approved Studio script or evidence-verification receipt.</p>
             {!context.movie && <Link href={context.projectHref} className={linkClass}>Open Project Overview</Link>}
