@@ -7,7 +7,7 @@ import { fixedRequest, createOfflineHarnessForTest, createMockPortForTest } from
 import { proposalForTest, createMockSpendingAssessorForTest } from "./spending.fixture";
 function fixture(config=0,voice=0) { const c=corpus(),requests=c.payload.passages.map((_,i)=>fixedRequest(c,i,selection(config,voice))),p=proposalForTest(requests),a=createMockSpendingAssessorForTest(p);
   return {c,requests,p,a,ticket:a.assess(p,1000000),h:createOfflineHarnessForTest(c),port:createMockPortForTest()}; }
-for(const [config,voice,label] of [[0,0,"full Gemini"],[1,0,"Nilar"],[1,1,"Thiha"],[2,0,"Eleven mock stock placeholder"]] as const) test(`${label}: six fixed originals yield only redacted non-audio observations`,async()=>{
+for(const [config,voice,label] of [[0,0,"OpenRouter Eleven v3 stock candidate"],[1,0,"OpenRouter full Gemini stock candidate"]] as const) test(`${label}: six fixed originals yield only redacted non-audio observations`,async()=>{
   const f=fixture(config,voice);
   for(const r of f.requests){const result=await f.h.submit(r,f.ticket,f.port.port);assert.equal(result.status,"MOCK_OBSERVED");assert.equal(result.audioVerified,false);assert.equal(result.liveEligible,false);
     assert.equal(result.actualDurationMs,null);assert.ok(result.fixtureByteCount && result.fixtureHash);for(const privateValue of [r.text,r.accountRef,r.requestId])assert.equal(JSON.stringify(result).includes(privateValue),false);}

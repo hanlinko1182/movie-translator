@@ -4,7 +4,9 @@ Research date: **2026-10-21, Asia/Bangkok**. **OFFLINE READINESS PASS; live M10-
 
 ## 1. Executive decision and evidence vocabulary
 
-Retain OpenRouter → full Gemini 3.8 Flash TTS as the primary research candidate. Direct Azure's two named Myanmar voices remain comparison candidates. Direct ElevenLabs v3 is documented for Burmese, but its exact current stock voice remains unselected. Do not substitute Flash-Lite, another Eleven model, a legacy voice alias or another upstream provider to bypass missing evidence.
+**OpenRouter is the exclusive AI gateway** for STT, translation, character analysis, recap generation and future Myanmar TTS. Research order is OpenRouter → ElevenLabs TTS, then OpenRouter → Burmese-capable Gemini TTS, then other independently documented Myanmar-capable OpenRouter routes. Direct Azure Speech, ElevenLabs and Google API clients are **UNSUPPORTED by project policy**, including emergency fallbacks. Earlier direct-provider comparisons are superseded by this user instruction.
+
+Keep application interfaces independent of upstream vendors. Exact OpenRouter model IDs and stock voice/options belong in reviewed server-side configuration. One server-side OpenRouter credential boundary must serve AI requests; no direct-provider credentials, SDKs, host switches or automatic alternate model/provider dispatch. This milestone updates only the test-only server catalog and report, without adding production configuration, credentials or senders. All unverified route/model/language/voice/billing/privacy claims remain UNKNOWN.
 
 | Classification | Meaning in this report |
 | --- | --- |
@@ -19,7 +21,7 @@ The current harness always returns `liveEligible:false`, `audioVerified:false`, 
 
 ## 2. Repository and source baseline
 
-Entry was clean `main` at **`3c9680227840e3238958d6655e4b94cbc3014f12`**, upstream `origin/main`. Cached `origin/main` is `518bc953c33a54138c133013835267d0c1319db8`; this is local metadata, not a newly fetched remote state. Verified accepted M8, M8-05 and Phase 0 ancestry through Phase 1A. Index, unstaged work and nonignored untracked inventory were empty. No fetch, branch change, pull, reset, merge, rebase, cherry-pick or push. All **685 baseline tracked file hashes** are preserved, including previous reports and M4 controls. The repository is public; no credential, account identifier or private fixture identifier belongs in this change.
+Original M10-02A entry was clean `main` at **`3c9680227840e3238958d6655e4b94cbc3014f12`**, upstream `origin/main`. The OpenRouter-only amendment starts from clean `main` at **`1e1b96199d229ec448906156532ffa8bc22a0c00`**, the local M10-02A commit descending from that baseline; index, worktree and nonignored untracked inventory are empty at entry (695 tracked files). Cached `origin/main` is `518bc953c33a54138c133013835267d0c1319db8`; this is local metadata, not a newly fetched remote state. Verified accepted M8, M8-05 and Phase 0 ancestry through Phase 1A. Index, unstaged work and nonignored untracked inventory were empty. No fetch, branch change, pull, reset, merge, rebase, cherry-pick or push. The original 685 pre-M10 files remain preserved, including previous reports and M4 controls. Amendment preservation checks compare all 695 entry files and permit changes only to the six explicit paths listed below. The repository is public; no credential, account identifier or private fixture identifier belongs in this change.
 
 Read [AGENTS](../AGENTS.md), [CLAUDE](../CLAUDE.md), installed Next testing guidance, [real-media/TTS feasibility](STORYLINE_REAL_MEDIA_TTS_FEASIBILITY_SECURITY_DESIGN.md), [Phase 1A](STORYLINE_M8_06_PHASE1A_MAINTENANCE_FOUNDATION.md), [Phase 0](STORYLINE_M8_06_PHASE0_EXCLUSION_FEASIBILITY.md), [M8-05](STORYLINE_M8_05_FAKE_OPERATIONAL_HARDENING_DESIGN.md) and [M8 final](STORYLINE_M8_FINAL_ACCEPTANCE.md). Historical results are not current test evidence.
 
@@ -31,35 +33,31 @@ Inspected M5 `productionVoiceCapabilities` (empty), `planMyanmarVoice`, `validat
 
 All citations in sections 3–5 were checked publicly on the research date. No API catalog, voice-list endpoint, pricing account, sample player or authenticated explorer was called. Inaccessible guessed documentation URLs were replaced using official navigation; they supply no evidence. The following request shapes are documentary specifications only, not implemented network adapters.
 
-### A. OpenRouter → full Gemini 3.8 Flash TTS
+### A. First priority: OpenRouter → ElevenLabs Eleven v3
 
-**DOCUMENTED:** model identifier `google/gemini-3.8-flash-tts`; listed price **USD 0.50 / million input text tokens and USD 9 / million output audio tokens**. The model page lists Google AI Studio and Google Vertex serving paths, a 33K context indication, and no EU in-region routing currently. These are catalog claims, not account availability or a worst-charge quote. [Model listing](https://openrouter.ai/google/gemini-3.8-flash-tts).
+**DOCUMENTED:** gateway ID `elevenlabs/eleven-v3`, text-to-speech, 5,000-character request ceiling, 21 stock voices, ElevenLabs upstream, no current EU in-region route. The page displays **USD 80 / million characters**, while retaining an October 19 promotional banner that has already expired. Record this as a dated public display, **not a current account quote or defensible maximum charge**. [OpenRouter model page](https://openrouter.ai/elevenlabs/eleven-v3).
 
-Google specifically lists Burmese for full `gemini-3.8-flash-tts`, with automatic language detection. Its direct Gemini API limits show 8,192 input and 16,384 output tokens; they are **not** an evidenced OpenRouter speech-route output ceiling. [Full model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts). Stock candidate **Kore** is documented in Google's speech guide; its active gateway voice entitlement remains unverified. Direct Gemini unary output defaults to WAV; that says nothing about gateway PCM headers, rate or channels. [Google speech guide](https://ai.google.dev/gemini-api/docs/speech-generation). Flash-Lite is excluded from the local allowlist; no Burmese support is inferred from its family name.
+OpenRouter's October 7 announcement documents stock voice names including **`george`**, explicit `response_format:"mp3"` (claimed 44.1-kHz/128-kbps output), or default raw PCM (claimed signed 16-bit little-endian mono/24-kHz). Character billing counts Unicode code points, including delivery tags. It says a separate ElevenLabs plan is unnecessary for gateway access. Reviewed upstream-specific settings would use `provider.options.elevenlabs`, including `language_code`, normalization controls and codec-compatible output options. No tags, context additions, cloning, BYOK, normalization or vendor options are enabled in this mock. [Gateway announcement and parameter details](https://openrouter.ai/blog/announcements/elevenlabs-on-openrouter/).
 
-**DOCUMENTED wire:** POST `https://openrouter.ai/api/v1/audio/speech`, bearer authentication, JSON with required `model` and `input`, explicit `voice`, and selected `response_format` (`pcm` or `mp3`). Optional `instructions` and `speed` require exact reviewed settings. Response is a raw byte stream, with `Content-Type` and `X-Generation-Id`; no decoded duration is thereby measured. Crucially, speech ignores `provider.order`, `only` and `ignore`; `provider.zdr`/`data_collection` are described. No chat `messages`, chat completion audio deltas, cloning references, provider options or arbitrary fields enter this harness. Strict upstream selection/no-failover cannot be claimed from chat controls. [Speech endpoint guide](https://openrouter.ai/docs/guides/overview/multimodal/tts). Chat routing documents describe a different request contract. [Chat routing](https://openrouter.ai/docs/guides/routing/provider-selection).
+The **upstream** v3 language table explicitly includes Burmese (`my`). This is DOCUMENTED upstream capability; the exact gateway/stock-voice/Myanmar combination is **UNKNOWN**, not account verified or audio evaluated. Bare upstream ID `eleven_v3` is rejected. [Upstream language evidence](https://elevenlabs.io/docs/overview/models). `george` is a documented stock research candidate, not an approved or version-pinned voice.
 
-**UNKNOWN / ACCOUNT_VERIFICATION_REQUIRED:** key/workspace entitlement, actual serving path, speech-specific quotas, hard output/billing ceiling, version attestation, exact PCM encoding and complete result/cost retrieval after lost ACK. Model-specific token rates take precedence over generic per-character speech descriptions. If the approved privacy/routing policy requires one upstream and speech cannot enforce it, this configuration is **NO-GO**; selecting direct Google would require separate authorization, not automatic fallback. Google project/model limits vary by tier. [Limits](https://ai.google.dev/gemini-api/docs/rate-limits).
+**UNKNOWN / ACCOUNT_VERIFICATION_REQUIRED:** current exact voice/model entitlement and revision, allowed format/quotas, speech-route Myanmar behavior and normalization, effective price/fees, charge ceiling/reset enforcement, actual serving/retention policy, result/cost retrieval and internal retry behavior. No direct ElevenLabs endpoint, key or timing/alignment API is an eligible escape route. Measured duration and timing support through this exact gateway configuration remain UNKNOWN.
 
-### B. Direct Azure Speech
+### B. Second priority: OpenRouter → full Gemini 3.8 Flash TTS
 
-**DOCUMENTED:** `my-MM-NilarNeural` and `my-MM-ThihaNeural` are Burmese stock voices. Neither is an OpenRouter Microsoft MAI model selection. [Voice table](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=text-to-speech).
+**DOCUMENTED:** `google/gemini-3.8-flash-tts`; displayed **USD 0.50 / million input text tokens and USD 9 / million output audio tokens**. Google AI Studio and Google Vertex are listed serving paths; EU in-region routing is unavailable. These are public catalog claims, not entitlement or bounded billing evidence. [Gateway model listing](https://openrouter.ai/google/gemini-3.8-flash-tts).
 
-**DOCUMENTED wire:** authenticated regional/resource Speech REST synthesis, POST `/cognitiveservices/v1`, `Content-Type: application/ssml+xml`, required output-format header; proposed `X-Microsoft-OutputFormat: riff-24khz-16bit-mono-pcm`. Use a fixed `speak` envelope with `xml:lang="my-MM"`, an allowlisted exact voice name and escaped exact corpus text. No caller SSML, styles, lexicons or source URLs. Response is audio bytes; REST can truncate output beyond ten minutes, so status 200 is insufficient coverage evidence. Account and Speech resource/key/endpoint are prerequisites. [REST reference](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech).
+Full Gemini explicitly lists Burmese with automatic detection. Direct API token ceilings do not establish a gateway maximum charge. [Full model language table](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts). Stock research candidate **`Kore`** is documented upstream; gateway entitlement/version and Myanmar behavior are UNKNOWN. [Upstream stock voices](https://ai.google.dev/gemini-api/docs/speech-generation). Flash-Lite is excluded; family resemblance never establishes Burmese support. PCM format parameters and actual duration require independent evidence.
 
-`AZURE_PREBUILT_NEURAL_VOICE` in the mock is a **local discriminator**, not a vendor model ID; Azure selects these voices by SSML name. `southeastasia` is listed for neural synthesis, but exact voice/resource availability must be checked independently. [Regions](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/regions?tabs=tts). Current quota table lists F0 20 transactions/60 seconds, S0 default 30 TPS and ten-minute maximum output. Quotas/capacity are not spending authority. [Quotas](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-services-quotas-and-limits).
+### Shared OpenRouter speech contract and routing blocker
 
-**Pricing:** official page specifies per-million-character units but returned `$-` for numeric region-dependent amounts during this public review. No unofficial USD 15 estimate is promoted to a quote. **Numeric effective price UNKNOWN.** [Pricing](https://azure.microsoft.com/en-us/pricing/details/speech/). Region, exact voices, credentials, billing character definition for Myanmar, subscription entitlements and enforceable spend bound remain ACCOUNT_VERIFICATION_REQUIRED.
+**DOCUMENTED wire, not an implemented sender:** POST `https://openrouter.ai/api/v1/audio/speech`; required JSON `model` and exact `input`, explicit `voice`, selected `response_format` (`mp3`/`pcm`). The response is raw bytes, not chat JSON; response headers are not independent audio verification. Speech supports data-policy settings `provider.zdr` and `data_collection`, but **`order`, `only` and `ignore` are not applied**. No chat-completion contract or generic catalog failover claim proves speech routing enforcement. [Speech guide](https://openrouter.ai/docs/guides/overview/multimodal/tts).
 
-### C. Direct ElevenLabs
+Application retries/fallbacks are prohibited, including direct providers. Gateway-internal rerouting/retry and original charge semantics still need evidence. If accepted privacy or no-fallback policy cannot be enforced for the chosen speech route, **BLOCKED**; do not bypass OpenRouter. Account quotas, stock-voice licensing/revision, complete lost-ACK receipts, effective rates and enforced maximum charge remain UNKNOWN for both routes.
 
-**DOCUMENTED:** exact model `eleven_v3` lists Burmese (`my`), supports TTS and has a 5,000-character limit. `eleven_v3_conversational`, v4 and Multilingual v2 are not interchangeable selections. [Models](https://elevenlabs.io/docs/overview/models). Public API pricing lists v3 at **USD 0.08 / 1,000 characters**; actual subscription credits, additional fees and final charge bounds are unverified. [Pricing](https://elevenlabs.io/pricing/api).
+### C. Other OpenRouter routes
 
-**DOCUMENTED wire:** POST `https://api.elevenlabs.io/v1/text-to-speech/{voice_id}`, `xi-api-key`, explicit JSON `text`, `model_id:"eleven_v3"`, `language_code:"my"`, and reviewed normalization/settings. Pin query output format, proposed `mp3_44100_128`; the response is audio bytes. The API defaults to a different model if model selection is omitted. Language enforcement is not sufficient by itself because unsupported codes may be ignored. PCM/WAV 44.1-kHz and MP3 192-kbps entitlement restrictions are documented. [Convert reference](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
-
-The separate `/with-timestamps` route returns `audio_base64`, `alignment`, `normalized_alignment`; character arrays/times are vendor claims, not proof of Myanmar syllable coverage or independently decoded duration. It must be separately selected/quoted, not called as an extra automatic request. [Timing reference](https://elevenlabs.io/docs/api-reference/text-to-speech/convert-with-timestamps).
-
-**Stock voice UNKNOWN:** no account voice lookup was allowed. The mock deliberately accepts only `MOCK_STOCK_PENDING`, which is not a real voice ID and cannot be sent to the provider. Official support documents legacy-ID automatic remapping, so copying Rachel/Sarah/example IDs cannot establish a fixed current voice. [Voice changes](https://help.elevenlabs.io/hc/en-us/articles/20939463028881-How-are-voices-updated-changed). Future account inspection must select a current stock voice, verify license/entitlement and revision/substitution policy, and obtain human acceptance. No cloned/designed/uploaded voice is eligible.
+`elevenlabs/eleven-v4`, v4 Turbo and v3 Conversational are visible gateway candidates; they are **not added to the mock allowlist or approved as replacements**. The upstream v4 family also documents Burmese, but this does not establish its exact gateway voice/privacy/account/billing combination. The cited model/language documents above justify further research only. Other models, including Flash/Multilingual variants or arbitrary TTS IDs, require independent model-specific Burmese evidence. An unverified configuration stays UNKNOWN/denied; no silent search or fallback dispatch occurs.
 
 ## 4. Privacy acceptance matrix
 
@@ -67,10 +65,10 @@ These are DOCUMENTED policy claims plus required reviews. **All actual account c
 
 | Configuration | Text/transmission and training | Retention, residency and deletion | Acceptance gap |
 | --- | --- | --- | --- |
-| OpenRouter + Google upstream | Gateway and selected upstream both receive text. OpenRouter describes its own prompt non-retention unless logging is opted in; endpoint policy can differ from provider defaults. | ZDR routing exists, but actual speech endpoint eligibility/account settings must be checked. Disable content logging, trace/broadcast destinations and tools; do not infer regional processing from the host name. | Accept both gateway and exact upstream terms; inability to constrain approved routing remains blocking. [ZDR](https://openrouter.ai/docs/guides/features/zdr). |
+| OpenRouter gateway, both candidate upstreams | Gateway and selected upstream both receive text. OpenRouter describes its own prompt non-retention unless logging is opted in; endpoint policy can differ from provider defaults. | ZDR routing exists, but actual speech endpoint eligibility/account settings must be checked. Disable content logging, trace/broadcast destinations and tools; do not infer regional processing from the host name. | Accept both gateway and exact upstream terms; inability to constrain approved routing remains blocking. [ZDR](https://openrouter.ai/docs/guides/features/zdr). |
 | Google AI Studio / Gemini upstream terms | Paid-service terms restrict product-improvement training, but paid status is not ZDR. Upstream gateway agreements may differ. | Abuse-monitoring prompt/response retention is separately described; direct Interactions state storage defaults need explicit control. No universal retention period or regional guarantee is inferred here. | Verify the contract applying to the exact OpenRouter serving endpoint, not merely a direct Gemini plan. [Terms](https://ai.google.dev/gemini-api/terms), [retention](https://ai.google.dev/gemini-api/docs/zdr). |
-| Direct Azure prebuilt realtime synthesis | Text is disclosed directly to Azure. Do not infer a broad training prohibition solely from a non-storage claim. | Microsoft documents no storage of realtime input text/output audio. Batch/long-audio storage differs; those APIs are excluded. Application logs, billing metadata and resource geography still require review. | Exact resource, region, DPA/terms, monitoring and local retention remain unverified. [Privacy](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/text-to-speech/data-privacy-security). |
-| Direct ElevenLabs v3 | Direct disclosure; own training opt-out must be checked before new submissions, not assumed from a paid plan or third-party LLM terms. | History retention is enabled by default; deletion can leave moderation/debug information and backups up to 30 days. ZRM is enterprise-specific and endpoint-dependent. | Choose explicit accepted logging mode; unavailable required ZRM means BLOCKED. Confirm opt-out, deletion scope and exact data residency/model compatibility. [ZRM](https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode), [terms](https://elevenlabs.io/terms-of-use), [privacy](https://elevenlabs.io/privacy-policy). |
+| OpenRouter → ElevenLabs v3 | Gateway and upstream receive the text. Upstream default retention and training terms do not establish the gateway's negotiated endpoint policy. | Upstream ZRM is restricted to eligible enterprise endpoints; paid status alone proves nothing about ZDR. No direct account setting or query parameter is assumed to apply through OpenRouter. | Obtain and accept exact gateway/upstream training, abuse-log, deletion and region terms; verify required ZDR availability. [Upstream ZRM](https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode), [privacy](https://elevenlabs.io/privacy-policy). |
+| Direct Azure/ElevenLabs/Google | Excluded by exclusive-gateway architecture. | No direct account, credential or endpoint is proposed. | UNSUPPORTED by project policy; never a fallback. |
 
 Eleven's residency documentation describes enterprise isolated environments and requires checking model availability for the chosen region/ZRM. This does not verify a particular account or TTS model deployment. [Residency](https://elevenlabs.io/docs/overview/administration/data-residency). No original dialogue, copyrighted transcript, uploaded reference, real-person data or confidential project material is used. Demonstration-content acceptability and generated-output rights still need human terms review. Private future generated audio must have an explicit retention/deletion owner; this phase stores no audio.
 
@@ -81,11 +79,11 @@ Audit logs must omit keys, headers, URLs containing account information, account
 Every unchecked item is **ACCOUNT_VERIFICATION_REQUIRED**. No API key is requested from the user.
 
 1. An authorized account owner accepts applicable geography/eligibility, service terms, demonstration text/output rights and the exact model/voice configuration. Confirm workspace/organization/resource identity privately, without public account IDs.
-2. Confirm model/stock voice entitlement and allowed formats. For Azure, confirm resource and matching region/endpoint/voice availability. For Eleven, verify a current stock voice rather than a remapping legacy alias. For OpenRouter, establish an acceptable speech routing policy and upstream terms.
-3. Provision a separate future server-side credential broker with minimum synthesis scope. Separately authorize read-only model/voice/account discovery if needed. No credential in browser bundles, corpus, requests, receipts, committed configuration or terminal output. No environment files change in M10-02A.
-4. Establish key scope, organization/workspace binding, issuance/expiration, rotation, revocation procedure and tested emergency stop. Eleven documents endpoint scopes, credit quotas, optional user-key expiration and service-account restrictions; availability depends on the account. [Key controls](https://elevenlabs.io/docs/overview/administration/workspaces/api-keys). Azure requires its own supported resource/token authority; no common cross-provider key is assumed.
+2. Confirm model/stock voice entitlement and allowed formats. For OpenRouter, verify exact gateway model/stock voice/format and acceptable upstream speech routing and terms. A direct-provider account or upstream model entitlement cannot substitute for gateway evidence.
+3. Use one separately authorized future server-side OpenRouter credential broker with minimum necessary scope; do not provision direct-provider credentials or clients. Separately authorize read-only model/voice/account discovery if needed. No credential in browser bundles, corpus, requests, receipts, committed configuration or terminal output. No environment files change in M10-02A.
+4. Establish key scope, organization/workspace binding, issuance/expiration, rotation, revocation procedure and tested emergency stop. Bind the OpenRouter account/workspace, permitted model/voice and key scope privately. Whether exact expiration, revocation, model restrictions and enforced budgets are available is ACCOUNT_VERIFICATION_REQUIRED. No upstream key is requested or configured.
 5. Obtain current model-specific request/byte/output limits, rate and concurrency quotas, format entitlement and outage behavior. Set evaluation concurrency one and request ceiling six even if provider quotas are larger.
-6. Capture quote units/rates, effective date, currency, billing/reset interval, tax/fees/credit conversion and maximum possible charge, plus provider-enforced limit evidence. OpenRouter documents workspace/key/guardrail budgets and reset attribution; none has been verified in account, and BYOK accounting is not necessarily the provider invoice. [Spending controls](https://openrouter.ai/docs/guides/best-practices/spend-controls).
+6. Capture quote units/rates, effective date, currency, billing/reset interval, tax/fees/credit conversion and maximum possible charge, plus provider-enforced limit evidence. Public spend-control documentation could not be retrieved during this amendment. No prior claim closes current hard-cap evidence: its enforcement, reset, late charges and currency/fees remain UNKNOWN. BYOK is not part of this trial proposal.
 7. Verify accepted training, abuse retention, region, content logging/deletion and audio storage policies. Approve the exact configuration hash. Capture only safe opaque receipt references, never account screenshots or raw secrets in the public repository.
 8. Require a new explicit authorization before using that broker. This checklist grants no account access, credential provisioning or synthesis permission.
 
@@ -119,25 +117,25 @@ The separate `story-tts-unissued-spending-proposal-v1` record binds exact provid
 
 For a future live record, those references must instead resolve through separately authenticated approval/quote/account authorities. A hash, shape-valid record, client counter, timeout, billing alert, advertised free tier or chosen budget number is insufficient. Confirm the limit's actual enforced amount, reset, account isolation, ongoing/late billing behavior and all charges. **Without a defensible maximum total charge, the live evaluation is NO-GO.**
 
-Mock arithmetic is exact: sum each component's `ceil(maximumUnitsPerRequest × priceMicros / perUnits)`, add bounded overhead, then reserve the whole worst case for all approved originals. Full Gemini requires both input-text and output-audio token components; Azure uses billable characters; Eleven's reviewed quote may use characters or credits with an independently established conversion. Mock prices/ceilings are deliberately synthetic: each original reserves 205 micro-units, six reserve 1,230; this is **not a real price estimate or approved USD budget**. BigInt arithmetic prevents overflow/rounding under safe-integer input ceilings.
+Mock arithmetic is exact: sum each component's `ceil(maximumUnitsPerRequest × priceMicros / perUnits)`, add bounded overhead, then reserve the whole worst case for all approved originals. The server-owned model metadata requires both input-text and output-audio token components for full Gemini, and billable characters for OpenRouter Eleven v3. Provider identity is always OPENROUTER; it cannot select a direct-provider pricing branch. Upstream credits and character-only Gemini quotes are rejected. Mock prices/ceilings are deliberately synthetic: each original reserves 205 micro-units, six reserve 1,230; this is **not a real price estimate or approved USD budget**. BigInt arithmetic prevents overflow/rounding under safe-integer input ceilings.
 
 A nonserializable mock assessment references a trusted fixture-owned frozen proposal/quote and shared in-memory reservations; changed/rehashed proposals, copied handles, missing bounds, wrong units, cross-account/model/voice/corpus requests, expiry/revocation and over-budget requests deny. Shared assessment handles/harness objects cannot reset that reservation ledger. Unknowns retain the full reservation and block new originals; no refund, replacement key, alternative model or fallback. Creating a completely new trusted fixture authority or restarting the process is outside its memory-only guarantee, which is another reason it is never live authority. Fixture time is explicitly injected; no production clock/session authority is certified. A future live approval must resolve an immutable account configuration reference/hash and independently authenticated limit evidence under a separate real schema; these mock references cannot be relabeled as approval.
 
 ## 8. Offline contracts and exact inventory
 
-Only these **ten new files** are created. No existing tracked file is modified.
+The original M10-02A added the following ten files. This amendment modifies exactly six: this report, `capabilities.fixture.ts`, `spending.fixture.ts`, `contracts.test.ts`, `security.test.ts`, and `lifecycle.test.ts`. No new files or application changes are introduced.
 
 | Path | Responsibility |
 | --- | --- |
 | `docs/STORYLINE_M10_02A_MYANMAR_TTS_PROVIDER_READINESS.md` | This dated research, gates, results and handoff. |
 | `tests/storyline/tts-evaluation/contracts.fixture.ts` | Strict bounded values, safe hashes, exact Myanmar text policy and immutable no-retry/no-live policy. |
 | `tests/storyline/tts-evaluation/corpus.fixture.ts` | Six original passages, semantic expectations, conservative grapheme chunks and corpus hashes. |
-| `tests/storyline/tts-evaluation/capabilities.fixture.ts` | Fixed documented candidate metadata; explicit mock-only Eleven voice placeholder. |
+| `tests/storyline/tts-evaluation/capabilities.fixture.ts` | OpenRouter-only server-owned catalog; Eleven v3/george first, full Gemini/Kore second; model-specific billing units and explicit unknown account/gateway Myanmar evidence. |
 | `tests/storyline/tts-evaluation/spending.fixture.ts` | Unissued proposal validation and private mock assessment/reservation ledger. |
 | `tests/storyline/tts-evaluation/harness.fixture.ts` | Exact requests, fixed in-memory response ports, original identity, UNKNOWN and redacted observations. |
 | `tests/storyline/tts-evaluation/contracts.test.ts` | Corpus, Unicode, chunks, hashes and bounded quote tests. |
 | `tests/storyline/tts-evaluation/security.test.ts` | Adversarial request, policy, response, secret, egress and promotion cases. |
-| `tests/storyline/tts-evaluation/lifecycle.test.ts` | Four mock configurations, duplicates, concurrency, revocation and no-resend cases. |
+| `tests/storyline/tts-evaluation/lifecycle.test.ts` | Two OpenRouter-only mock configurations, duplicates, concurrency, revocation and no-resend cases. |
 | `tests/storyline/tts-evaluation/production-audit.mjs` | Read-only source/import and fresh build-bundle audit. |
 
 Seven new domains are `story-tts-{offline-corpus,offline-text,offline-chunk,offline-request,unissued-spending-proposal,nonaudio-mock-response,offline-observation}-v1`. No M5/M8 domain is extended, cast or modified. Generic canonical/validation helpers remain byte-identical.
@@ -164,11 +162,11 @@ Reservations are made before the sole mock invocation. Duplicate same original r
 | Attempted network operation | Test egress tripwire throws before network; valid harness has no network port. |
 | Production import/bundle leakage | Fresh source/build audit finds zero markers or production activation. |
 
-Fresh results and retained failure accounting follow in section 11. No live quality outcome follows from these assertions.
+Fresh amendment results and prior failure accounting follow in section 11. No live quality outcome follows from these assertions.
 
 ## 10. Proposed M10-02B protocol and listening rubric — NOT AUTHORIZED
 
-Future trial authorization must name **one exact provider/account/model/current stock voice/configuration**, accepted upstream/region/privacy/retention terms, approved corpus/hash and pronunciation expectations, six specific original request identities, maximum actual currency spend and count, evidenced provider-enforced limit plus per-request upper bounds, expiration/revocation and a separately reviewed server-side credential broker. A comparison provider or second Azure voice consumes another separately authorized set; it is not fallback. Current hash/normalization are proposals until human review.
+Future trial authorization must name **one exact OpenRouter account/gateway model/current stock voice/configuration**, accepted upstream/region/privacy/retention terms, approved corpus/hash and pronunciation expectations, six specific original request identities, maximum actual currency spend and count, evidenced provider-enforced limit plus per-request upper bounds, expiration/revocation and a separately reviewed server-side credential broker. Any additional OpenRouter model/voice requires separate approval and original request/spend limits. A direct-provider trial is outside the architecture; it cannot be approved as a fallback by this report. Current hash/normalization are proposals until human review.
 
 Disable SDK/HTTP retries, redirects to unapproved hosts, alternative models/providers, request parallelism and implicit middleware/proxy retries. Maintain original request/cost identity and a separate durable admission/journal design before a paid sender can be authorized. After submission ambiguity, observe only original evidence/results/billing under separately approved account access; timeout, missing ACK or NOT_FOUND does not prove no charge. No speculative resend, new key or replacement original. Provider result receipt/cost retrieval and upstream retry behavior must be evidenced; if unavailable, retain UNKNOWN and stop. Do not import M8 fake recovery to solve this.
 
@@ -187,70 +185,67 @@ Two independent qualified Myanmar listeners must review every full passage again
 
 Listener disagreement or any critical proper-name/number/negation/coverage error means BLOCKED pending explicit review; it does not authorize regeneration. Advisory ASR/alignment would need its own privacy/spending authorization and cannot replace listeners. Record honest model drift, pronunciation and format limitations. A successful trial remains evaluation-only; production voice artifacts, narration approval, source rights, private delivery/publication and Movie Translator integration need separate milestones.
 
-## 11. Verification, preservation and remaining blockers
+## 11. OpenRouter-only amendment verification and remaining blockers
 
-Final offline acceptance **PASS**. All prior logs remain in the ignored `coverage/m10-02a-08428e50/` directory. No credentials or private account data are recorded.
+**OpenRouter-only offline readiness PASS; live/audio-quality acceptance remains BLOCKED.** Fresh receipts are in ignored `coverage/m10-02a-openrouter-policy/`; older logs are preserved.
 
-| Executed check | Actual final result | Evidence |
+| Fresh check | Result | Receipt |
 | --- | --- | --- |
-| New offline contracts/security/lifecycle, three files | **69/69 PASS**, 0.381 s; zero failures/skips/cancellations/TODO | `focused-acceptance.log` |
-| Unchanged M5 pure boundary/planner/reference, three files | **51/51 Node-reported nodes PASS**, 0.835 s; **47 leaf cases + 4 parent groups** | `m5-pure-regression.log` |
-| Lint | **PASS**, zero diagnostics | `lint-final.log` |
-| Standalone TypeScript | **PASS**, zero diagnostics | `typescript-acceptance.log` |
-| Dummy-datasource Webpack build | **PASS** after scoped compiler subprocess permission retry | `webpack-retry.log` |
-| New TTS and existing M6/M7/M8/Phase 1A production audits | **8/8 scripts PASS** | `*-production.json` |
-| Exact inventory, baseline hashes, new-domain collision, links, secrets and whitespace | **PASS**; 685 files unchanged, ten new paths, seven new domains | `source-audit.json`; staged receipt |
+| Offline corpus/contracts, security and lifecycle | **78/78 PASS**, zero failures/skips/cancellations, 0.420 s | `focused.log` |
+| Unchanged M5 pure boundary/planner/reference | **51/51 Node nodes PASS**, 47 leaf cases + 4 parent groups, 0.944 s | `m5-pure.log` |
+| Lint | **PASS**, zero diagnostics | `lint.log` |
+| TypeScript | **PASS**, zero diagnostics | `typescript.log` |
+| Unreachable dummy-datasource Webpack build | **PASS** | `webpack.log` |
+| TTS + M6/M7/M8/Phase 1A production boundary audits | **8/8 scripts PASS** | `*-production.json` |
+| Baseline preservation, inventory, local links, secret patterns and whitespace | **PASS**: 695 entry files; six modified, 689 unchanged; no new tracked/untracked files | `source-audit.json` |
 
-The final selection contains **120 distinct passing Node-reported nodes / 116 distinct leaf cases** (69 new + 47 unchanged M5 cases, plus four disclosed M5 parent groups). Earlier successful overlapping development executions are 2 + 62 + 66 = **130 repeats**. Across successful runs this is **250 passing node executions / 246 leaf executions**, representing those same 120 nodes / 116 leaf cases. Loops over six passages/four mock configurations, assertions, fake starts, eight audit scripts and historical reports add no independent test cases.
+There are **129 distinct passing Node nodes / 125 distinct leaf cases** (78 + 47 leaves; four M5 parent groups disclosed), one execution each and **zero overlapping reruns in this amendment**. No failed command or case occurred in this amendment's acceptance runs. A nonexistent local testing-guide path and two inaccessible public spend-document URLs yielded no evidence; the installed guide was subsequently located and read. The 78-case suite replaces 69 prior cases: eleven policy, metadata and billing cases added, two Azure-positive configurations removed. The surviving Eleven positive case now uses the gateway model/stock candidate. Prior test runs do not add to these fresh counts. Assertion loops, six passages, mock invocations and eight audit scripts are not extra test cases.
 
-Retained failures: the initial default-isolated runner reported three failed file wrappers before any case-level evidence; a separate compiler-child diagnostic reproduced sandbox `EPERM`. The next in-process run executed 61 cases: **2 passed / 59 failed**, because the initial orphan-mark check rejected legitimate corpus spacing signs. That check was corrected, not the passages; dependent-sign chunk preservation and a specific regression were added. Subsequent development runs passed 62 and 66 cases, and final acceptance passes 69. The initial TypeScript run also failed on fixture readonly/narrowing types and ES2017 BigInt literal syntax; these were corrected only in new files. A default-sandbox build failed parsing its `tsc --showConfig` child output; direct child diagnostics returned EPERM, and the authorized compiler-permission retry passed without application changes. No existing test, quota, deadline or assertion was weakened. Failure logs were not overwritten.
+The TTS production audit reviewed **364 source files, 217 built JavaScript files, five server-only fixture modules, 38 unchanged routes and zero Server Actions**. It found zero TTS fixture markers or network/SDK/M5/M8 authority imports. The other seven scripts passed unchanged. `openRouterConfig` still pins the HTTPS OpenRouter API origin; the existing translation, transcription, character and recap providers use the OpenRouter SDK/server configuration. No production code, environment file, credential or M5–M8 contract changed. This proves this test-only amendment adds no production adapter; it does not certify live account or provider behavior. Egress tripwires and reviewed imports are offline test controls, not an OS sandbox against hostile arbitrary code.
 
-Production source/bundle audit covers **364 source files** (including existing libraries), **217 built JavaScript files**, five test-only fixture modules, **38 unchanged API routes** and **zero Server Actions**. It finds zero new TTS markers in production, no fixture network/SDK/M5/M8-execution/maintenance imports, and no environment activation path. The seven unchanged audits independently preserve the earlier authority boundaries. The new egress tripwires are mocked negative controls plus reviewed transitive import restrictions, not a hostile-code OS network sandbox.
+**NOT RUN:** application/database/PostgreSQL/M4 expiry/M6–M8 runtime suites, Redis/workers, browser/component suites, real media tools or files, synthesis or audio downloads/decoding/listening, authenticated account discovery, paid calls, deployment or push. No application runtime/UI change calls for rerunning those broader suites; database/media/account actions remain forbidden. The original corpus fixture and hash domains are byte-identical. No real TTS quality result is claimed.
 
-**NOT RUN:** PostgreSQL/M4/M6/M7/M8 runtime suites, Redis/queues, workers, M5 fake audio generation/parsing, media tools/decoders, browser/component suites, authenticated discovery/account APIs, provider synthesis, audio downloads, real listeners or paid inference. No application runtime/UI files changed; the pure M5 regressions, static preservation and fresh production build/import audits are the applicable broader checks. Database/media/provider operations are explicitly forbidden. No historical PASS count substitutes for an omitted suite.
+### Exact amendment commands
 
-### Exact fresh commands
-
-All Node test/build commands used an explicitly unreachable application datasource. No application environment file changed. Compiler subprocess permission was expanded only for the failed build retry; this did not authorize a database, provider, worker or media operation.
+Each test/build/audit command used `DATABASE_URL=postgresql://storyline_dummy:unused@127.0.0.1:1/storyline_unreachable` and builds/audits used `NEXT_TELEMETRY_DISABLED=1`. No environment file was edited. The compiler build used scoped subprocess permission; no runtime service was started.
 
 ```sh
-export DATABASE_URL=postgresql://storyline_dummy:unused@127.0.0.1:1/storyline_unreachable
-export NEXT_TELEMETRY_DISABLED=1
 node --conditions=react-server --import tsx --test --test-isolation=none --test-reporter=tap --test-concurrency=1 tests/storyline/tts-evaluation/contracts.test.ts tests/storyline/tts-evaluation/security.test.ts tests/storyline/tts-evaluation/lifecycle.test.ts
 node --conditions=react-server --import tsx --test --test-isolation=none --test-reporter=tap --test-concurrency=1 tests/storyline/voice-foundation/boundary.test.ts tests/storyline/voice-foundation/planner.test.ts tests/storyline/voice-foundation/reference.test.ts
 pnpm lint
 pnpm exec tsc --noEmit --incremental false
 pnpm exec next build --webpack
-node tests/storyline/tts-evaluation/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/tts-evaluation-production.json"
-node tests/storyline/render-execution-fake/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/render-execution-fake-production.json"
-node tests/storyline/maintenance-fake/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/maintenance-fake-production.json"
-node tests/storyline/render-planning/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/render-planning-production.json"
-node tests/storyline/highlights-studio/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/highlights-studio-production.json"
-node tests/storyline/timeline/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/timeline-production.json"
-node tests/storyline/timeline-persistence/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/timeline-persistence-production.json"
-node tests/storyline/timeline-studio/production-audit.mjs "$PWD/coverage/m10-02a-08428e50/timeline-studio-production.json"
-python3 coverage/m10-02a-08428e50/audit.py
+node tests/storyline/tts-evaluation/production-audit.mjs coverage/m10-02a-openrouter-policy/tts-evaluation-production.json
+node tests/storyline/render-execution-fake/production-audit.mjs coverage/m10-02a-openrouter-policy/render-execution-fake-production.json
+node tests/storyline/maintenance-fake/production-audit.mjs coverage/m10-02a-openrouter-policy/maintenance-fake-production.json
+node tests/storyline/render-planning/production-audit.mjs coverage/m10-02a-openrouter-policy/render-planning-production.json
+node tests/storyline/highlights-studio/production-audit.mjs coverage/m10-02a-openrouter-policy/highlights-studio-production.json
+node tests/storyline/timeline/production-audit.mjs coverage/m10-02a-openrouter-policy/timeline-production.json
+node tests/storyline/timeline-persistence/production-audit.mjs coverage/m10-02a-openrouter-policy/timeline-persistence-production.json
+node tests/storyline/timeline-studio/production-audit.mjs coverage/m10-02a-openrouter-policy/timeline-studio-production.json
+python3 coverage/m10-02a-openrouter-policy/audit.py
 git diff --check
 git diff --cached --check
 ```
 
-### New source SHA-256 inventory
+### Current test-only source SHA-256 inventory
 
-The following hashes pin all nine new executable/test source files. The report's own staged byte hash is recorded separately in `staged.json` to avoid a self-referential digest.
+These hashes bind all nine test-only source files, including four unchanged files. The report's own hash is recorded separately in the staged receipt to avoid self-reference.
 
-| New source | Raw file SHA-256 |
+| File under `tests/storyline/tts-evaluation/` | SHA-256 |
 | --- | --- |
-| `tests/storyline/tts-evaluation/capabilities.fixture.ts` | `7b06f5641612d9b18938ddc493b37b93fb563451627bc17045c7f83277584476` |
-| `tests/storyline/tts-evaluation/contracts.fixture.ts` | `587020cc14196dc322171c408bc9fea4513104e80bf1692f7f2ce5746a8dc9ba` |
-| `tests/storyline/tts-evaluation/contracts.test.ts` | `93a6e9ec037eb7a5e8c6fba6244a00ce3a850cdfc488d09b39fa4d8ecc12bd2c` |
-| `tests/storyline/tts-evaluation/corpus.fixture.ts` | `ceb12a838da4f44f34d9ec487e09a661c156b9a5d4fcd284f01a5ba3b08bab39` |
-| `tests/storyline/tts-evaluation/harness.fixture.ts` | `8ada1abc407aacd791dcaef459150d57b83b4f63499503e90450c57ef33d1f12` |
-| `tests/storyline/tts-evaluation/lifecycle.test.ts` | `4c4e43bcb48395fce233e5d718e5e9d39edace466852e23387aa8d9520ac9de8` |
-| `tests/storyline/tts-evaluation/production-audit.mjs` | `f8b143ec9cd997bd138dc89d19dd72605b1fd02a0be5fb95c61cc976c6a2d4ec` |
-| `tests/storyline/tts-evaluation/security.test.ts` | `f51ed9152f284fd4026de6d385b46b804b44745d62ef22c6eed983c13977aadb` |
-| `tests/storyline/tts-evaluation/spending.fixture.ts` | `a3a804490f6dbb96b68a7514832791a69ecc87b2c3d83ff53c0a02163f3ab2ea` |
+| `capabilities.fixture.ts` | `533e3ba899179c2123f810e2c25c6bff2c89234bed3f18d86c7cea8f686c9987` |
+| `contracts.fixture.ts` | `587020cc14196dc322171c408bc9fea4513104e80bf1692f7f2ce5746a8dc9ba` |
+| `contracts.test.ts` | `25c254459eded9453d3cda4556a9203829a53b6e2c37726e236d6e9f2a9b459c` |
+| `corpus.fixture.ts` | `ceb12a838da4f44f34d9ec487e09a661c156b9a5d4fcd284f01a5ba3b08bab39` |
+| `harness.fixture.ts` | `8ada1abc407aacd791dcaef459150d57b83b4f63499503e90450c57ef33d1f12` |
+| `lifecycle.test.ts` | `6b5d0846bc96cc1f87960b19b8af9c75e2cdb61074e410f4bc2ee02b9c871293` |
+| `production-audit.mjs` | `f8b143ec9cd997bd138dc89d19dd72605b1fd02a0be5fb95c61cc976c6a2d4ec` |
+| `security.test.ts` | `0bee64f77a6d9d55ccb1047428f5feb78e8daaa4fa537aba6175ce5681263fd6` |
+| `spending.fixture.ts` | `d91f05391910726add8934e300738675dea850c3eb73763eee274f818b096b24` |
 
+Historical original M10-02A results and failures are retained in local commit `1e1b96199d229ec448906156532ffa8bc22a0c00` and ignored `coverage/m10-02a-08428e50/`; they are not fresh amendment evidence. The initial original milestone had a sandbox child-process failure, a Myanmar spacing-sign validation defect corrected with regression coverage, and TypeScript fixture issues; none is concealed by this amendment. Original 69-case acceptance is superseded by the OpenRouter-only suite.
 
-The original sixteen M4 expiry controls and original 700-ms positive deadline remain unchanged at file SHA-256 `8330f222f1d74bcd21a8aec20f0b7b4569bac9b557e478df8412063bb41c55d7`. **NOT RERUN here** because PostgreSQL is forbidden. The historical positive-control timing incident remains **UNRESOLVED**; no deadline/assertion changes or retry inference. M8 fake execution, Phase 0 and Phase 1A contracts/authority remain unchanged and unimported by this harness.
+The original sixteen M4 expiry controls and 700-ms positive deadline remain unchanged at source SHA-256 `8330f222f1d74bcd21a8aec20f0b7b4569bac9b557e478df8412063bb41c55d7`. PostgreSQL tests are NOT RERUN. The historical timing incident remains UNRESOLVED. All accepted M8 fake execution, Phase 0, Phase 1A and M5 contract/authority boundaries remain unchanged and unimported by this harness.
 
-**M10-02B remains BLOCKED** by unverified account entitlement/key authority, current Eleven stock voice, accepted provider/upstream privacy/region/logging configuration, speech-route constraint enforcement, exact effective quote/max-charge/provider limit evidence, provider version/result retrieval semantics, separately reviewed live original-request ownership and an independently approved audio-decode/listening environment. Questions requiring authentication stop at ACCOUNT_VERIFICATION_REQUIRED; no account access is attempted to close them. No amount, account configuration, privacy decision, provider request, audio generation or future milestone is approved by this report.
+**M10-02B remains BLOCKED** until explicit approval binds OpenRouter account/model entitlement, exact stock voice/version, accepted gateway/upstream privacy/region/retention terms, enforceable maximum actual charge and original request limit, exact Myanmar corpus and no automatic retries after UNKNOWN. A separately reviewed live sender, original-request ownership/journal protocol and independent decode/two-listener environment are also required. Missing speech routing constraints or billing evidence are blockers, not permission to switch gateway. ACCOUNT_VERIFICATION_REQUIRED questions stop without account calls. No approval, credential use, real audio, spending, publication or next milestone is authorized here.

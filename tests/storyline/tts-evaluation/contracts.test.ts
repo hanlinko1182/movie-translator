@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { capabilities, selection } from "./capabilities.fixture";
 import { D, digest, myanmarText } from "./contracts.fixture";
 import { corpus, passages, expectations, chunkText, validateChunks } from "./corpus.fixture";
 import { fixedRequest, parseRequest } from "./harness.fixture";
@@ -26,7 +27,7 @@ for (let i = 0; i < 6; i++) test(`passage ${i+1}: exact reconstruction and graph
   assert.throws(() => validateChunks(p.text, forged));
 });
 test("unissued cost proposal uses exact integer ceiling arithmetic and reserves six worst-case requests", () => {
-  const c = corpus(), p = proposalForTest(c.payload.passages.map((_,i) => fixedRequest(c,i))), parsed = parseSpendingProposal(p);
+  const c = corpus(), p = proposalForTest(c.payload.passages.map((_,i) => fixedRequest(c,i,selection(1)))), parsed = parseSpendingProposal(p);
   assert.equal(parsed.worstPerRequestMicros, 205); assert.equal(parsed.maxTotalSpendMicros, 1230);
   assert.equal(parsed.authority, "UNISSUED_OFFLINE_PROPOSAL");
   const token = structuredClone(p); token.quote.components = [{ unit: "INPUT_TEXT_TOKEN", maximumUnitsPerRequest: 10, priceMicros: 500000, perUnits: 1000000 }, { unit: "OUTPUT_AUDIO_TOKEN", maximumUnitsPerRequest: 10, priceMicros: 9000000, perUnits: 1000000 }];
@@ -47,4 +48,10 @@ test("Myanmar spacing vowels and tone signs remain with their bases across chunk
   const t = "ကား".repeat(20), chunks = chunkText(t,32);
   assert.equal(chunks.map(c=>c.text).join(""),t);
   for(const c of chunks) { assert.ok(c.text.startsWith("က")); assert.ok(c.text.endsWith("း")); }
+});
+
+test("server-owned candidates prioritize Eleven via OpenRouter and never claim account or audio verification", () => {
+  assert.deepEqual(capabilities.map(c => c.model), ["elevenlabs/eleven-v3", "google/gemini-3.8-flash-tts"]);
+  for (const c of capabilities) { assert.equal(c.provider, "OPENROUTER"); assert.equal(c.accountEvidence, "UNKNOWN");
+    assert.equal(c.gatewayMyanmarEvidence, "UNKNOWN"); assert.equal(c.audioEvidence, "NOT_EVALUATED"); assert.ok(Object.isFrozen(c)); }
 });

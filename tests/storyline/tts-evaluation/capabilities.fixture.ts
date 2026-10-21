@@ -1,15 +1,19 @@
 import "server-only";
 import { deny, freeze } from "./contracts.fixture";
-// Dated public claims are metadata, never account entitlement or measured quality.
+// OpenRouter is the sole gateway. Upstream documentation is never account or audio evidence.
+// This server-only test catalog is not a production activation configuration.
 export const capabilities = freeze([
-  { provider: "OPENROUTER", model: "google/gemini-3.8-flash-tts", voices: ["Kore"], nativeFormat: "pcm", language: "my", locale: "my-MM", languageEvidence: "DOCUMENTED", voiceEvidence: "DOCUMENTED_STOCK_CANDIDATE", routing: "SPEECH_PINNING_UNAVAILABLE" },
-  { provider: "AZURE", model: "AZURE_PREBUILT_NEURAL_VOICE", voices: ["my-MM-NilarNeural", "my-MM-ThihaNeural"], nativeFormat: "riff-24khz-16bit-mono-pcm", language: "my", locale: "my-MM", languageEvidence: "DOCUMENTED", voiceEvidence: "DOCUMENTED_STOCK_CANDIDATE", routing: "RESOURCE_REGION_REQUIRED" },
-  { provider: "ELEVENLABS", model: "eleven_v3", voices: ["MOCK_STOCK_PENDING"], nativeFormat: "mp3_44100_128", language: "my", locale: "my-MM", languageEvidence: "DOCUMENTED", voiceEvidence: "UNKNOWN_MOCK_PLACEHOLDER_ONLY", routing: "ACCOUNT_REGION_REQUIRED" },
+  { provider: "OPENROUTER", model: "elevenlabs/eleven-v3", voices: ["george"], nativeFormat: "mp3", language: "my", locale: "my-MM",
+    languageEvidence: "DOCUMENTED_UPSTREAM", gatewayMyanmarEvidence: "UNKNOWN", voiceEvidence: "DOCUMENTED_STOCK_CANDIDATE",
+    accountEvidence: "UNKNOWN", audioEvidence: "NOT_EVALUATED", routing: "SPEECH_PINNING_UNAVAILABLE", billableUnits: ["BILLABLE_CHARACTER"] },
+  { provider: "OPENROUTER", model: "google/gemini-3.8-flash-tts", voices: ["Kore"], nativeFormat: "pcm", language: "my", locale: "my-MM",
+    languageEvidence: "DOCUMENTED_UPSTREAM", gatewayMyanmarEvidence: "UNKNOWN", voiceEvidence: "DOCUMENTED_STOCK_CANDIDATE",
+    accountEvidence: "UNKNOWN", audioEvidence: "NOT_EVALUATED", routing: "SPEECH_PINNING_UNAVAILABLE", billableUnits: ["INPUT_TEXT_TOKEN", "OUTPUT_AUDIO_TOKEN"] },
 ] as const);
 export type Selection = { provider: string; model: string; voice: string; nativeFormat: string; language: string; locale: string };
 export function capability(s: Selection) {
   const c = capabilities.find(c => c.provider === s.provider && c.model === s.model);
-  if (!c || c.language !== s.language || c.locale !== s.locale || c.nativeFormat !== s.nativeFormat || !(c.voices as readonly string[]).includes(s.voice)) deny("UNSUPPORTED_CONFIGURATION");
+  if (s.provider !== "OPENROUTER" || !c || c.language !== s.language || c.locale !== s.locale || c.nativeFormat !== s.nativeFormat || !(c.voices as readonly string[]).includes(s.voice)) deny("UNSUPPORTED_CONFIGURATION");
   return c;
 }
 export function selection(index = 0, voiceIndex = 0): Selection {

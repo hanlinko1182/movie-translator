@@ -6,7 +6,7 @@ const epoch = (v: unknown) => counter(v, Number.MAX_SAFE_INTEGER);
 export function parseSpendingProposal(input: unknown) {
   const r = exact(input, ["schemaVersion", "authority", "provider", "model", "voice", "nativeFormat", "language", "locale", "accountRef", "corpusHash", "requestCountCeiling", "originalRequests", "quote", "maxTotalSpendMicros", "currency", "interval", "approvalIdentityRef", "approvalTimestampMs", "expiresAtMs", "revoked", "providerLimitEvidence"]);
   if (r.schemaVersion !== D.spending || r.authority !== "UNISSUED_OFFLINE_PROPOSAL" || r.currency !== "USD" || r.approvalIdentityRef !== "UNISSUED_REVIEWER" || typeof r.revoked !== "boolean") deny("UNISSUED_PROPOSAL_REQUIRED");
-  capability(r as unknown as Selection); account(r.accountRef); sha(r.corpusHash);
+  const configured = capability(r as unknown as Selection); account(r.accountRef); sha(r.corpusHash);
   const n = counter(r.requestCountCeiling, 6); if (!n || !Array.isArray(r.originalRequests) || r.originalRequests.length !== n) deny("REQUEST_CEILING");
   const originalRequests = r.originalRequests.map(v => { const x = exact(v, ["requestId", "requestHash"]); return { requestId: ident(x.requestId), requestHash: sha(x.requestHash) }; });
   if (new Set(originalRequests.map(x => x.requestId)).size !== n || new Set(originalRequests.map(x => x.requestHash)).size !== n) deny("DUPLICATE_ORIGINAL");
@@ -20,9 +20,7 @@ export function parseSpendingProposal(input: unknown) {
     return { unit: x.unit as string, maximumUnitsPerRequest, priceMicros, perUnits }; });
   if (new Set(components.map(c => c.unit)).size !== components.length) deny("DUPLICATE_BILLABLE_UNIT");
   const units = components.map(c => c.unit).sort();
-  if (r.provider === "OPENROUTER" ? !equal(units, ["INPUT_TEXT_TOKEN", "OUTPUT_AUDIO_TOKEN"])
-    : r.provider === "AZURE" ? !equal(units, ["BILLABLE_CHARACTER"])
-    : !equal(units, ["BILLABLE_CHARACTER"]) && !equal(units, ["CREDIT"])) deny("MODEL_BILLABLE_UNIT_MISMATCH");
+  if (!equal(units, [...configured.billableUnits].sort())) deny("MODEL_BILLABLE_UNIT_MISMATCH");
   const interval = exact(r.interval, ["startsAtMs", "endsAtMs", "resetAtMs"]);
   const startsAtMs = epoch(interval.startsAtMs), endsAtMs = epoch(interval.endsAtMs), resetAtMs = epoch(interval.resetAtMs), expiresAtMs = epoch(r.expiresAtMs), approvalTimestampMs = epoch(r.approvalTimestampMs);
   if (startsAtMs >= endsAtMs || resetAtMs !== endsAtMs || expiresAtMs > endsAtMs || approvalTimestampMs < startsAtMs || approvalTimestampMs >= expiresAtMs) deny("BILLING_INTERVAL");
@@ -68,7 +66,7 @@ export function proposalForTest(requests: EvaluationRequest[], now = 1000000) {
     language: r.language, locale: r.locale, accountRef: r.accountRef, corpusHash: r.corpusHash, requestCountCeiling: requests.length,
     originalRequests: requests.map(x => ({ requestId: x.requestId, requestHash: digest(D.request, x) })),
     // Deliberately synthetic prices/bounds, never a public or account quote.
-    quote: { quoteId: "mock-quote-only", components: r.provider === "OPENROUTER"
+    quote: { quoteId: "mock-quote-only", components: capability(r).billableUnits.some(unit => unit === "INPUT_TEXT_TOKEN")
       ? [{ unit: "INPUT_TEXT_TOKEN", maximumUnitsPerRequest: 100, priceMicros: 1000, perUnits: 1000 }, { unit: "OUTPUT_AUDIO_TOKEN", maximumUnitsPerRequest: 100, priceMicros: 1050, perUnits: 1000 }]
       : [{ unit: "BILLABLE_CHARACTER", maximumUnitsPerRequest: 2048, priceMicros: 100, perUnits: 1000 }], overheadMicros: 0, evidenceHash: "a".repeat(64) },
     maxTotalSpendMicros: 1230, currency: "USD", interval: { startsAtMs: now - 1, endsAtMs: now + 60000, resetAtMs: now + 60000 },
