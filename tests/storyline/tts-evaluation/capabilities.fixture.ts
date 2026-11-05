@@ -1,11 +1,9 @@
 import "server-only";
 import { deny, freeze } from "./contracts.fixture";
 // OpenRouter is the sole gateway. Upstream documentation is never account or audio evidence.
+// Sole primary: full Gemini/Kore/PCM. Historical Eleven evidence stays in the dated reports.
 // This server-only test catalog is not a production activation configuration.
 export const capabilities = freeze([
-  { provider: "OPENROUTER", model: "elevenlabs/eleven-v3", voices: ["george"], nativeFormat: "mp3", language: "my", locale: "my-MM",
-    languageEvidence: "DOCUMENTED_UPSTREAM", gatewayMyanmarEvidence: "UNKNOWN", voiceEvidence: "DOCUMENTED_STOCK_CANDIDATE",
-    accountEvidence: "UNKNOWN", audioEvidence: "NOT_EVALUATED", routing: "SPEECH_PINNING_UNAVAILABLE", billableUnits: ["BILLABLE_CHARACTER"] },
   { provider: "OPENROUTER", model: "google/gemini-3.8-flash-tts", voices: ["Kore"], nativeFormat: "pcm", language: "my", locale: "my-MM",
     languageEvidence: "DOCUMENTED_UPSTREAM", gatewayMyanmarEvidence: "UNKNOWN", voiceEvidence: "DOCUMENTED_STOCK_CANDIDATE",
     accountEvidence: "UNKNOWN", audioEvidence: "NOT_EVALUATED", routing: "SPEECH_PINNING_UNAVAILABLE", billableUnits: ["INPUT_TEXT_TOKEN", "OUTPUT_AUDIO_TOKEN"] },

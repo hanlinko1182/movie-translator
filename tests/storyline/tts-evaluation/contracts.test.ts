@@ -9,6 +9,7 @@ import { parseSpendingProposal, proposalForTest } from "./spending.fixture";
 test("six original passages retain exact UTF-8, semantic review tokens and versioned corpus identity", () => {
   const c = corpus(); assert.equal(c.payload.passages.length, 6); assert.equal(new Set(Object.values(D)).size, 7);
   assert.equal(c.corpusHash, corpus(structuredClone(passages)).corpusHash);
+  assert.equal(c.corpusHash, "940ab42793a4316ade9103382bbb31357eff66c55fc8388c2f383c4b96079efa");
   for (const [i,p] of c.payload.passages.entries()) {
     assert.equal(p.text, passages[i].text); assert.equal(p.utf8Bytes, Buffer.byteLength(p.text));
     for (const token of expectations[p.id as keyof typeof expectations]) assert.ok(p.text.includes(token));
@@ -27,7 +28,7 @@ for (let i = 0; i < 6; i++) test(`passage ${i+1}: exact reconstruction and graph
   assert.throws(() => validateChunks(p.text, forged));
 });
 test("unissued cost proposal uses exact integer ceiling arithmetic and reserves six worst-case requests", () => {
-  const c = corpus(), p = proposalForTest(c.payload.passages.map((_,i) => fixedRequest(c,i,selection(1)))), parsed = parseSpendingProposal(p);
+  const c = corpus(), p = proposalForTest(c.payload.passages.map((_,i) => fixedRequest(c,i))), parsed = parseSpendingProposal(p);
   assert.equal(parsed.worstPerRequestMicros, 205); assert.equal(parsed.maxTotalSpendMicros, 1230);
   assert.equal(parsed.authority, "UNISSUED_OFFLINE_PROPOSAL");
   const token = structuredClone(p); token.quote.components = [{ unit: "INPUT_TEXT_TOKEN", maximumUnitsPerRequest: 10, priceMicros: 500000, perUnits: 1000000 }, { unit: "OUTPUT_AUDIO_TOKEN", maximumUnitsPerRequest: 10, priceMicros: 9000000, perUnits: 1000000 }];
@@ -50,8 +51,11 @@ test("Myanmar spacing vowels and tone signs remain with their bases across chunk
   for(const c of chunks) { assert.ok(c.text.startsWith("က")); assert.ok(c.text.endsWith("း")); }
 });
 
-test("server-owned candidates prioritize Eleven via OpenRouter and never claim account or audio verification", () => {
-  assert.deepEqual(capabilities.map(c => c.model), ["elevenlabs/eleven-v3", "google/gemini-3.8-flash-tts"]);
+test("server-owned catalog allows only full Gemini Kore PCM and never claims account or audio verification", () => {
+  assert.deepEqual(capabilities.map(c => c.model), ["google/gemini-3.8-flash-tts"]);
+  assert.deepEqual(selection(), {provider:"OPENROUTER",model:"google/gemini-3.8-flash-tts",voice:"Kore",nativeFormat:"pcm",language:"my",locale:"my-MM"});
+  assert.deepEqual(capabilities[0].billableUnits, ["INPUT_TEXT_TOKEN", "OUTPUT_AUDIO_TOKEN"]);
+  assert.throws(()=>selection(1)); assert.throws(()=>selection(0,1));
   for (const c of capabilities) { assert.equal(c.provider, "OPENROUTER"); assert.equal(c.accountEvidence, "UNKNOWN");
     assert.equal(c.gatewayMyanmarEvidence, "UNKNOWN"); assert.equal(c.audioEvidence, "NOT_EVALUATED"); assert.ok(Object.isFrozen(c)); }
 });

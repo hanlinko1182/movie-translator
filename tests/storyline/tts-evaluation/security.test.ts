@@ -22,11 +22,12 @@ const badRequests = [
   ["direct Azure Thiha", { provider: "AZURE", model: "AZURE_PREBUILT_NEURAL_VOICE", voice: "my-MM-ThihaNeural" }],
   ["direct Google", { provider: "GOOGLE", model: "gemini-3.8-flash-tts" }],
   ["bare upstream model through gateway", { model: "eleven_v3" }],
+  ["former gateway Eleven primary is no longer eligible", { model: "elevenlabs/eleven-v3", voice: "george", nativeFormat: "mp3" }],
   ["unreviewed gateway Eleven model", { model: "elevenlabs/eleven-v4" }],
   ["unreviewed gateway speech model", { model: "other/myanmar-tts" }],
-  ["voice from different gateway model", { voice: "Kore" }], ["Flash-Lite is not Burmese full TTS", { model: "google/gemini-3.8-flash-lite-tts" }],
+  ["historical Eleven voice cannot replace Kore", { voice: "george" }], ["Flash-Lite is not the approved full model", { model: "google/gemini-3.8-flash-lite-tts" }],
   ["wrong Eleven model", { provider: "ELEVENLABS", model: "eleven_multilingual_v2" }], ["unsupported language", { language: "en" }],
-  ["unknown voice", { voice: "UNREVIEWED" }], ["wrong native format", { nativeFormat: "mp4" }], ["empty text", { text: "" }],
+  ["unknown voice", { voice: "UNREVIEWED" }], ["wrong native format", { nativeFormat: "mp4" }], ["Gemini gateway cannot select MP3", { nativeFormat: "mp3" }], ["direct WAV format is not the gateway format", { nativeFormat: "wav" }], ["empty text", { text: "" }],
   ["oversized text", { text: "က".repeat(1000) }], ["invalid surrogate", { text: "က\ud800" }], ["orphan grapheme", { text: "က \u1031" }],
   ["browser grant", { canSpend: true }], ["secret field", { apiKey: "SYNTHETIC_PRIVATE_VALUE_NEVER_LOG" }], ["missing ID", { requestId: undefined }],
   ["changed request ID", { requestId: "replacement-original" }], ["live endpoint", { endpoint: "https://tts-forbidden.invalid" }],
@@ -76,7 +77,7 @@ test("rehashed cost reductions cannot replace the independent frozen quote", () 
   assert.throws(() => f.authority.assess(forged,1000000));
 });
 test("input-only or character-only Gemini quote cannot claim to bound output-token billing", () => {
-  const f=fixture(1);for(const components of [[f.p.quote.components[0]],[{unit:"BILLABLE_CHARACTER",maximumUnitsPerRequest:100,priceMicros:1,perUnits:1}]])
+  const f=fixture();for(const components of [[f.p.quote.components[0]],[{unit:"BILLABLE_CHARACTER",maximumUnitsPerRequest:100,priceMicros:1,perUnits:1}]])
     assert.throws(()=>createMockSpendingAssessorForTest({...f.p,quote:{...f.p.quote,components}}));
 });
 test("forged corpus metadata and getters cannot run during harness composition", () => {
@@ -105,11 +106,35 @@ test("egress tripwire rejects an attempted live call; valid offline handling mak
 // Scenario is an exhaustive fixed enum; there is no external responder callback seam.
 test("unknown mock scenario cannot install a live transport", () => { assert.throws(() => createMockPortForTest("FETCH" as Scenario)); });
 
-test("OpenRouter Eleven character quote cannot use Gemini token billing or upstream credits", () => {
-  const f=fixture();for(const unit of ["INPUT_TEXT_TOKEN", "OUTPUT_AUDIO_TOKEN", "CREDIT"])
+test("Gemini token billing rejects upstream credits and character pricing", () => {
+  const f=fixture();for(const unit of ["BILLABLE_CHARACTER", "CREDIT"])
     assert.throws(()=>createMockSpendingAssessorForTest({...f.p,quote:{...f.p.quote,components:[{...f.p.quote.components[0],unit}]}}));
 });
 test("direct providers cannot be restored by forging the spending configuration", () => {
   const f=fixture();for(const provider of ["ELEVENLABS", "AZURE", "GOOGLE"])
     assert.throws(()=>createMockSpendingAssessorForTest({...f.p,provider}));
+});
+
+for(const [name,patch] of [
+  ["missing output component", {components:[] }],
+  ["missing output maximum", {maximumUnitsPerRequest:undefined}],
+  ["zero output maximum", {maximumUnitsPerRequest:0}],
+  ["unknown output maximum", {maximumUnitsPerRequest:"UNKNOWN"}],
+  ["unbounded output maximum", {maximumUnitsPerRequest:Infinity}],
+  ["missing output rate", {priceMicros:undefined}],
+  ["unknown output rate", {priceMicros:"UNKNOWN"}],
+] as const)test(`Gemini charge DENY: ${name} before any mock dispatch`,async()=>{
+  const f=fixture(),output={...f.p.quote.components[1],...patch};
+  const components=name==="missing output component"?[f.p.quote.components[0]]:[f.p.quote.components[0],output];
+  assert.throws(()=>createMockSpendingAssessorForTest({...f.p,quote:{...f.p.quote,components}}));assert.equal(f.port.calls(),0);
+});
+for(const overheadMicros of [undefined,"UNKNOWN",-1,Infinity])test(`Gemini charge DENY: unbounded fee overhead ${String(overheadMicros)}`,()=>{
+  const f=fixture();assert.throws(()=>createMockSpendingAssessorForTest({...f.p,quote:{...f.p.quote,overheadMicros}}));assert.equal(f.port.calls(),0);
+});
+test("independent mock quote binds audio-token ceilings and all-in fee overhead against caller reductions",()=>{
+  const f=fixture(),p={...f.p,quote:{...f.p.quote,overheadMicros:5},maxTotalSpendMicros:1260,providerLimitEvidence:{...f.p.providerLimitEvidence,limitMicros:1260}};
+  const a=createMockSpendingAssessorForTest(p);a.assess(p,1000000);
+  assert.throws(()=>a.assess({...p,quote:{...p.quote,overheadMicros:0}},1000000));
+  const forged=structuredClone(p);forged.quote.components[1].maximumUnitsPerRequest=1;assert.throws(()=>a.assess(forged,1000000));
+  assert.equal(a.snapshot().liveAuthority,"NONE");assert.equal(f.port.calls(),0);
 });

@@ -73,5 +73,5 @@ export function createOfflineHarnessForTest(c: Corpus = corpus()) {
     originals.set(r.requestId, result); return result;
   }
   return Object.freeze({ submit, inspect(requestHash: string) { sha(requestHash); return [...originals.values()].find(v => v.requestHash === requestHash) ?? null; },
-    liveReadiness: () => freeze({ verdict: "NO_GO", account: "ACCOUNT_VERIFICATION_REQUIRED", privacy: "HUMAN_ACCEPTANCE_REQUIRED", spending: "PROVIDER_HARD_CAP_UNVERIFIED", audio: "NOT_GENERATED" }) });
+    liveReadiness: () => freeze({ verdict: "NO_GO", account: "ACCOUNT_VERIFICATION_REQUIRED", privacy: "HUMAN_ACCEPTANCE_REQUIRED", spending: "PROVIDER_HARD_CAP_UNVERIFIED", outputAudioTokenCharge: "INDEPENDENT_MAXIMUM_REQUIRED", fees: "ALL_APPLICABLE_FEES_UNVERIFIED", requestOwnership: "DURABLE_OWNERSHIP_UNREVIEWED", audio: "NOT_GENERATED" }) });
 }

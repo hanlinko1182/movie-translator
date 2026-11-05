@@ -7,7 +7,7 @@ import { fixedRequest, createOfflineHarnessForTest, createMockPortForTest } from
 import { proposalForTest, createMockSpendingAssessorForTest } from "./spending.fixture";
 function fixture(config=0,voice=0) { const c=corpus(),requests=c.payload.passages.map((_,i)=>fixedRequest(c,i,selection(config,voice))),p=proposalForTest(requests),a=createMockSpendingAssessorForTest(p);
   return {c,requests,p,a,ticket:a.assess(p,1000000),h:createOfflineHarnessForTest(c),port:createMockPortForTest()}; }
-for(const [config,voice,label] of [[0,0,"OpenRouter Eleven v3 stock candidate"],[1,0,"OpenRouter full Gemini stock candidate"]] as const) test(`${label}: six fixed originals yield only redacted non-audio observations`,async()=>{
+for(const [config,voice,label] of [[0,0,"OpenRouter full Gemini Kore PCM sole primary"]] as const) test(`${label}: six fixed originals yield only redacted non-audio observations`,async()=>{
   const f=fixture(config,voice);
   for(const r of f.requests){const result=await f.h.submit(r,f.ticket,f.port.port);assert.equal(result.status,"MOCK_OBSERVED");assert.equal(result.audioVerified,false);assert.equal(result.liveEligible,false);
     assert.equal(result.actualDurationMs,null);assert.ok(result.fixtureByteCount && result.fixtureHash);for(const privateValue of [r.text,r.accountRef,r.requestId])assert.equal(JSON.stringify(result).includes(privateValue),false);}
@@ -22,7 +22,7 @@ for(const scenario of ["LOST_ACK","TIMEOUT","HTTP_429"] as const)test(`${scenari
 });
 test("one original cannot use a different configuration after a definitive mock result",async()=>{
   const f=fixture();await f.h.submit(f.requests[0],f.ticket,f.port.port);
-  await assert.rejects(f.h.submit(fixedRequest(f.c,0,selection(1)),f.ticket,f.port.port));assert.equal(f.port.calls(),1);
+  await assert.rejects(f.h.submit({...f.requests[0],model:"elevenlabs/eleven-v3",voice:"george",nativeFormat:"mp3"},f.ticket,f.port.port));assert.equal(f.port.calls(),1);
 });
 test("permit-like copies, new harness objects and new assessment handles cannot rerun a retained original",async()=>{
   const f=fixture(),p=createMockPortForTest("LOST_ACK");await f.h.submit(f.requests[0],f.ticket,p.port);
@@ -30,7 +30,7 @@ test("permit-like copies, new harness objects and new assessment handles cannot 
   await assert.rejects(h.submit(f.requests[0],fresh,next.port));await assert.rejects(h.submit(f.requests[1],fresh,next.port));assert.equal(next.calls(),0);assert.equal(p.calls(),1);
 });
 test("pending duplicate and global concurrent dispatch cannot create a second call",async()=>{
-  const f=fixture(),held=createMockPortForTest("HELD_SUCCESS"),other=fixture(1);let pending:Promise<unknown>|undefined;
+  const f=fixture(),held=createMockPortForTest("HELD_SUCCESS"),other=fixture();let pending:Promise<unknown>|undefined;
   try{pending=f.h.submit(f.requests[0],f.ticket,held.port);assert.equal(held.calls(),1);
     assert.equal((await f.h.submit(f.requests[0],f.ticket,held.port)).status,"RESERVED");
     await assert.rejects(other.h.submit(other.requests[0],other.ticket,other.port.port));assert.equal(other.port.calls(),0);
@@ -45,4 +45,9 @@ test("definitive mock rejection retains original charge/identity without replace
   const f=fixture(),p=createMockPortForTest("REJECTED");assert.equal((await f.h.submit(f.requests[0],f.ticket,p.port)).status,"MOCK_REJECTED");
   await f.h.submit(f.requests[0],f.ticket,p.port);assert.equal(p.calls(),1);assert.equal(f.a.snapshot().reservedMicros,205);
   assert.equal(f.h.inspect("a".repeat(64)),null);for(const k of ["retry","fallback","sendLive","approve","reconcileAndResend"])assert.equal(k in f.h,false);
+});
+
+test("composition does not dispatch, and unverified output-token charges and fees always block live readiness", () => {
+  const f=fixture();assert.equal(f.port.calls(),0);assert.deepEqual(f.a.snapshot(),{reservedMicros:0,originals:0,unresolved:false,liveAuthority:"NONE"});
+  assert.deepEqual(f.h.liveReadiness(),{verdict:"NO_GO",account:"ACCOUNT_VERIFICATION_REQUIRED",privacy:"HUMAN_ACCEPTANCE_REQUIRED",spending:"PROVIDER_HARD_CAP_UNVERIFIED",outputAudioTokenCharge:"INDEPENDENT_MAXIMUM_REQUIRED",fees:"ALL_APPLICABLE_FEES_UNVERIFIED",requestOwnership:"DURABLE_OWNERSHIP_UNREVIEWED",audio:"NOT_GENERATED"});
 });

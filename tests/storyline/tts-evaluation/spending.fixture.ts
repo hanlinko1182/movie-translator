@@ -61,14 +61,13 @@ export function reserveMockBudget(t: Assessment, r: EvaluationRequest, now: numb
 }
 export function finishMockObservation(t: Assessment, now: number, definitive: boolean) { const l = current(t, now); if (definitive) l.unresolved = false; }
 export function proposalForTest(requests: EvaluationRequest[], now = 1000000) {
-  const r = requests[0]; if (!r) deny("REQUEST_CEILING");
+  const r = requests[0]; if (!r) deny("REQUEST_CEILING"); capability(r);
   return { schemaVersion: D.spending, authority: "UNISSUED_OFFLINE_PROPOSAL", provider: r.provider, model: r.model, voice: r.voice, nativeFormat: r.nativeFormat,
     language: r.language, locale: r.locale, accountRef: r.accountRef, corpusHash: r.corpusHash, requestCountCeiling: requests.length,
     originalRequests: requests.map(x => ({ requestId: x.requestId, requestHash: digest(D.request, x) })),
-    // Deliberately synthetic prices/bounds, never a public or account quote.
-    quote: { quoteId: "mock-quote-only", components: capability(r).billableUnits.some(unit => unit === "INPUT_TEXT_TOKEN")
-      ? [{ unit: "INPUT_TEXT_TOKEN", maximumUnitsPerRequest: 100, priceMicros: 1000, perUnits: 1000 }, { unit: "OUTPUT_AUDIO_TOKEN", maximumUnitsPerRequest: 100, priceMicros: 1050, perUnits: 1000 }]
-      : [{ unit: "BILLABLE_CHARACTER", maximumUnitsPerRequest: 2048, priceMicros: 100, perUnits: 1000 }], overheadMicros: 0, evidenceHash: "a".repeat(64) },
+    // Deliberately synthetic input/output token bounds and all-in fee overhead.
+    // A zero mock overhead is not evidence that real fees are zero; no live approval is issued.
+    quote: { quoteId: "mock-quote-only", components: [{ unit: "INPUT_TEXT_TOKEN", maximumUnitsPerRequest: 100, priceMicros: 1000, perUnits: 1000 }, { unit: "OUTPUT_AUDIO_TOKEN", maximumUnitsPerRequest: 100, priceMicros: 1050, perUnits: 1000 }], overheadMicros: 0, evidenceHash: "a".repeat(64) },
     maxTotalSpendMicros: 1230, currency: "USD", interval: { startsAtMs: now - 1, endsAtMs: now + 60000, resetAtMs: now + 60000 },
     approvalIdentityRef: "UNISSUED_REVIEWER", approvalTimestampMs: now - 1, expiresAtMs: now + 60000, revoked: false,
     providerLimitEvidence: { kind: "MOCK_NOT_PROVIDER_ENFORCED", evidenceHash: "b".repeat(64), limitMicros: 1230, resetAtMs: now + 60000 } };
