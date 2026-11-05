@@ -33,8 +33,10 @@ for (const file of owned) {
   visit(ast);
 }
 const marker = /narration-intake|story-narration-(?:wav-measurement|intake-candidate|timing-preview)-v1|authorizePrivateWavInspection|measureNarrationWav|createOfflineNarrationRegistry|buildNarrationTimingPreview/;
+// Exact offline-consumer exception only; M10-03B independently audits its complete production isolation.
+const offlineConsumers = new Set(["lib/storyline/narration-private-store/contracts.ts", "lib/storyline/narration-private-store/files.ts", "lib/storyline/narration-private-store/store.ts"]);
 const sources = (await Promise.all(["app", "components", "lib", "workers", "scripts"].map(files))).flat()
-  .filter(p => /\.[cm]?[jt]sx?$/.test(p) && !p.startsWith(root));
+  .filter(p => /\.[cm]?[jt]sx?$/.test(p) && !p.startsWith(root) && !offlineConsumers.has(p));
 const bundles = [...await files(".next/server"), ...await files(".next/static")].filter(p => p.endsWith(".js"));
 assert.ok(bundles.length, "Fresh dummy build required");
 for (const file of [...sources, ...bundles]) assert.ok(!marker.test(await readFile(file, "utf8")), file);
