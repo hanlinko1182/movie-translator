@@ -31,8 +31,8 @@ test("server-only module has an exhaustive stdlib/local import allowlist; no net
   }
 });
 test("no production source or existing storyline barrel composes the offline intake", async () => {
-  // M10-03B is a separately audited offline consumer, never production composition.
-  const offlineConsumers = new Set(["lib/storyline/narration-private-store/contracts.ts", "lib/storyline/narration-private-store/files.ts", "lib/storyline/narration-private-store/store.ts"]);
+  // Separately audited offline consumers, never production composition. M10-04A uses pure preview submodules only.
+  const offlineConsumers = new Set(["lib/storyline/narration-private-store/contracts.ts", "lib/storyline/narration-private-store/files.ts", "lib/storyline/narration-private-store/store.ts", "lib/storyline/video-highlights-offline/compatibility.ts"]);
   for (const dir of ["app", "components", "workers", "scripts", "lib"]) for (const p of await files(dir)) {
     if (!/\.[cm]?[jt]sx?$/.test(p) || p.startsWith("lib/storyline/narration-intake/") || offlineConsumers.has(p)) continue;
     assert.doesNotMatch(await readFile(p, "utf8"), /narration-intake|authorizePrivateWavInspection|measureNarrationWav|buildNarrationTimingPreview/);

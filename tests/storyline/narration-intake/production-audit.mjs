@@ -33,8 +33,8 @@ for (const file of owned) {
   visit(ast);
 }
 const marker = /narration-intake|story-narration-(?:wav-measurement|intake-candidate|timing-preview)-v1|authorizePrivateWavInspection|measureNarrationWav|createOfflineNarrationRegistry|buildNarrationTimingPreview/;
-// Exact offline-consumer exception only; M10-03B independently audits its complete production isolation.
-const offlineConsumers = new Set(["lib/storyline/narration-private-store/contracts.ts", "lib/storyline/narration-private-store/files.ts", "lib/storyline/narration-private-store/store.ts"]);
+// Exact offline-consumer exceptions only; their own audits independently verify complete production isolation.
+const offlineConsumers = new Set(["lib/storyline/narration-private-store/contracts.ts", "lib/storyline/narration-private-store/files.ts", "lib/storyline/narration-private-store/store.ts", "lib/storyline/video-highlights-offline/compatibility.ts"]);
 const sources = (await Promise.all(["app", "components", "lib", "workers", "scripts"].map(files))).flat()
   .filter(p => /\.[cm]?[jt]sx?$/.test(p) && !p.startsWith(root) && !offlineConsumers.has(p));
 const bundles = [...await files(".next/server"), ...await files(".next/static")].filter(p => p.endsWith(".js"));
