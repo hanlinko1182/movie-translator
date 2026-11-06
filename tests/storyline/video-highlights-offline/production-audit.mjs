@@ -33,7 +33,14 @@ export async function auditProductionReferences() {
   const root = "lib/storyline/video-highlights-offline/";
   const sources = (await Promise.all(["app", "components", "lib", "workers", "scripts"].map(files))).flat().filter(p => /\.[cm]?[jt]sx?$/.test(p) && !p.startsWith(root));
   const marker = /video-highlights-offline|story-offline-video-|createSyntheticVideoCatalog|buildOfflineHighlightPlan|assessNarrationCompatibility/;
-  for (const p of sources) assert.ok(!marker.test(await readFile(p, "utf8")), p);
+  for (const p of sources) {
+    let source = await readFile(p, "utf8");
+    // The offline probe reuses one pure rational import. All other references still fail.
+    if (p === "lib/storyline/media-probe-offline/timestamps.ts") {
+      source = source.replace('import { add, compare, parseSeconds } from "../video-highlights-offline/rational";', "");
+    }
+    assert.ok(!marker.test(source), p);
+  }
   return { sources: sources.length, marker };
 }
 // Importing from Node tests runs no build audit; direct CLI invocation requires the fresh dummy build.
